@@ -134,18 +134,49 @@ class DashboardIntegrationTest extends AbstractIntegrationTest {
     }
 
     /**
-     * Total booked is cash and cost incurred is cost. A reader who cannot see the difference adds
-     * the wrong one to something, so both are on the response and they are not the same number.
+     * Total booked is cash and cost incurred is cost, and the gap between them is exactly the
+     * money that is costed somewhere else.
+     *
+     * <p>The test books a cement bill into the window to make the point with teeth. Before it,
+     * June carries only a cartage bill and the two figures coincide — which would let a
+     * dashboard that blended them pass. After it, ₹40,000 of cement has to appear in
+     * {@code totalBooked} and stay out of {@code costIncurred}, because that cement is inventory
+     * until it is issued and will be costed then. A dashboard that added it here would report the
+     * project cost inflated by the value of its own stockyard, and would do it twice over once
+     * the bags leave the store.</p>
      */
     @Test
-    @DisplayName("total booked and cost incurred are carried apart, and the caveat says why")
-    void cashAndCostAreNotTheSameNumber() throws Exception {
-        JsonNode dashboard = companyDashboard();
+    @DisplayName("a material purchase raises cash booked and leaves cost incurred alone")
+    void aMaterialPurchaseIsCashRatherThanCost() throws Exception {
+        JsonNode before = siteDashboard(SITE_A, "uttam").get("cash");
 
-        assertThat(decimal(dashboard, "totalBooked"))
-                .as("the seed books material purchases, so cash exceeds cost")
-                .isGreaterThan(decimal(dashboard, "costIncurred"));
-        assertThat(dashboard.get("caveat").asText())
+        String uttam = loginToken("uttam");
+        bookMaterialPurchase(uttam, "40000");
+
+        JsonNode after = siteDashboard(SITE_A, "uttam").get("cash");
+
+        assertThat(decimal(after, "totalBooked"))
+                .as("the bill is money that left the books")
+                .isEqualByComparingTo(decimal(before, "totalBooked").add(new BigDecimal("40000")));
+        assertThat(decimal(after, "costIncurred"))
+                .as("and it is not cost: the cement becomes cost when it is issued")
+                .isEqualByComparingTo(decimal(before, "costIncurred"));
+        assertThat(decimal(after, "materialPurchases"))
+                .isEqualByComparingTo(decimal(before, "materialPurchases")
+                        .add(new BigDecimal("40000")));
+
+        // The four figures Phase 5 refuses to merge, still refusing on the dashboard.
+        assertThat(decimal(after, "totalBooked"))
+                .isEqualByComparingTo(decimal(after, "costIncurred")
+                        .add(decimal(after, "materialPurchases"))
+                        .add(decimal(after, "labourDisbursements")));
+    }
+
+    /** The caveat is on the response so a reader cannot mistake which total is which. */
+    @Test
+    @DisplayName("the dashboard states in words which total may be compared with a budget")
+    void theCaveatExplainsTheTwoTotals() throws Exception {
+        assertThat(companyDashboard().get("caveat").asText())
                 .contains("Total booked")
                 .contains("is not a cost figure");
     }
@@ -262,8 +293,9 @@ class DashboardIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/v1/dashboard/admin")
                         .param("from", "2020-01-01").param("to", "2026-01-01")
                         .header("Authorization", "Bearer " + loginToken("viplove")))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("dashboard.range-too-wide"));
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.type").value(
+                        org.hamcrest.Matchers.endsWith("dashboard.range-too-wide")));
     }
 
     /** The trend is three series, because one blended line hides the story it is read for. */
@@ -366,22 +398,88 @@ class DashboardIntegrationTest extends AbstractIntegrationTest {
 
     private BigDecimal inventoryValueFromBalances() {
         return jdbc.queryForObject("""
-                SELECT COALESCE(SUM(total_value), 0) FROM stock_balances b
-                JOIN stores s ON s.id = b.store_id
-                WHERE s.org_id = ?::uuid
+                SELECT COALESCE(SUM(stock_value), 0) FROM stock_balances
+                WHERE org_id = ?::uuid
                 """, BigDecimal.class, ORG);
     }
 
+    /**
+     * The flag lives on the category, and the subcategory overrides its parent — the same
+     * precedence {@code ExpenseLookupService.resolveCategory} applies, spelled out in SQL so
+     * this is an independent check rather than the same code asked twice.
+     */
     private BigDecimal materialPurchasesFromExpenses() {
         return jdbc.queryForObject("""
-                SELECT COALESCE(SUM(total_amount), 0) FROM expenses
-                WHERE org_id = ?::uuid AND expense_date BETWEEN ? AND ?
-                  AND workflow_status <> 'VOIDED' AND is_material_purchase
+                SELECT COALESCE(SUM(e.total_amount), 0)
+                FROM expenses e
+                LEFT JOIN expense_categories sub ON sub.id = e.subcategory_id
+                LEFT JOIN expense_categories cat ON cat.id = e.category_id
+                WHERE e.org_id = ?::uuid AND e.expense_date BETWEEN ? AND ?
+                  AND e.workflow_status <> 'VOIDED'
+                  AND COALESCE(sub.is_material_purchase, cat.is_material_purchase, false)
                 """, BigDecimal.class, ORG, FROM, TO);
     }
 
     private static BigDecimal decimal(JsonNode node, String field) {
         return new BigDecimal(node.get(field).asText());
+    }
+
+    /**
+     * A cement bill inside the window, booked and approved. Dated mid-June so it lands in the
+     * period under test, and carried on the MAT-PURCHASE subcategory because that is where the
+     * {@code is_material_purchase} flag lives — the flag is the whole point of the fixture.
+     */
+    private void bookMaterialPurchase(String token, String amount) throws Exception {
+        MvcResult created = mockMvc.perform(post("/api/v1/expenses")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"id":"%s","siteId":"%s","expenseDate":"2025-06-15",
+                                 "categoryId":"%s","subcategoryId":"%s","vendorId":"%s",
+                                 "description":"Cement for the first-floor beams",
+                                 "billNumber":"DASH-%s","billDate":"2025-06-15",
+                                 "amountBeforeTax":%s,"gstPercent":0,"paymentMode":"BANK"}"""
+                                .formatted(java.util.UUID.randomUUID(), SITE_A,
+                                        categoryId("MATERIAL"), categoryId("MAT-PURCHASE"),
+                                        materialVendorId(),
+                                        java.util.UUID.randomUUID().toString().substring(0, 8),
+                                        amount)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String id = objectMapper.readTree(created.getResponse().getContentAsString())
+                .get("id").asText();
+
+        mockMvc.perform(post("/api/v1/expenses/" + id + "/submit")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        // Routing is data, and ₹40,000 is over the seeded administrator threshold, so this
+        // walks whatever chain approval_rules configured rather than assuming one level.
+        for (int level = 0; level < 3; level++) {
+            String status = jdbc.queryForObject(
+                    "SELECT workflow_status FROM expenses WHERE id = ?::uuid", String.class, id);
+            if (!"SUBMITTED".equals(status) && !"L1_APPROVED".equals(status)) {
+                break;
+            }
+            mockMvc.perform(post("/api/v1/expenses/" + id + "/approve")
+                            .header("Authorization", "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"action\":\"APPROVE\"}"))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    private String categoryId(String code) {
+        return jdbc.queryForObject(
+                "SELECT id::text FROM expense_categories WHERE code = ? AND org_id = ?::uuid",
+                String.class, code, ORG);
+    }
+
+    private String materialVendorId() {
+        return jdbc.queryForObject("""
+                SELECT id::text FROM vendors
+                WHERE org_id = ?::uuid AND deleted_at IS NULL
+                ORDER BY code LIMIT 1
+                """, String.class, ORG);
     }
 
     private String loginToken(String username) throws Exception {

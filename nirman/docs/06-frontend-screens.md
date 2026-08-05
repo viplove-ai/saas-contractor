@@ -14,7 +14,7 @@ Home is seven tiles, nothing else. Each tile is a full-width 88px row with an ic
 | `/inventory/issue` | Material issue | Material search, quantity with unit switch, BOQ item, issued-to |
 | `/expenses/new` | Add expense | Category, amount before tax with GST rate beside it, bill number. Saves as a draft; sending is a separate act. A duplicate warning shows the rows it collided with and takes a reason to override |
 | `/approvals` | Approvals and payments | What is waiting on you, with the level and role on each row; and, for whoever holds `payment:record`, the approved bills still owed with approved/paid/owed shown separately |
-| `/dpr/new` | DPR wizard | 4 steps: auto-summary → work done → observations → photos |
+| `/dpr/new` | DPR wizard | 3 steps: what the records already say → work done → observations. Step one is read-only: the figures are derived from the muster, the ledger and the bill book, and a field that let somebody type over them would create a second version of a number the rest of the system computes. A labour cost standing on unverified attendance is marked provisional, and material received is shown apart from material consumed. Photographs arrive with Phase 7's compression |
 | `/approvals` | My submissions | Status chips, rejection reasons |
 | `/sync` | Sync centre | Queue with draft / pending / synced / failed, retry, conflict resolver |
 
@@ -23,9 +23,9 @@ Left sidebar, dense tables, saved filters.
 
 | Route | Screen | Roles |
 |---|---|---|
-| `/dashboard` | Company dashboard | Admin, Accountant |
-| `/dashboard/site/:siteId` | Site dashboard | Admin, Engineer |
-| `/dashboard/quality` | Data quality | Admin, Engineer |
+| `/dashboard` | Company dashboard. Material as three figures set out as an equation that lands on what the stores hold, with purchased below the rule and visibly not one of the terms; cost incurred and total booked under separate headings | Admin, Accountant |
+| `/dashboard/site/:siteId` | Site dashboard: labour with the unsigned part of the wage bill flagged, material, cash, contract progress by value, and the dates with no report rather than a count of them | Admin, Engineer |
+| `/dashboard/quality` | Data quality. A work queue: act before watch, every finding with what to do about it and the evidence behind its count | Admin, Engineer |
 | `/projects`, `/projects/:id` | Project list, add and edit contract details, detail with budget vs actual | Admin, Accountant |
 | `/sites`, `/sites/:id` | Site list, detail, stores, engineer and supervisor posting | Admin |
 | `/boq`, `/boq/:id` | BOQ items, progress | Admin, Engineer |
@@ -40,7 +40,7 @@ Left sidebar, dense tables, saved filters.
 | `/expenses/:id` | Detail, approval trail, attachments, payments | same |
 | `/payments` | Payment recording, vendor balances | Admin, Accountant |
 | `/advances` | Advances, settlements, outstanding | Admin, Accountant |
-| `/dprs`, `/dprs/:id` | DPR list, verify, PDF | Admin, Engineer |
+| `/dprs` | DPR list and the verification queue. The panel shows what would be claimed against the contract before it offers the verify button, and keeps work recorded apart from work claimed. Sending a report back requires a reason. PDF downloads through the api client, since the route needs the Authorization header | Admin, Engineer |
 | `/reports/:name` | Report runner with filters and xlsx export | per permission |
 | `/masters/*` | Materials, vendors, contractors, categories, units | Admin |
 | `/users`, `/users/:id` | Users, roles, site assignment, first-time password and reset | Admin |

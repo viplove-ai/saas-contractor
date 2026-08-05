@@ -19,13 +19,17 @@ const TILES: Tile[] = [
   { title: 'Stock', to: '/inventory/stock', permission: 'inventory:read' },
   { title: 'Add expense', to: '/expenses/new', permission: 'expense:create' },
   { title: 'Approvals and payments', to: '/approvals', permission: 'expense:read' },
+  { title: 'Daily report', to: '/dpr/new', permission: 'dpr:draft' },
+  { title: 'Verify reports', to: '/dprs', permission: 'dpr:verify' },
+  { title: 'Company dashboard', to: '/dashboard', permission: 'dashboard:company' },
+  { title: 'Site dashboard', to: '/dashboard/site', permission: 'dashboard:site' },
+  { title: 'Data quality', to: '/dashboard/quality', permission: 'dashboard:dataquality' },
   { title: 'Workers', to: '/workers', permission: 'worker:read' },
   { title: 'Members', to: '/users', permission: 'user:read' },
   { title: 'Projects', to: '/projects', permission: 'project:write' },
   { title: 'Sites', to: '/sites', permission: 'site:write' },
   { title: 'Your account', to: '/profile' },
-  { title: 'Submit DPR', phase: 'Phase 6' },
-  { title: 'Reports', phase: 'Phase 6' },
+  { title: 'Reports', phase: 'Phase 7' },
 ];
 
 export function HomePage() {

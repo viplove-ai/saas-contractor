@@ -9,7 +9,7 @@ Phases 1 and 2 are complete. Each later phase ends with working code, migrations
 | **3 — Labour** ✅ | Workers, wage history, roster, bulk attendance, hour and overtime calculation, verification workflow, period lock, **worker advances, wage ledger and settlement**, labour reports, Excel export | Attendance calculation tests pass, including night shift and half-day; duplicate attendance is rejected; wage revision provably does not alter a locked month; **verifying the same attendance row twice does not pay the worker twice; earned − advance = payable reconciles against the field sheet** |
 | **4 — Inventory** ✅ | Material master and conversions, opening stock, goods receipt, issue, transfer lifecycle, wastage, physical count, ledger, weighted-average valuation, **material estimates and estimated-vs-actual variance**, stock reports | Negative stock is rejected and logged; moving-average rate is correct after mixed-rate receipts; a transfer is counted at neither site while in transit; **variance is computed only over the BOQ scope an estimate covers, with uncovered scope shown separately** |
 | **5 — Expenses and cash** ✅ | Expense submission, bill upload with threshold rule, duplicate detection, two-level approval, partial payments, vendor balances, site advances, settlement, reports | Approved expense cannot be silently edited; duplicate invoice returns 409 with candidates; approved cost, cash paid and payable reconcile |
-| **6 — DPR and dashboards** | DPR with auto-prefill from the other three modules, engineer verification, PDF, admin and site and data-quality dashboards, charts | DPR prefill matches the underlying records exactly; dashboard shows material purchased, consumed and inventory value as three separate figures that add up |
+| **6 — DPR and dashboards** ✅ | DPR with auto-prefill from the other three modules, engineer verification, PDF, admin and site and data-quality dashboards, charts | DPR prefill matches the underlying records exactly; dashboard shows material purchased, consumed and inventory value as three separate figures that add up |
 | **7 — Offline and hardening** | IndexedDB drafts, sync queue, idempotency, image compression, conflict resolution UI, security review, indexes and query tuning, deployment guide | The same draft sent twice creates one row; a conflict surfaces a resolvable prompt; Playwright covers mark-attendance and add-expense offline then online |
 
 ## Working agreement for each phase
@@ -236,7 +236,76 @@ and is not read by the flow; routing lives in `approval_rules` alone, because tw
 one threshold is exactly the drift docs/09 question 2 was about. Bill photographs attach
 through the existing attachment service rather than a new upload path.
 
-## Next: Phase 6
+## Phase 6 — what shipped
 
-DPR and dashboards, where the prefill reads all three modules at once and the dashboard has
-to show material purchased, consumed and inventory value as three figures that add up.
+Every exit criterion named above is met and covered by a test that says so by name.
+211 backend tests and 133 frontend tests. What is built:
+
+- **The prefill is derived, never stored, and that is the feature.** The criterion is that it
+  matches the underlying records exactly, and the only way to keep that true through a late
+  correction, a rejection or a worker added to the muster at five o'clock is to compute it on
+  every call. A cached daily total would be a second version of the truth, and the version
+  people would notice is whichever one was wrong. `DprPrefillIntegrationTest` checks every
+  figure against the same figure summed straight out of the tables in SQL, because comparing
+  the API against hand-written constants would only prove somebody typed the same number twice.
+- **Three read APIs rather than three joins.** `LabourLookup`, `InventoryLookup` and
+  `ExpenseLookup` follow the `SiteLookup` precedent from Phase 4: the DPR and the dashboards
+  ask each module what it knows, and neither reaches into another module's tables. That is what
+  stops the dashboard becoming a fourth opinion about what a project cost.
+- **The document freezes at submission, not at save.** A verified report is what an engineer put
+  his name to, so from then on the figures are the document's own. A correction to an attendance
+  row behind it shows up as a difference rather than by rewriting the report — tested by editing
+  the muster under a verified report and checking the report did not move. Before submission
+  there is nothing to protect and a draft tracks the records, which is what makes the prefill
+  useful right up to the moment it is sent.
+- **Verifying is what claims work.** A measured line reaches the measurement book at
+  verification and never before: entering the contract and claiming against it are different
+  acts (the note Phase 4 left when it brought BOQ items forward). A line described without a
+  quantity is recorded and claims nothing, because shuttering struck and a site cleared are real
+  work and not claims. `V9`'s `uq_boq_entry_dpr_item` is the backstop under the service's own
+  check — the same discipline as `uq_wle_attendance_posting` in labour and the V7 partial
+  indexes in inventory, and for the same reason: a double click must not bill the client twice.
+- **Material as three figures that add up**, with every term of the identity on the response —
+  `opening + received − consumed − residual = inventory value` — and the residual printed even
+  when it is zero, because a reconciliation you only see when it fails is one nobody believes
+  when it passes. **Purchased sits beside them and is not one of them.** It comes from the bills
+  rather than the ledger, so it is not expected to equal what was received: freight is booked
+  separately and a bill and its lorry rarely arrive the same day. The test books a ₹40,000
+  cement bill into the window and checks it raises cash booked and leaves cost incurred alone,
+  because before it the two figures coincide and a dashboard that blended them would have passed.
+- **Cost and cash never share a tile.** `costIncurred` is labour plus material consumed plus the
+  expenses that are neither a material purchase nor a wage payment, and it is the only total
+  that may be set against a budget. `totalBooked` is what left the books. Phase 5 established
+  that split for the expense register; the dashboards now carry it with the caveat attached, so
+  a reader cannot mistake which one they are looking at.
+- **A data-quality dashboard that is a work queue.** Every finding carries what to do about it
+  and the examples behind the count, at one of two severities. "Eleven days unmarked" is a
+  complaint; eleven dates are a morning's work. Two levels and not five, because a five-level
+  scale invites arguments about whether something is a three or a four and nobody acts on a three.
+- **Five screens.** The DPR wizard opens on what the records already say and asks only for what
+  the numbers cannot know — what got built, what went wrong, what happens tomorrow — with the
+  provisional wage bill flagged on its face. The reports list puts the measured lines in front of
+  the engineer before it puts the verify button, because signing a report you have not read is
+  easy when the screen makes it easy. The company and site dashboards draw the material identity
+  as an equation a reader can check on the screen, and the cost trend is three stacked series
+  rather than one line: a week where labour held steady and material consumption tripled is a
+  different story from one where both rose, and the blended line looks identical in both.
+
+**A four-phase-old bug, found by being the first caller.** Every master-data list — vendors,
+contractors, materials — answered 500 to a request with no search term, which is the request
+every screen makes on page load. The three search queries opened with a bare `:q IS NULL`,
+giving PostgreSQL nothing to infer the parameter's type from; a null term went across untyped,
+the driver settled on `bytea`, and `lower(bytea)` does not exist. Searching *for* something
+worked, which is why it survived from Phase 2 — every test that existed passed a term. The fix
+is `CAST(:q AS string)`, and `MasterDataListingIntegrationTest` now covers the boring case.
+
+**Deliberately narrow.** Photographs attach through the existing attachment service rather than
+a new upload path, and the wizard's fourth step waits for Phase 7's image compression. The PDF
+renders from the frozen snapshot rather than from today's records, which is the whole point of
+freezing it.
+
+## Next: Phase 7
+
+Offline and hardening: IndexedDB drafts, the sync queue and its idempotency, image compression,
+conflict resolution, a security review and query tuning. The client-generated ids that labour,
+inventory, expense and now the DPR all take on arrival are what that phase is built on.

@@ -28,7 +28,7 @@ export const router = createBrowserRouter([
         },
         children: [
           { index: true, element: <Navigate to="/home" replace /> },
-          // Phase 6: /dprs/*, /dashboard/*   Phase 7: /sync
+          // Phase 7: /sync
           {
             path: 'home',
             lazy: async () => {
@@ -91,6 +91,46 @@ export const router = createBrowserRouter([
             lazy: async () => {
               const { ApprovalsPage } = await import('../features/expenses/ApprovalsPage');
               return { Component: ApprovalsPage };
+            },
+          },
+          {
+            path: 'dpr/new',
+            lazy: async () => {
+              const { DprWizardPage } = await import('../features/dpr/DprWizardPage');
+              return { Component: DprWizardPage };
+            },
+          },
+          {
+            path: 'dprs',
+            lazy: async () => {
+              const { DprListPage } = await import('../features/dpr/DprListPage');
+              return { Component: DprListPage };
+            },
+          },
+          {
+            path: 'dashboard',
+            lazy: async () => {
+              const { CompanyDashboardPage } = await import(
+                '../features/dashboard/CompanyDashboardPage'
+              );
+              return { Component: CompanyDashboardPage };
+            },
+          },
+          {
+            // Without a site id the screen resolves the first one the caller can see.
+            path: 'dashboard/site/:siteId?',
+            lazy: async () => {
+              const { SiteDashboardPage } = await import(
+                '../features/dashboard/SiteDashboardPage'
+              );
+              return { Component: SiteDashboardPage };
+            },
+          },
+          {
+            path: 'dashboard/quality',
+            lazy: async () => {
+              const { DataQualityPage } = await import('../features/dashboard/DataQualityPage');
+              return { Component: DataQualityPage };
             },
           },
           {

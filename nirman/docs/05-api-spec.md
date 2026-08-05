@@ -110,9 +110,25 @@ beside it and a `scopeComplete` flag saying whether the figure is the whole stor
 | GET | `/advances/balances` | `?userId&siteId` — floats still outstanding |
 
 ### /dprs
-`GET|POST /dprs` (`?siteId&from&to`), `GET|PUT /dprs/{id}`,
+`GET|POST /dprs` (`?siteId&status&from&to`), `GET|PUT /dprs/{id}`,
 `GET /dprs/prefill?siteId&date` → labour, material, expense rollup for the day,
-`POST /dprs/{id}/submit`, `POST /dprs/{id}/verify`, `GET /dprs/{id}/pdf`.
+`POST /dprs/{id}/submit`, `POST /dprs/{id}/verify`, `POST /dprs/{id}/photos`,
+`GET /dprs/{id}/pdf`.
+
+The prefill is **derived on every call**, never cached: the exit criterion is that it matches
+the underlying records exactly, and a late correction, a rejection or a worker added to the
+muster at five o'clock all have to show up in it. It carries `labourCostProvisional` because
+the wage is frozen at verification — a cost standing on unverified attendance can move
+overnight without anybody editing anything, and a report that did not say so would be quoting
+a figure it cannot stand behind. `suggestedWorkItems` are BOQ lines that had labour or material
+charged to them that day: evidence somebody worked on the line, and **not** a measurement of
+how much got built.
+
+The document freezes at `submit`, not at save. From then on `snapshotFrozen` is true and the
+rolled-up figures are the report's own — a correction to a record underneath shows up as a
+difference rather than by rewriting something an engineer signed. `verify` is the act that
+posts measured quantities to the measurement book; a work line with no quantity is recorded
+and claims nothing. Verifying twice cannot claim twice (`uq_boq_entry_dpr_item`, V9).
 
 ### /approvals
 The one queue, whatever module raised the record. `GET /approvals/pending`
@@ -133,7 +149,28 @@ rules configured gets a single administrator level — never an automatic pass.
 `GET /reports/{name}` with `?format=json|xlsx` — `attendance-register`, `wage-summary`, `stock-position`, `material-consumption`, `low-stock`, `transfer-register`, `wastage`, `expense-register`, `payable-ageing`, `advance-balances`, `budget-vs-actual`.
 
 `expense-register` returns four figures rather than one total: `costIncurred + materialPurchases + labourDisbursements = totalBooked`. Total booked is what left the books, not what the project cost — material purchase becomes inventory and is costed again at issue, and money handed to a worker settles a wage already costed through attendance (docs/09).
-`GET /dashboard/admin`, `GET /dashboard/site/{siteId}`, `GET /dashboard/data-quality`.
+`GET /dashboard/admin`, `GET /dashboard/site/{siteId}`, `GET /dashboard/data-quality` — all
+`?from&to`, defaulting to the month to date and refusing a range wider than a year.
+
+The dashboards own no tables; every figure comes from a business module's own read API, which
+is what stops them becoming a fourth opinion about what a project cost. Material is reported as
+**three separate figures that add up**, with every term of the identity on the response:
+
+```
+openingValue + received − consumed − residual = inventoryValue
+```
+
+`purchased` is beside them and is not one of them — it comes from the bills rather than the
+ledger, and it is not expected to equal `received`: freight is booked separately and a bill and
+its lorry rarely arrive the same day. `residual` is the difference between that arithmetic and
+what the balance cache holds, printed even when it is zero, because a reconciliation you only
+see when it fails is one nobody believes when it passes.
+
+`costIncurred` and `totalBooked` are carried apart for the same reason the expense register
+carries four figures: the first is what the project cost and may be set against a budget, the
+second is what left the books. Every data-quality finding carries `whatToDo` and the examples
+behind its count, at one of two severities — a five-level scale invites arguments about whether
+something is a three or a four, and nobody acts on a three.
 `GET /imports/templates/{entity}` (xlsx), `POST /imports/{entity}` (multipart, dry-run flag), `GET /imports/batches`, `GET /imports/batches/{id}/errors` (xlsx).
 
 ### /sync
