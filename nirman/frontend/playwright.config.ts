@@ -11,6 +11,20 @@ import { defineConfig, devices } from '@playwright/test';
 const PORT = 4173;
 const baseURL = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`;
 
+/**
+ * Which browser binary to drive. CI leaves this unset and gets Playwright's own bundled
+ * Chromium, which is the build the suite is meant to be judged on.
+ *
+ * <p>`PLAYWRIGHT_CHANNEL=chrome` points it at the Chrome already installed on the machine.
+ * That exists for the same reason AbstractIntegrationTest has a no-Docker path: the primary
+ * dev machine is macOS 12, and Playwright stopped shipping a Chromium for it — so without
+ * this the offline tests could only ever be run by CI, which is a poor place to find out
+ * that a sync bug exists.</p>
+ */
+const channel = process.env.PLAYWRIGHT_CHANNEL
+  ? { channel: process.env.PLAYWRIGHT_CHANNEL }
+  : {};
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -30,8 +44,8 @@ export default defineConfig({
 
   projects: [
     // Supervisors are the primary users and they are on a phone, so that runs first.
-    { name: 'mobile-chrome', use: { ...devices['Pixel 5'] } },
-    { name: 'desktop-chrome', use: { ...devices['Desktop Chrome'] } },
+    { name: 'mobile-chrome', use: { ...devices['Pixel 5'], ...channel } },
+    { name: 'desktop-chrome', use: { ...devices['Desktop Chrome'], ...channel } },
   ],
 
   // Skipped when E2E_BASE_URL points somewhere already serving the app.

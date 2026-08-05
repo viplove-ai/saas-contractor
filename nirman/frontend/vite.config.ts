@@ -13,7 +13,7 @@ export default defineConfig({
       registerType: 'prompt', // a supervisor mid-entry must never be reloaded out from under
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Nirman',
+        name: 'Nirman Constructions',
         short_name: 'Nirman',
         description: 'Attendance, materials, expenses and daily reports for construction sites',
         theme_color: '#14181D',

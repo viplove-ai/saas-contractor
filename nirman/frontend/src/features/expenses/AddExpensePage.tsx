@@ -13,6 +13,7 @@ import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount } from '../../shared/formatters';
 import { StatusChip, type RecordStatus } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
+import { BillPhotoField } from './BillPhotoField';
 import {
   duplicateCandidates,
   useCreateExpense,
@@ -50,6 +51,11 @@ export function AddExpensePage() {
   const [noBillReason, setNoBillReason] = useState('');
   const [overrideReason, setOverrideReason] = useState('');
   const [candidates, setCandidates] = useState<DuplicateCandidate[] | null>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
+  // The id is fixed when the form is opened, not when Save is pressed. The photograph is
+  // attached to it before the expense exists anywhere, and a fresh uuid at save time would
+  // leave the photograph pointing at a record that was never created.
+  const [expenseId, setExpenseId] = useState(() => crypto.randomUUID());
 
   const sites = useSites();
   const categories = useExpenseCategories();
@@ -76,12 +82,17 @@ export function AddExpensePage() {
   const complete =
     Boolean(siteId) && Boolean(categoryId) && description.trim().length > 0 && total > 0;
 
+  const site = sites.data?.find((candidate) => candidate.id === siteId);
+  const booked = create.data;
+
   const book = (force: boolean) => {
     create.mutate(
       {
         force,
+        siteLabel: site ? `${site.code} ${site.name}` : 'site',
+        photo: photo ?? undefined,
         input: {
-          id: crypto.randomUUID(),
+          id: expenseId,
           siteId,
           expenseDate,
           categoryId,
@@ -101,6 +112,10 @@ export function AddExpensePage() {
           setNoBillReason('');
           setOverrideReason('');
           setCandidates(null);
+          setPhoto(null);
+          // A new id for the next bill. Reusing this one would make the second expense a
+          // replay of the first and the server would answer with the first one back.
+          setExpenseId(crypto.randomUUID());
         },
         onError: (error) => setCandidates(duplicateCandidates(error)),
       },
@@ -192,6 +207,8 @@ export function AddExpensePage() {
 
       <Typography color="text.secondary">Total with tax: {formatAmount(total)}</Typography>
 
+      <BillPhotoField file={photo} onPick={setPhoto} />
+
       {/*
         The duplicate warning, with what it collided against. Refusing without saying which
         row sends somebody hunting through a month of paper for something already in hand.
@@ -228,9 +245,15 @@ export function AddExpensePage() {
       {create.isError && !candidates && (
         <Alert severity="error">{apiErrorDetail(create.error)}</Alert>
       )}
-      {create.isSuccess && (
+      {booked?.outcome === 'SENT' && (
         <Alert severity="success">
-          Saved {create.data.expenseNumber} as a draft. Send it when you are ready.
+          Saved {booked.expense.expenseNumber} as a draft. Send it when you are ready.
+        </Alert>
+      )}
+      {booked?.outcome === 'QUEUED' && (
+        <Alert severity="info">
+          No connection. This expense{booked.photoQueued ? ' and its photograph are' : ' is'} saved
+          on this phone and goes out by itself when there is a signal.
         </Alert>
       )}
 

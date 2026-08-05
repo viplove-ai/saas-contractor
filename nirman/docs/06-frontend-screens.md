@@ -3,20 +3,24 @@
 Two shells. The role decides which one loads at `/`.
 
 ## SupervisorShell — phone first
-Home is seven tiles, nothing else. Each tile is a full-width 88px row with an icon, a label and a pending-count badge.
+Home is tiles and nothing else, grouped under six headings.
+
+The grouping is by **act, not by module**, and that is the decision to hold to when a screen is added. Attendance, material and expenses are three modules and one job — the things entered as the day happens — while marking attendance and verifying it are one module and two entirely different jobs, done by different people at different times of day. Grouping by module would put the second pair together and split the first three, which is backwards from how the work is done. A flat list said only what order the phases were built in.
+
+A group whose tiles the role cannot open disappears with its heading: the word "Set up" over an empty space reads as something broken rather than as something that was never yours. The group order is fixed rather than sorted per role — the permission filter already leaves a supervisor with entry first and little else — because a menu whose contents move is a menu nobody learns.
 
 | Route | Screen | Notes |
 |---|---|---|
-| `/` | Home tiles | Mark attendance · Receive material · Issue material · Add expense · Submit DPR · Pending approvals · Reports |
+| `/` | Home tiles | **Today at site** — mark attendance · receive material · issue material · add expense · daily report. **Check and sign off** — verify attendance · verify reports · approvals and payments. **Look something up** — stock · workers. **How it is going** — company, site and data-quality dashboards. **Set up** — members · projects · sites. **This device** — not sent yet · your account |
 | `/attendance/mark` | Roster | Site and date defaulted. Present/absent toggle, mark-all-present, per-worker hours drawer |
 | `/attendance/mark/:workerId` | Worker hours | Hours worked (prefilled with the site shift), OT reason, BOQ item |
 | `/inventory/receive` | Goods receipt | Supplier, challan, camera capture, line items |
 | `/inventory/issue` | Material issue | Material search, quantity with unit switch, BOQ item, issued-to |
-| `/expenses/new` | Add expense | Category, amount before tax with GST rate beside it, bill number. Saves as a draft; sending is a separate act. A duplicate warning shows the rows it collided with and takes a reason to override |
+| `/expenses/new` | Add expense | Category, amount before tax with GST rate beside it, bill number, and the bill photographed and compressed on the device before it is queued. Saves as a draft; sending is a separate act. A duplicate warning shows the rows it collided with and takes a reason to override |
 | `/approvals` | Approvals and payments | What is waiting on you, with the level and role on each row; and, for whoever holds `payment:record`, the approved bills still owed with approved/paid/owed shown separately |
 | `/dpr/new` | DPR wizard | 3 steps: what the records already say → work done → observations. Step one is read-only: the figures are derived from the muster, the ledger and the bill book, and a field that let somebody type over them would create a second version of a number the rest of the system computes. A labour cost standing on unverified attendance is marked provisional, and material received is shown apart from material consumed. Photographs arrive with Phase 7's compression |
 | `/approvals` | My submissions | Status chips, rejection reasons |
-| `/sync` | Sync centre | Queue with draft / pending / synced / failed, retry, conflict resolver |
+| `/sync` | Not sent yet | What the device still owes the server, named rather than counted — "12 attendance mark(s) — KSN-A Kausani", not "1 record". Anything waiting on its own says so and asks nothing; anything stuck on a decision is listed first, because those are the only rows still here tomorrow if nobody touches them. Retry and discard for a refusal, keep-mine-with-a-reason or discard for a conflict |
 
 ## DeskShell — Admin, Engineer, Accountant
 Left sidebar, dense tables, saved filters.
@@ -53,5 +57,6 @@ Left sidebar, dense tables, saved filters.
 - A member still carrying the password an admin issued is held on `/profile` until they replace it: a first-time password is known to two people, so nothing may be entered under it.
 - Every list screen: empty state that names the next action, error state that names what failed and offers retry.
 - Status chip component is the one visual constant across all modules.
-- Offline banner appears at the top of the shell when the queue is non-empty, with the count and a link to `/sync`.
+- Offline banner appears at the top of the shell when the queue is non-empty, with a link to `/sync`. Records stuck on a decision are called out separately and in a louder colour: the two states need opposite things from the reader, and a conflict will still be there tomorrow if the banner lets it hide inside a count of things that are merely waiting.
+- Saving with no signal is not an error and does not read like one. The record is kept on the device under the id it would have been sent with, and the screen says so in those words — the only thing that has not happened is the sending, and that happens by itself.
 - i18n: all strings through `t()` from day one, English catalogue only.

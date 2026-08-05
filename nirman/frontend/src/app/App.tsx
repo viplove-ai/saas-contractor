@@ -2,6 +2,7 @@ import { CssBaseline, ThemeProvider } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from 'react-router-dom';
 import { AuthProvider } from '../features/auth/AuthContext';
+import { SyncProvider } from '../offline/SyncProvider';
 import { router } from './router';
 import { theme } from './theme';
 
@@ -26,8 +27,14 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
+        {/*
+          Inside AuthProvider: the queue sends with the signed-in user's token, and a drain
+          fired before the session is restored would spend its first pass collecting 401s.
+        */}
         <AuthProvider>
-          <RouterProvider router={router} />
+          <SyncProvider>
+            <RouterProvider router={router} />
+          </SyncProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

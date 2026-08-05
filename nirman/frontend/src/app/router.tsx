@@ -28,7 +28,13 @@ export const router = createBrowserRouter([
         },
         children: [
           { index: true, element: <Navigate to="/home" replace /> },
-          // Phase 7: /sync
+          {
+            path: 'sync',
+            lazy: async () => {
+              const { SyncPage } = await import('../features/sync/SyncPage');
+              return { Component: SyncPage };
+            },
+          },
           {
             path: 'home',
             lazy: async () => {

@@ -52,19 +52,29 @@ export function RootLayout() {
               <HomeOutlinedIcon />
             </IconButton>
           )}
+          {/*
+            Smaller on a phone rather than truncated. A 375px bar carrying the home icon, the
+            identity strip and Sign out has about 210px left, and at h6 the name clips to
+            "Nirman Construc…" — which reads as a layout that broke rather than as a decision.
+            Dropping a couple of points fits it whole, and `noWrap` is the backstop: on a
+            narrower screen than any we target it clips rather than making the bar two lines
+            tall, which is the one thing the screen can least afford.
+          */}
           <Typography
             variant="h6"
             component={user && !atHome ? Link : 'span'}
             {...(user && !atHome ? { to: '/home' } : {})}
+            noWrap
             sx={{
               flexGrow: 1,
               fontWeight: 700,
+              fontSize: { xs: '1rem', sm: '1.25rem' },
               color: 'inherit',
               textDecoration: 'none',
               minWidth: 0,
             }}
           >
-            Nirman
+            Nirman Constructions
           </Typography>
           {user && (
             <Stack direction="row" alignItems="center" spacing={1}>

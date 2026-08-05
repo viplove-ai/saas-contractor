@@ -6,7 +6,7 @@ nirman/
 ├─ .env.example                every configurable value, no secrets committed
 ├─ README.md
 ├─ docs/                       00 assumptions … 08 roadmap
-├─ infra/nginx/default.conf    TLS-ready reverse proxy, SPA fallback, security headers
+├─ .github/workflows/         ci.yml (test on PR), deploy.yml (Fly.io on main)
 ├─ backend/
 │  ├─ pom.xml
 │  ├─ mvnw, mvnw.cmd           Apache Maven Wrapper 3.3.2, script-only (no jar vendored)
@@ -34,6 +34,11 @@ nirman/
 └─ frontend/
    ├─ package.json, package-lock.json   lockfile is required: the prod image runs `npm ci`
    ├─ vite.config.ts, tsconfig.json, Dockerfile
+   ├─ fly.toml               Fly app config; backend/fly.toml is the API's
+   ├─ nginx.default.conf.template   SPA fallback, security headers, /api/ proxy.
+   │                         Baked into the prod image; ${API_UPSTREAM} and
+   │                         ${DNS_RESOLVER} are substituted at container start,
+   │                         which is what lets compose and Fly share one file.
    ├─ .eslintrc.cjs          eslintrc format, matches the pinned eslint 8
    ├─ playwright.config.ts   e2e runs against a production build, not the dev server
    ├─ e2e/                   Playwright specs (Vitest is scoped to src/, so they never collide)

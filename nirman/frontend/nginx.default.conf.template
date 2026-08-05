@@ -1,5 +1,13 @@
+# Rendered at container start by the nginx image's envsubst entrypoint.
+# Only ${API_UPSTREAM} and ${DNS_RESOLVER} are substituted (see
+# NGINX_ENVSUBST_FILTER in the Dockerfile) — nginx's own $variables survive.
+#
+#   docker compose : API_UPSTREAM=backend:8080          DNS_RESOLVER=127.0.0.11
+#   fly.io         : API_UPSTREAM=nirman-api.internal:8080  DNS_RESOLVER=[fdaa::3]
+
 server {
     listen 80;
+    listen [::]:80;
     server_name _;
     root /usr/share/nginx/html;
     index index.html;
@@ -27,7 +35,14 @@ server {
     }
 
     location /api/ {
-        proxy_pass http://backend:8080/api/;
+        # Resolve the upstream per-request: on Fly the backend machine's
+        # private address changes on every deploy, and a hostname baked into
+        # proxy_pass at startup would go stale.
+        resolver ${DNS_RESOLVER} valid=10s ipv6=on;
+        set $api_upstream "${API_UPSTREAM}";
+        proxy_pass http://$api_upstream$request_uri;
+
+        proxy_http_version 1.1;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;

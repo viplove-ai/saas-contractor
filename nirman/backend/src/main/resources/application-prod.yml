@@ -1,0 +1,46 @@
+# Production profile. Everything sensitive comes from the environment;
+# on Fly those are set with `fly secrets set` (see docs/deployment.md).
+
+spring:
+  datasource:
+    # A managed Postgres (Neon, RDS, Fly Postgres) hands you one connection
+    # string including sslmode, so take it whole instead of rebuilding it
+    # from DB_HOST/DB_NAME the way the default profile does.
+    url: ${DATABASE_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    hikari:
+      # Neon's free tier caps connections well below the default 20, and a
+      # single 1gb machine does not need more anyway.
+      maximum-pool-size: 8
+      minimum-idle: 2
+  flyway:
+    locations: classpath:db/migration   # no seed data in production
+
+app:
+  # Swagger and /v3/api-docs are a complete map of the API. Development wants that;
+  # a deployment carrying one contractor's payroll does not publish it.
+  api-docs:
+    public: false
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+
+logging:
+  level:
+    root: INFO
+    in.nirman: INFO

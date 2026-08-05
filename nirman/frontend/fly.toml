@@ -1,0 +1,37 @@
+# Fly.io config for the nginx-served SPA.
+# nginx also reverse-proxies /api/ to the backend over Fly's private network,
+# so the browser only ever talks to one origin and CORS stays out of the way.
+
+app = "nirman-constructions"
+primary_region = "bom"
+
+[build]
+  dockerfile = "Dockerfile"
+  build-target = "prod"
+
+  [build.args]
+    # Relative base URL — nginx proxies /api/ to nirman-constructions-api.internal:8080.
+    VITE_API_BASE_URL = "/api/v1"
+
+[env]
+  API_UPSTREAM = "nirman-constructions-api.internal:8080"
+  DNS_RESOLVER = "[fdaa::3]"   # Fly's internal DNS, reachable over 6PN
+
+[http_service]
+  internal_port = 80
+  force_https = true
+  auto_start_machines = true
+  auto_stop_machines = "suspend"   # static assets resume in ~1s, so stopping is free
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "5s"
+    interval = "30s"
+    timeout = "5s"
+    method = "GET"
+    path = "/"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

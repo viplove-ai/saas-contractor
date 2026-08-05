@@ -47,7 +47,7 @@ export function LoginPage() {
         <form onSubmit={onSubmit} noValidate>
           <Stack spacing={3}>
             <Stack spacing={0.5}>
-              <Typography variant="h1">Nirman</Typography>
+              <Typography variant="h1">Nirman Constructions</Typography>
               <Typography color="text.secondary">Sign in to continue</Typography>
             </Stack>
 

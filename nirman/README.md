@@ -4,7 +4,7 @@ Multi-project, multi-site operations for a CPWD contractor: labour attendance an
 
 Works in a phone browser, installs as a PWA, and keeps accepting entries when the site has no signal.
 
-**Status: Phase 6 complete.** Architecture and schema (Phase 1); a foundation of sign-in with refresh-token rotation, the role and permission matrix, service-layer site scoping, projects, sites, stores, master data, audit trail and attachments (Phase 2); labour — workers, wage history, the muster roll, attendance with hour and overtime calculation, engineer verification, the append-only wage ledger, advances and settlement, the period lock, two reports with Excel export, and a phone-first mark-attendance screen (Phase 3); inventory — an append-only stock ledger with weighted-average valuation, goods receipts, issues, the three-step transfer lifecycle, wastage, physical counts, BOQ items, material estimates with scope-honest variance, five reports and three phone-first screens (Phase 4); expenses and cash — one generic approval engine, duplicate detection that returns its candidates, partial payments, vendor balances, site floats with office-approved settlement, and three financial reports (Phase 5); and daily progress reports and dashboards — a DPR whose figures are derived live from the other three modules rather than retyped, engineer verification that posts measured work to the measurement book, a printed report rendered from the frozen snapshot, and company, site and data-quality dashboards that report material as three separate figures which add up (Phase 6). Phase 7 is offline and hardening. See `docs/08-roadmap.md`.
+**Status: Phase 7 complete — all seven phases shipped.** Architecture and schema (Phase 1); a foundation of sign-in with refresh-token rotation, the role and permission matrix, service-layer site scoping, projects, sites, stores, master data, audit trail and attachments (Phase 2); labour — workers, wage history, the muster roll, attendance with hour and overtime calculation, engineer verification, the append-only wage ledger, advances and settlement, the period lock, two reports with Excel export, and a phone-first mark-attendance screen (Phase 3); inventory — an append-only stock ledger with weighted-average valuation, goods receipts, issues, the three-step transfer lifecycle, wastage, physical counts, BOQ items, material estimates with scope-honest variance, five reports and three phone-first screens (Phase 4); expenses and cash — one generic approval engine, duplicate detection that returns its candidates, partial payments, vendor balances, site floats with office-approved settlement, and three financial reports (Phase 5); and daily progress reports and dashboards — a DPR whose figures are derived live from the other three modules rather than retyped, engineer verification that posts measured work to the measurement book, a printed report rendered from the frozen snapshot, and company, site and data-quality dashboards that report material as three separate figures which add up (Phase 6); and offline and hardening — an IndexedDB queue that survives a phone being killed mid-sync, on-device image compression, a conflict prompt with the two answers a supervisor can actually give, a per-source ceiling on the sign-in endpoint, and twelve indexes each justified against a named query (Phase 7). See `docs/08-roadmap.md`.
 
 ---
 
@@ -176,8 +176,16 @@ cd frontend && npm run e2e
 the PWA manifest, service worker and icons only exist after `vite build`.
 
 > **Playwright does not run on macOS 12** — `npx playwright install` refuses with
-> `Playwright does not support chromium on mac12`. The e2e suite therefore runs in CI and on
-> macOS 13+ only. Vitest, the backend suite and everything else are unaffected.
+> `Playwright does not support chromium on mac12`, for every browser it ships. Driving the
+> Chrome installed on the machine instead (`PLAYWRIGHT_CHANNEL=chrome npm run e2e`) gets one
+> step further and then fails in the same place, because current Chrome builds do not load on
+> macOS 12 either. The e2e suite therefore runs in CI and on macOS 13+ only; the channel
+> override is there because it will work on any machine whose Chrome does. Vitest, the backend
+> suite and everything else are unaffected.
+>
+> This matters more from Phase 7 than it did before: the offline sync journeys — mark
+> attendance and add an expense with no signal, then reconnect — are e2e tests and nowhere
+> else, which is why CI gained a dedicated `e2e` job in that phase.
 
 ### Database
 
@@ -262,7 +270,9 @@ Read `docs/00-assumptions.md` first — it records every decision made where the
 
 **A rotated refresh token is single-use.** Presenting one twice is the signature of a stolen token, so it revokes the entire family and raises an audit event rather than quietly issuing another pair.
 
-**Offline entry is safe.** The device generates the record id, so the same draft sent three times over a flaky connection creates one row.
+**Offline entry is safe.** The device generates the record id, so the same draft sent three times over a flaky connection creates one row. The queue does not rely on that: a record that has gone out is marked as gone out and is not sent again. Both halves are tested, because a guarantee that only holds on the server is one nobody can see holding.
+
+**A conflict is a question, not a retry.** With no answer at all, the queue waits and tries again on its own. Everything else — a refusal, a duplicate, a locked month — is the server having an opinion, and an opinion is put in front of a person with the two answers they can act on: keep mine with a stated reason, or drop mine and leave what is there.
 
 ---
 

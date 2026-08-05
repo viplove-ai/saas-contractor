@@ -107,10 +107,12 @@ services:
     profiles: ["prod"]
     depends_on:
       - backend
+    environment:
+      # The image renders frontend/nginx.default.conf.template at startup.
+      API_UPSTREAM: backend:8080
+      DNS_RESOLVER: 127.0.0.11
     ports:
       - "80:80"
-    volumes:
-      - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
 
 volumes:
   postgres_data:

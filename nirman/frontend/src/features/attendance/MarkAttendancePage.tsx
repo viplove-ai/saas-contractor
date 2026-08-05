@@ -55,7 +55,10 @@ export function MarkAttendancePage() {
 
   const sites = useSites();
   const roster = useRoster(siteId || undefined, date);
-  const save = useSaveAttendance(siteId, date);
+  const site = sites.data?.find((candidate) => candidate.id === siteId);
+  // Named now rather than when the queue is read: by then this screen is gone and the sync
+  // list would be showing a row of uuids.
+  const save = useSaveAttendance(siteId, date, site ? `${site.code} ${site.name}` : 'site');
   const submit = useSubmitAttendance(siteId, date);
 
   // Default to the first site the user can reach; most supervisors have exactly one.
@@ -141,7 +144,10 @@ export function MarkAttendancePage() {
     });
   };
 
-  const rejected = save.data?.outcomes.filter((o) => o.outcome === 'REJECTED') ?? [];
+  const saved = save.data;
+  const sent = saved && saved.outcome === 'SENT' ? saved.result : null;
+  const queued = saved && saved.outcome === 'QUEUED' ? saved : null;
+  const rejected = sent?.outcomes.filter((o) => o.outcome === 'REJECTED') ?? [];
 
   return (
     <Stack spacing={2}>
@@ -286,10 +292,21 @@ export function MarkAttendancePage() {
               ))}
             </Alert>
           )}
-          {save.isSuccess && rejected.length === 0 && (
+          {sent && rejected.length === 0 && (
             <Alert severity="success">
-              Saved {save.data.accepted}
-              {save.data.unchanged > 0 && `, ${save.data.unchanged} already recorded`}.
+              Saved {sent.accepted}
+              {sent.unchanged > 0 && `, ${sent.unchanged} already recorded`}.
+            </Alert>
+          )}
+          {/*
+            Not an error, and it must not read like one. The marks are on the phone under the
+            same ids they would have gone out with, so the only thing that has not happened
+            yet is the sending — and that happens by itself.
+          */}
+          {queued && (
+            <Alert severity="info">
+              No connection. {queued.marks} mark(s) are saved on this phone and go out by
+              themselves when there is a signal.
             </Alert>
           )}
           {submit.isSuccess && (

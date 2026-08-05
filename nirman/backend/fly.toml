@@ -1,0 +1,37 @@
+# Fly.io config for the Spring Boot API.
+# Secrets (DATABASE_URL, JWT_SECRET, STORAGE_*) are set with `fly secrets set`,
+# never in this file — it is committed.
+
+app = "nirman-constructions-api"
+primary_region = "bom"   # Mumbai, matching app.timezone Asia/Kolkata
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  SPRING_PROFILES_ACTIVE = "prod"
+  STORAGE_ENDPOINT = "https://fly.storage.tigris.dev"
+  # The JVM is the only thing in the container; give it most of the machine.
+  JAVA_OPTS = "-XX:MaxRAMPercentage=70 -XX:+UseSerialGC -Xss512k"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_start_machines = true
+  # JVM cold start is ~20s, so keep one machine warm rather than suspending
+  # to zero. Set min_machines_running = 0 and auto_stop_machines = "suspend"
+  # if you would rather trade first-request latency for a lower bill.
+  auto_stop_machines = "off"
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "45s"   # Flyway migrations run before the port opens
+    interval = "15s"
+    timeout = "5s"
+    method = "GET"
+    path = "/actuator/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"           # Spring Boot + Hibernate + POI/PDF needs >512mb

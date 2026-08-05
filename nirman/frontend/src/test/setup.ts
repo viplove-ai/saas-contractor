@@ -1,4 +1,14 @@
 import '@testing-library/jest-dom/vitest';
+/*
+  jsdom ships no IndexedDB, and from Phase 7 the offline queue is mounted under every screen —
+  the banner counts unsent records on mount and the sync provider drains on mount. Without a
+  store behind them, Dexie throws asynchronously and the failure lands on whichever test file
+  happened to be running, which is a very hard thing to read.
+
+  fake-indexeddb/auto installs an in-memory implementation on globalThis. Each test file gets
+  its own module registry and therefore its own empty database, so the queue starts clean.
+*/
+import 'fake-indexeddb/auto';
 
 /**
  * jsdom has no ResizeObserver, and recharts' ResponsiveContainer constructs one on mount —

@@ -1,5 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
+import { drain } from '../../offline/queue';
+import { saveOrQueue } from '../../offline/saveOrQueue';
+import { queuePhoto } from '../../offline/uploads';
 import { apiClient } from '../../shared/apiClient';
 import type {
   Approval,
@@ -84,24 +87,71 @@ export interface ExpenseInput {
   duplicateOverrideReason?: string | undefined;
 }
 
+/** Either the server booked it, or it is on the device under the id it will keep. */
+export type CreateExpenseResult =
+  | { outcome: 'SENT'; expense: Expense }
+  | { outcome: 'QUEUED'; id: string; photoQueued: boolean };
+
 /**
  * Books an expense. The id is generated here, on the device, so a bill photographed and
  * typed at site with no signal and synced three times is one expense.
  *
  * <p>{@link force} re-sends after a duplicate warning; the server then requires a reason,
  * which is why the screen collects one before setting it.
+ *
+ * <p>With no connection the expense goes into the offline queue instead of failing, and the
+ * photograph — already compressed by the caller — is queued behind it. It is queued behind
+ * rather than with it because a bill number and a total are what the office needs on Monday;
+ * the photograph is the evidence for it and is fifty times the size.</p>
  */
 export function useCreateExpense() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ input, force }: { input: ExpenseInput; force?: boolean }) =>
-      (
-        await apiClient.post<Expense>('/expenses', input, {
-          params: force ? { force: true } : undefined,
-        })
-      ).data,
+    mutationFn: async ({
+      input,
+      force,
+      siteLabel,
+      photo,
+    }: {
+      input: ExpenseInput;
+      force?: boolean;
+      siteLabel: string;
+      photo?: File | undefined;
+    }): Promise<CreateExpenseResult> => {
+      const saved = await saveOrQueue({
+        send: async () =>
+          (
+            await apiClient.post<Expense>('/expenses', input, {
+              params: force ? { force: true } : undefined,
+            })
+          ).data,
+        queue: {
+          clientId: input.id,
+          entityType: 'EXPENSE',
+          siteId: input.siteId,
+          businessDate: input.expenseDate,
+          payload: input,
+          summary: `${input.description} — ${siteLabel}`,
+        },
+      });
+      if (photo) {
+        await queuePhoto({
+          clientId: input.id,
+          entityType: 'EXPENSE',
+          siteId: input.siteId,
+          file: photo,
+        });
+      }
+      return saved.outcome === 'SENT'
+        ? { outcome: 'SENT', expense: saved.result }
+        : { outcome: 'QUEUED', id: input.id, photoQueued: Boolean(photo) };
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: expenseKeys.all });
+      // The photograph is queued either way, so the drain is what actually sends it when
+      // there was a connection all along. Fire and forget: the expense is already booked and
+      // a failed upload is the queue's problem from here.
+      void drain();
     },
   });
 }

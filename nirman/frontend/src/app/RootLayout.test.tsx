@@ -55,15 +55,15 @@ describe('RootLayout', () => {
   it('also takes the wordmark home, for the desk habit of clicking the brand', () => {
     renderAt('/attendance/verify');
 
-    expect(screen.getByRole('link', { name: 'Nirman' })).toHaveAttribute('href', '/home');
+    expect(screen.getByRole('link', { name: 'Nirman Constructions' })).toHaveAttribute('href', '/home');
   });
 
   it('does not point home while already on it', () => {
     renderAt('/home');
 
     expect(screen.queryByRole('link', { name: 'Go to home' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Nirman' })).not.toBeInTheDocument();
-    expect(screen.getByText('Nirman')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Nirman Constructions' })).not.toBeInTheDocument();
+    expect(screen.getByText('Nirman Constructions')).toBeInTheDocument();
   });
 
   it('shows no way home to a visitor who is not signed in', () => {

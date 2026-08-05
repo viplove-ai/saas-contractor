@@ -166,9 +166,18 @@ describe('IssueMaterialPage', () => {
     await screen.findByRole('combobox', { name: 'For which work' });
 
     await user.click(screen.getByRole('combobox', { name: 'For which work' }));
-    const listbox = await screen.findByRole('listbox');
 
-    expect(within(listbox).getByText(/B-001/)).toBeInTheDocument();
+    /*
+      Waiting for a real work item before asserting the placeholder is absent, and that order
+      is the whole point. The list opens the instant it is clicked, carrying only its own
+      "Not against a work item" row; the BOQ items arrive when /boq-items answers. Asserting
+      the parser placeholder is missing from a list that has not loaded yet passes for
+      entirely the wrong reason — which is what made this test fail about one run in twenty,
+      on the runs where the query happened to land after the click rather than before it.
+    */
+    expect(await screen.findByRole('option', { name: /B-001/ })).toBeInTheDocument();
+
+    const listbox = screen.getByRole('listbox');
     expect(within(listbox).queryByText(/B-UNALLOC/)).not.toBeInTheDocument();
   });
 

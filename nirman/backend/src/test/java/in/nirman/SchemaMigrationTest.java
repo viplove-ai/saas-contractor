@@ -96,4 +96,44 @@ class SchemaMigrationTest extends AbstractIntegrationTest {
                 WHERE table_name = 'approvals'""", String.class);
         assertThat(columns).contains("entity_amount");
     }
+
+    /**
+     * V10's query tuning. Asserted by name because the whole point of these is that they are
+     * invisible: nothing fails without them, the seeded dataset is far too small for anyone
+     * to notice, and a merge that dropped the migration would be found in production by a
+     * supervisor whose expense list took nine seconds to open.
+     */
+    @Test
+    @DisplayName("the hot-path queries have an index behind them")
+    void phase7IndexesExist() {
+        assertThat(indexesOn("expenses"))
+                .as("the supervisor's own-records list, the period roll-up and the ageing report")
+                .contains("ix_expenses_own", "ix_expenses_org_date", "ix_expenses_outstanding",
+                        "ix_expenses_similar");
+        assertThat(indexesOn("goods_receipts"))
+                .contains("ix_grn_store_status", "ix_grn_vendor_invoice");
+        assertThat(indexesOn("material_issues")).contains("ix_issues_store_status");
+        assertThat(indexesOn("daily_progress_reports")).contains("ix_dpr_status_date");
+        assertThat(indexesOn("refresh_tokens")).contains("ix_refresh_tokens_expiry");
+        assertThat(indexesOn("audit_logs")).contains("ix_audit_org_occurred");
+    }
+
+    /**
+     * The one index whose absence would be a correctness problem rather than a slow screen:
+     * the duplicate-invoice check compares case- and space-insensitively, so it needs an
+     * expression index or it needs a full scan of every delivery ever booked.
+     */
+    @Test
+    @DisplayName("the delivery duplicate check is an expression index, not a column one")
+    void theInvoiceCheckIsIndexedOnTheExpression() {
+        String definition = jdbc.queryForObject("""
+                SELECT indexdef FROM pg_indexes WHERE indexname = 'ix_grn_vendor_invoice'
+                """, String.class);
+        assertThat(definition).contains("upper", "btrim");
+    }
+
+    private List<String> indexesOn(String table) {
+        return jdbc.queryForList("SELECT indexname FROM pg_indexes WHERE tablename = ?",
+                String.class, table);
+    }
 }

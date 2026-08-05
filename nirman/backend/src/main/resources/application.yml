@@ -52,6 +52,12 @@ app:
     max-failed-logins: 5
     lockout-minutes: 15
     bcrypt-strength: 12
+    # Per source address, not per account: the lockout above stops somebody guessing at one
+    # password, and this stops one password being tried against every username in turn.
+    # Refresh is separate and far larger — see LoginRateLimitFilter.
+    login-attempts-per-window: 60
+    refresh-attempts-per-window: 600
+    login-window-minutes: 5
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
     allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS

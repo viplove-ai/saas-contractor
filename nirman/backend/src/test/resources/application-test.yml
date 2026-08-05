@@ -7,3 +7,10 @@ spring:
 app:
   jwt:
     secret: test_secret_test_secret_test_secret_test_secret_32
+  security:
+    # The whole suite signs in from 127.0.0.1 several hundred times in a few minutes, which
+    # no real client does and the production limit rightly refuses. The limit itself is
+    # tested directly, by driving the filter — see SecurityHardeningIntegrationTest — so
+    # raising it here disables nothing that is under test.
+    login-attempts-per-window: 100000
+    refresh-attempts-per-window: 100000

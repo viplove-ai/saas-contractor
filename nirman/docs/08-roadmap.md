@@ -10,7 +10,7 @@ Phases 1 and 2 are complete. Each later phase ends with working code, migrations
 | **4 — Inventory** ✅ | Material master and conversions, opening stock, goods receipt, issue, transfer lifecycle, wastage, physical count, ledger, weighted-average valuation, **material estimates and estimated-vs-actual variance**, stock reports | Negative stock is rejected and logged; moving-average rate is correct after mixed-rate receipts; a transfer is counted at neither site while in transit; **variance is computed only over the BOQ scope an estimate covers, with uncovered scope shown separately** |
 | **5 — Expenses and cash** ✅ | Expense submission, bill upload with threshold rule, duplicate detection, two-level approval, partial payments, vendor balances, site advances, settlement, reports | Approved expense cannot be silently edited; duplicate invoice returns 409 with candidates; approved cost, cash paid and payable reconcile |
 | **6 — DPR and dashboards** ✅ | DPR with auto-prefill from the other three modules, engineer verification, PDF, admin and site and data-quality dashboards, charts | DPR prefill matches the underlying records exactly; dashboard shows material purchased, consumed and inventory value as three separate figures that add up |
-| **7 — Offline and hardening** | IndexedDB drafts, sync queue, idempotency, image compression, conflict resolution UI, security review, indexes and query tuning, deployment guide | The same draft sent twice creates one row; a conflict surfaces a resolvable prompt; Playwright covers mark-attendance and add-expense offline then online |
+| **7 — Offline and hardening** ✅ | IndexedDB drafts, sync queue, idempotency, image compression, conflict resolution UI, security review, indexes and query tuning, deployment guide | The same draft sent twice creates one row; a conflict surfaces a resolvable prompt; Playwright covers mark-attendance and add-expense offline then online |
 
 ## Working agreement for each phase
 1. I state what the phase implements and list every file created or modified.
@@ -304,8 +304,85 @@ a new upload path, and the wizard's fourth step waits for Phase 7's image compre
 renders from the frozen snapshot rather than from today's records, which is the whole point of
 freezing it.
 
-## Next: Phase 7
+## Phase 7 — what shipped
 
-Offline and hardening: IndexedDB drafts, the sync queue and its idempotency, image compression,
-conflict resolution, a security review and query tuning. The client-generated ids that labour,
-inventory, expense and now the DPR all take on arrival are what that phase is built on.
+Every exit criterion named above is met and covered by a test that says so by name.
+226 backend tests, 166 frontend tests and 3 Playwright journeys. What is built:
+
+- **The queue does not lean on the server's idempotency, and that is the point.** Every module
+  has absorbed a repeated client-generated id since the phase that built it, so a naive queue
+  could re-send everything on every reconnect and still be correct. It would also be
+  unreadable — nobody could tell from the outside whether the property was holding — and it
+  would spend a supervisor's data allowance proving it. So a record that has gone out is
+  marked as gone out, the drain is single-flight, and `queue.test.ts` asserts the send count
+  rather than the absence of a visible error. `OfflineReplayIntegrationTest` holds the other
+  half against a real PostgreSQL: three sends of the same expense keep the *first* document
+  number, which is the assertion that would fail if the row were quietly recreated.
+- **The queue takes over at exactly one boundary: no answer at all.** With signal, records go
+  straight out and the person who typed them sees what the server said — including a bill that
+  looks like one already on file, or a worker somebody else already marked. Those are questions
+  for the person standing there with the paperwork, and a queue-first design would deliver them
+  hours later to a screen that had forgotten the context. Everything except a dead connection —
+  a refusal, a duplicate, a locked month — is the server having an opinion, and an opinion is
+  not something to retry.
+- **Four failure kinds, because there are four different things to do about them.**
+  `classifyFailure` is a pure function of the error and nothing else, and every downstream
+  behaviour follows from its four answers. The one that looks wrong and is not: a 401 that
+  survives the api client's own refresh-and-retry is treated as transient, because burning a
+  morning's muster as "refused" when a token expired in somebody's pocket is a far worse
+  outcome than one wasted retry.
+- **A conflict is a question with two answers, not a merge.** Keep this device's version, with a
+  stated reason that goes on the record, or drop it and leave the server's. A field-by-field
+  merge sounds better and is unusable on a phone — a man was present or he was not, and a screen
+  offering to combine two answers to that is asking a question with no meaning. The asymmetry is
+  deliberate and visible: an expense can be forced through because a second delivery on the same
+  afternoon is real, and a duplicate attendance mark cannot, because there is one man and one
+  day. Where there is no door, the dialog says so instead of offering a button that would 409
+  again.
+- **Photographs are compressed on the device, at the moment they are taken.** 1600px on the long
+  edge and 700 KB is enough to read a GST number off a printed invoice and is roughly a fifth of
+  what a phone camera produces. Doing it at pick time rather than at upload time is what lets the
+  screen say "3.8 MB → 240 KB" — the same work done invisibly ten minutes later on a reconnect is
+  indistinguishable from the app having lost it. And they queue *behind* the record they belong
+  to: a bill number and a total are what the office needs on Monday, and an attachment pointing
+  at an expense the server has never heard of is a broken row on somebody's approval list.
+- **The security review is written down as tests rather than as a page of findings.** What it
+  turned up as genuinely thin was the login endpoint: the Phase 2 lockout stops somebody guessing
+  at one password and does nothing about one password tried against every username, because each
+  of those is the first failure on a different account. The fence had to be per source and count
+  attempts rather than failures. Refresh gets an allowance ten times larger and for a stated
+  reason — it is an app rotating a token every fifteen minutes, a whole site shares one gateway
+  address, and token theft there is already answered by single-use rotation and family
+  revocation. The rest is headers a JSON API should have had from the start, and taking the
+  OpenAPI map off the production deployment.
+- **Twelve indexes, each justified against a named caller.** The one that mattered most was the
+  absence of any index on `expenses.created_by` — the matrix's **O** means a supervisor's expense
+  list is "the ones I raised", which made the most frequent query in the module a full scan
+  filtered afterwards. They are asserted by name in `SchemaMigrationTest` precisely because they
+  are invisible: nothing fails without them, the seeded dataset is far too small to notice, and a
+  merge that dropped the migration would be found in production by somebody whose screen took
+  nine seconds to open.
+
+**Not run on the primary dev machine.** The Playwright journeys execute in CI and nowhere else:
+Playwright ships no browser build for macOS 12, and neither does the Chrome installed on it. This
+is the same constraint that gives `AbstractIntegrationTest` its no-Docker path, and it is why the
+CI workflow gained an `e2e` job in this phase rather than a later one — the specs are worth
+nothing if the only thing that can run them is not wired up.
+
+**Home stopped being a build log.** Eighteen tiles in a flat list had been fine at four and
+stopped being fine somewhere around ten: "Verify attendance" sat beside "Receive material" for no
+reason except that labour was built before inventory. They are now grouped by *act* rather than by
+module — the things entered as the day happens, the things waiting on somebody's sign-off, the
+registers, the dashboards, setup, and this device — because attendance, material and expenses are
+three modules and one job, while marking attendance and verifying it are one module and two
+entirely different jobs done by different people at different times of day. A group whose tiles a
+role cannot open disappears with its heading, since "Set up" over an empty space reads as
+something broken rather than as something that was never yours. The word "Open" came off every
+tile to pay for the headings: it existed to contrast with "Coming soon", and with every screen now
+built it was a line of text on eighteen tiles saying nothing.
+
+**Deliberately narrow.** Attendance and expenses go through the queue; goods receipt, material
+issue and the DPR do not yet. The first two are the screens the exit criteria name and the ones a
+supervisor uses with no signal every day. The DPR is excluded on the merits rather than for time:
+its draft already lives on the server from the first save and the wizard edits it there across
+several sittings, so it has a life the queue's send-once-and-forget shape does not fit.

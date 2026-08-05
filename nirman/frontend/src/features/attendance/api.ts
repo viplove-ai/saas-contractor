@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { saveOrQueue } from '../../offline/saveOrQueue';
 import { apiClient } from '../../shared/apiClient';
 import type {
   AttendanceListRow,
@@ -42,11 +43,21 @@ export function useRoster(siteId: string | undefined, date: string) {
   });
 }
 
+/** Either the server answered, or the batch is on the device and the queue owns it. */
+export type SaveAttendanceResult =
+  | { outcome: 'SENT'; result: BulkResult }
+  | { outcome: 'QUEUED'; marks: number };
+
 /**
  * Saves the marked workers. Ids are generated here, on the device, which is what makes a
  * re-send safe: the same batch arriving twice is recognised rather than duplicated.
+ *
+ * <p>With no connection the batch goes into the offline queue under the same ids instead of
+ * failing. That is the only difference — with signal it still goes straight out, so a worker
+ * somebody else already marked is still refused while the supervisor is looking at the
+ * muster rather than three hours later on a screen he has left.</p>
  */
-export function useSaveAttendance(siteId: string, date: string) {
+export function useSaveAttendance(siteId: string, date: string, siteLabel: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (drafts: Map<string, MarkDraft & { id: string }>) => {
@@ -60,9 +71,23 @@ export function useSaveAttendance(siteId: string, date: string) {
         enteredHours: draft.enteredHours,
         overtimeReason: draft.overtimeReason || undefined,
       }));
-      return (
-        await apiClient.post<BulkResult>('/attendance/bulk', { siteId, date, entries })
-      ).data;
+      const payload = { siteId, date, entries };
+      const saved = await saveOrQueue({
+        send: async () => (await apiClient.post<BulkResult>('/attendance/bulk', payload)).data,
+        queue: {
+          // One batch per site and day, so a supervisor who marks ten more men after lunch
+          // has one queued muster carrying everything rather than two that overlap.
+          clientId: `attendance:${siteId}:${date}`,
+          entityType: 'ATTENDANCE',
+          siteId,
+          businessDate: date,
+          payload,
+          summary: `${entries.length} attendance mark(s) — ${siteLabel}`,
+        },
+      });
+      return saved.outcome === 'SENT'
+        ? ({ outcome: 'SENT', result: saved.result } satisfies SaveAttendanceResult)
+        : ({ outcome: 'QUEUED', marks: entries.length } satisfies SaveAttendanceResult);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: attendanceKeys.roster(siteId, date) });
