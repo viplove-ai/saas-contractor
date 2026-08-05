@@ -1,0 +1,25 @@
+.env
+*.log
+target/
+build/
+node_modules/
+dist/
+.DS_Store
+.idea/
+.vscode/
+*.iml
+frontend/dev-dist/
+backend/src/main/resources/application-local.yml
+
+# Playwright output. The report and traces are build artefacts, never committed.
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/
+frontend/.cache/
+
+# Maven wrapper downloads its distribution into ~/.m2; nothing local to ignore, but a
+# wrapper jar must never reappear here — the script-only distribution is deliberate.
+backend/.mvn/wrapper/maven-wrapper.jar
+
+# Local dev runtime: logs and the generated dev JWT signing key.
+.dev/

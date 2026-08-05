@@ -1,0 +1,122 @@
+package in.nirman.modules.dpr.api;
+
+import in.nirman.common.PageResponse;
+import in.nirman.modules.dpr.api.dto.DprDtos.AttachPhotoRequest;
+import in.nirman.modules.dpr.api.dto.DprDtos.CreateDprRequest;
+import in.nirman.modules.dpr.api.dto.DprDtos.DprPrefill;
+import in.nirman.modules.dpr.api.dto.DprDtos.DprResponse;
+import in.nirman.modules.dpr.api.dto.DprDtos.UpdateDprRequest;
+import in.nirman.modules.dpr.api.dto.DprDtos.VerifyDprRequest;
+import in.nirman.modules.dpr.domain.DailyProgressReport;
+import in.nirman.modules.dpr.service.DprPdfService;
+import in.nirman.modules.dpr.service.DprPrefillService;
+import in.nirman.modules.dpr.service.DprService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.net.URI;
+import java.time.LocalDate;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/v1/dprs")
+@Tag(name = "DPR", description = "Daily progress reports: prefill, draft, verify and print")
+public class DprController {
+
+    private final DprService dprs;
+    private final DprPrefillService prefill;
+    private final DprPdfService pdf;
+
+    public DprController(DprService dprs, DprPrefillService prefill, DprPdfService pdf) {
+        this.dprs = dprs;
+        this.prefill = prefill;
+        this.pdf = pdf;
+    }
+
+    @GetMapping
+    @Operation(summary = "Reports, narrowed to the caller's sites")
+    public PageResponse<DprResponse> list(
+            @RequestParam(required = false) UUID siteId,
+            @RequestParam(required = false) DailyProgressReport.Workflow status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size) {
+        return dprs.list(siteId, status, from, to,
+                PageRequest.of(page, Math.min(size, 200),
+                        Sort.by(Sort.Direction.DESC, "reportDate")));
+    }
+
+    @GetMapping("/prefill")
+    @Operation(summary = "What labour, inventory and expense already know about the day, derived live from the records")
+    public DprPrefill prefill(
+            @RequestParam UUID siteId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return prefill.prefill(siteId, date);
+    }
+
+    @PostMapping
+    @Operation(summary = "Open the day's report. One per site per day; 409 names the one that already covers it.")
+    public ResponseEntity<DprResponse> create(@Valid @RequestBody CreateDprRequest request) {
+        DprResponse created = dprs.create(request);
+        return ResponseEntity.created(URI.create("/api/v1/dprs/" + created.id())).body(created);
+    }
+
+    @GetMapping("/{id}")
+    public DprResponse get(@PathVariable UUID id) {
+        return dprs.get(id);
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "Edit. Draft and returned reports only — a verified report is the document that was signed.")
+    public DprResponse update(@PathVariable UUID id,
+                              @Valid @RequestBody UpdateDprRequest request) {
+        return dprs.update(id, request);
+    }
+
+    @PostMapping("/{id}/submit")
+    @Operation(summary = "Send for the engineer's signature, and freeze the rolled-up figures")
+    public DprResponse submit(@PathVariable UUID id) {
+        return dprs.submit(id);
+    }
+
+    @PostMapping("/{id}/verify")
+    @Operation(summary = "Verify or return. Verifying posts the measured quantities to the measurement book.")
+    public DprResponse verify(@PathVariable UUID id,
+                              @Valid @RequestBody VerifyDprRequest request) {
+        return dprs.decide(id, request);
+    }
+
+    @PostMapping("/{id}/photos")
+    @Operation(summary = "Link an uploaded site photograph to the day's report")
+    public DprResponse attachPhoto(@PathVariable UUID id,
+                                   @Valid @RequestBody AttachPhotoRequest request) {
+        return dprs.attachPhoto(id, request);
+    }
+
+    @GetMapping("/{id}/pdf")
+    @Operation(summary = "The printed report, rendered from the frozen figures rather than from today's records")
+    public ResponseEntity<byte[]> pdf(@PathVariable UUID id) {
+        DprPdfService.Rendered rendered = pdf.render(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + rendered.fileName() + "\"")
+                .body(rendered.body());
+    }
+}

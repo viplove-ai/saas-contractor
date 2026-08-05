@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<!--
+  The printed daily progress report. Rendered by DprPdfService through openhtmltopdf, which
+  needs well-formed XHTML — every tag closes, and nothing relies on the browser's tolerance.
+
+  Every figure on this page comes from the report's frozen columns. Nothing here computes,
+  and nothing here reads today's records: the whole point of the snapshot is that the PDF
+  issued on the 3rd still says what it said on the 3rd.
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title th:text="'DPR ' + ${dpr.dprNumber()}">Daily Progress Report</title>
+    <style>
+        @page { size: A4; margin: 14mm 12mm; }
+        body { font-family: Helvetica, Arial, sans-serif; font-size: 9pt; color: #111; }
+        h1 { font-size: 14pt; margin: 0; }
+        h2 { font-size: 10pt; margin: 12px 0 4px; border-bottom: 1px solid #999;
+             padding-bottom: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #bbb; padding: 3px 5px; text-align: left;
+                 vertical-align: top; }
+        th { background: #eee; font-weight: bold; }
+        td.num, th.num { text-align: right; }
+        .head td { border: none; padding: 0; }
+        .meta { font-size: 8.5pt; color: #444; }
+        .rollup th { background: #f6f6f6; }
+        .rollup td.total { font-weight: bold; }
+        .note { font-size: 8pt; color: #555; margin-top: 3px; }
+        .narrative td { height: 34px; }
+        .sign { margin-top: 18px; }
+        .sign td { border: none; padding-top: 26px; }
+        .sign .line { border-top: 1px solid #444; padding-top: 3px; width: 58mm; }
+        .draft { color: #b00; font-weight: bold; }
+        .empty { color: #777; font-style: italic; }
+    </style>
+</head>
+<body>
+
+<table class="head">
+    <tr>
+        <td>
+            <h1>Daily Progress Report</h1>
+            <div class="meta">
+                <span th:text="${projectName}">Project</span> ·
+                <span th:text="${dpr.siteName()}">Site</span>
+            </div>
+        </td>
+        <td style="text-align: right;">
+            <div><strong th:text="${dpr.dprNumber()}">DPR-2025-0001</strong></div>
+            <div class="meta" th:text="${reportDate}">01 Jan 2025</div>
+            <div class="meta" th:text="'Status: ' + ${dpr.workflowStatus()}">Status</div>
+            <div class="draft" th:if="${draft}">DRAFT — figures not final</div>
+        </td>
+    </tr>
+</table>
+
+<h2>Conditions</h2>
+<table>
+    <tr>
+        <th>Weather</th>
+        <td th:text="${dpr.weather()} ?: '—'">—</td>
+        <th>Temperature</th>
+        <td th:text="${dpr.temperatureC()} != null ? ${dpr.temperatureC()} + ' °C' : '—'">—</td>
+        <th>Working hours lost</th>
+        <td th:text="${dpr.workingHoursLost()}">0</td>
+    </tr>
+</table>
+
+<h2>Work done</h2>
+<table th:if="${!dpr.workItems().isEmpty()}">
+    <tr>
+        <th style="width: 16mm;">BOQ</th>
+        <th>Activity</th>
+        <th style="width: 28mm;">Location</th>
+        <th class="num" style="width: 22mm;">Quantity</th>
+        <th style="width: 34mm;">Remarks</th>
+    </tr>
+    <tr th:each="line : ${dpr.workItems()}">
+        <td th:text="${line.itemNumber()} ?: '—'">—</td>
+        <td th:text="${line.activity()}">Activity</td>
+        <td th:text="${line.workLocation()} ?: '—'">—</td>
+        <!--
+          A dash rather than a zero where nothing was measured. "Shuttering struck" is real
+          work that measures against no contract line, and printing 0.00 beside it reads as a
+          claim of nothing done.
+        -->
+        <td class="num" th:text="${line.measured()} ? ${line.quantity()} : '—'">—</td>
+        <td th:text="${line.remarks()} ?: '—'">—</td>
+    </tr>
+</table>
+<p class="empty" th:if="${dpr.workItems().isEmpty()}">No work items recorded.</p>
+
+<h2>Labour on site</h2>
+<table th:if="${!dpr.labour().isEmpty()}">
+    <tr>
+        <th>Trade</th>
+        <th>Contractor</th>
+        <th class="num" style="width: 20mm;">Men</th>
+        <th class="num" style="width: 26mm;">Regular hrs</th>
+        <th class="num" style="width: 26mm;">Overtime hrs</th>
+    </tr>
+    <tr th:each="line : ${dpr.labour()}">
+        <td th:text="${line.skillCategoryName()} ?: 'Unclassified'">Trade</td>
+        <td th:text="${line.labourContractorName()} ?: 'Direct'">Contractor</td>
+        <td class="num" th:text="${line.headCount()}">0</td>
+        <td class="num" th:text="${line.regularHours()}">0</td>
+        <td class="num" th:text="${line.overtimeHours()}">0</td>
+    </tr>
+    <tr>
+        <th colspan="2">Total</th>
+        <th class="num" th:text="${dpr.labourPresentCount()}">0</th>
+        <th class="num" th:text="${dpr.labourRegularHours()}">0</th>
+        <th class="num" th:text="${dpr.labourOvertimeHours()}">0</th>
+    </tr>
+</table>
+<p class="empty" th:if="${dpr.labour().isEmpty()}">No attendance recorded for this day.</p>
+
+<h2>Plant and machinery</h2>
+<table th:if="${!dpr.machinery().isEmpty()}">
+    <tr>
+        <th>Machine</th>
+        <th class="num" style="width: 16mm;">Number</th>
+        <th class="num" style="width: 24mm;">Hours run</th>
+        <th class="num" style="width: 24mm;">Hours idle</th>
+        <th style="width: 40mm;">Remarks</th>
+    </tr>
+    <tr th:each="plant : ${dpr.machinery()}">
+        <td th:text="${plant.machineryName()}">Machine</td>
+        <td class="num" th:text="${plant.count()}">1</td>
+        <td class="num" th:text="${plant.hoursUsed()} ?: '—'">—</td>
+        <td class="num" th:text="${plant.idleHours()} ?: '—'">—</td>
+        <td th:text="${plant.remarks()} ?: '—'">—</td>
+    </tr>
+</table>
+<p class="empty" th:if="${dpr.machinery().isEmpty()}">No plant recorded.</p>
+
+<h2>What the day cost</h2>
+<!--
+  Four rows, three of which add up, and one that deliberately does not join the total.
+  Material received is inventory: it becomes cost when it is issued, and adding it here would
+  count the same cement twice (docs/02, docs/09).
+-->
+<table class="rollup">
+    <tr>
+        <th>Labour</th>
+        <td class="num" th:text="${dpr.labourCost()} ?: '—'">—</td>
+        <th>Material consumed</th>
+        <td class="num" th:text="${dpr.materialConsumedValue()} ?: '—'">—</td>
+        <th>Other cost incurred</th>
+        <td class="num" th:text="${dpr.expenseAmount()} ?: '—'">—</td>
+        <th>Total</th>
+        <td class="num total" th:text="${dpr.dayCost()}">0</td>
+    </tr>
+    <tr>
+        <th>Material received into store</th>
+        <td class="num" th:text="${dpr.materialReceivedValue()} ?: '—'">—</td>
+        <td colspan="6" class="note">
+            Received material is inventory, not cost — it is costed when it is issued to the
+            work face, so it is shown here and left out of the total.
+        </td>
+    </tr>
+</table>
+
+<h2>Observations</h2>
+<table class="narrative">
+    <tr>
+        <th style="width: 34mm;">Summary of work</th>
+        <td th:text="${dpr.workSummary()} ?: '—'">—</td>
+    </tr>
+    <tr>
+        <th>Delays</th>
+        <td th:text="${dpr.delays()} ?: '—'">—</td>
+    </tr>
+    <tr>
+        <th>Safety</th>
+        <td th:text="${dpr.safetyObservations()} ?: '—'">—</td>
+    </tr>
+    <tr>
+        <th>Quality</th>
+        <td th:text="${dpr.qualityObservations()} ?: '—'">—</td>
+    </tr>
+    <tr>
+        <th>Instructions received</th>
+        <td th:text="${dpr.instructionsReceived()} ?: '—'">—</td>
+    </tr>
+    <tr>
+        <th>Needs management attention</th>
+        <td th:text="${dpr.managementAttention()} ?: '—'">—</td>
+    </tr>
+    <tr>
+        <th>Plan for tomorrow</th>
+        <td th:text="${dpr.nextDayPlan()} ?: '—'">—</td>
+    </tr>
+</table>
+
+<h2>Photographs</h2>
+<table th:if="${!dpr.photos().isEmpty()}">
+    <tr>
+        <th style="width: 10mm;">#</th>
+        <th>Caption</th>
+        <th style="width: 44mm;">File</th>
+    </tr>
+    <tr th:each="photo, iter : ${dpr.photos()}">
+        <td th:text="${iter.count}">1</td>
+        <td th:text="${photo.caption()} ?: '—'">—</td>
+        <td th:text="${photo.fileName()} ?: '—'">—</td>
+    </tr>
+</table>
+<p class="empty" th:if="${dpr.photos().isEmpty()}">No photographs attached.</p>
+
+<table class="sign">
+    <tr>
+        <td>
+            <div class="line">
+                Prepared by
+                <span th:text="${dpr.preparedByName()} ?: '—'">—</span>
+            </div>
+            <div class="meta" th:text="${submittedAt} ?: 'not yet submitted'">—</div>
+        </td>
+        <td>
+            <div class="line">
+                Verified by
+                <span th:text="${dpr.verifiedByName()} ?: '—'">—</span>
+            </div>
+            <div class="meta" th:text="${verifiedAt} ?: 'not yet verified'">—</div>
+        </td>
+    </tr>
+</table>
+
+<p class="note" th:if="${dpr.rejectionReason()} != null">
+    Returned to the preparer:
+    <span th:text="${dpr.rejectionReason()}">reason</span>
+</p>
+
+</body>
+</html>

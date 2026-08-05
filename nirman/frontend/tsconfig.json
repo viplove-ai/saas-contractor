@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "baseUrl": ".",
+    "paths": { "@/*": ["./src/*"] },
+    // This array *restricts* which ambient type packages load, so anything omitted is
+    // invisible. vite/client declares import.meta.env (used by shared/apiClient.ts) and node
+    // declares process/__dirname/node:path (used by vite.config.ts and playwright.config.ts).
+    // Without them `tsc -b` fails and so does `npm run build`.
+    "types": ["vitest/globals", "vite/client", "vite-plugin-pwa/client", "node"]
+  },
+  "include": ["src", "vite.config.ts", "playwright.config.ts", "e2e"]
+}

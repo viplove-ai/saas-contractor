@@ -1,0 +1,9 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+app:
+  jwt:
+    secret: test_secret_test_secret_test_secret_test_secret_32

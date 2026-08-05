@@ -1,0 +1,7 @@
+2026-08-03 16:18:41.583 IST [33505] LOG:  starting PostgreSQL 16.14 (Homebrew) on x86_64-apple-darwin21.6.0, compiled by Apple clang version 14.0.0 (clang-1400.0.29.202), 64-bit
+2026-08-03 16:18:41.584 IST [33505] LOG:  listening on IPv6 address "::1", port 5432
+2026-08-03 16:18:41.584 IST [33505] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2026-08-03 16:18:41.586 IST [33505] LOG:  listening on Unix socket "/tmp/.s.PGSQL.5432"
+2026-08-03 16:18:41.589 IST [33505] FATAL:  postmaster became multithreaded during startup
+2026-08-03 16:18:41.589 IST [33505] HINT:  Set the LC_ALL environment variable to a valid locale.
+2026-08-03 16:18:41.592 IST [33505] LOG:  database system is shut down

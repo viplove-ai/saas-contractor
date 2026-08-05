@@ -1,0 +1,17 @@
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed   # dev-only sample data
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+
+logging:
+  level:
+    in.nirman: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+
+app:
+  seed:
+    enabled: true

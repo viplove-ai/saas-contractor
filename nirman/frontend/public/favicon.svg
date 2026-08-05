@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Nirman">
+  <!-- Same mark and geometry as icon-192/512.png, in vector so it stays crisp in a browser tab.
+       Colours are tokens.ink and tokens.signal from src/app/theme.ts. -->
+  <rect width="512" height="512" fill="#14181D"/>
+  <g fill="#C2410C">
+    <rect x="100" y="256" width="78" height="132" rx="10"/>
+    <rect x="217" y="178" width="78" height="210" rx="10"/>
+    <rect x="334" y="93"  width="78" height="295" rx="10"/>
+  </g>
+</svg>
