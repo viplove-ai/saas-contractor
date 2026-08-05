@@ -3,7 +3,8 @@
 # so the browser only ever talks to one origin and CORS stays out of the way.
 
 app = "nirman-constructions"
-primary_region = "bom"
+primary_region = "sin"   # Same region as the API — /api/ is proxied over 6PN, so the
+                         # two apps should not sit on opposite ends of that hop.
 
 [build]
   dockerfile = "Dockerfile"

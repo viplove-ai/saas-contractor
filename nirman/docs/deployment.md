@@ -49,9 +49,19 @@ URLs in `.github/workflows/deploy.yml`.
 
 ### 2. Postgres (Neon)
 
-Create a project at neon.tech in the region closest to `primary_region` (ap-south-1
-for Mumbai). Copy the JDBC connection string — it looks like
-`jdbc:postgresql://ep-xxx.ap-south-1.aws.neon.tech/nirman?sslmode=require`.
+Create a project at neon.tech in the same region as `primary_region` — ap-southeast-1
+(Singapore), matching `sin`. Copy the connection string and rewrite it into JDBC form:
+prefix `jdbc:`, and drop the `user:password@` part, since `DB_USER` and `DB_PASSWORD`
+are separate secrets.
+
+`postgresql://neondb_owner:npg_xxx@ep-xxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require`
+becomes `jdbc:postgresql://ep-xxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require`.
+
+Take the direct endpoint, not the `-pooler` one: Hikari already holds a persistent pool,
+and stacking it on PgBouncer in transaction mode breaks prepared statements.
+
+Colocation is the point — a request makes several DB round trips and one trip to the
+user, so if you move the database, move `primary_region` in both fly.toml files with it.
 
 ### 3. Object storage (Tigris)
 
@@ -86,13 +96,21 @@ production deploy into a one-click approval.
 
 ### 6. First deploy
 
+Deploy from inside each app's directory, not from the repo root with `--config`: both
+Dockerfiles copy `pom.xml` / `package.json` from the context root, so the build context
+has to be that directory. This is the same form `.github/workflows/deploy.yml` uses.
+
 ```bash
-flyctl deploy --config backend/fly.toml --remote-only
+cd backend && flyctl deploy --remote-only
 ```
 
 ```bash
-flyctl deploy --config frontend/fly.toml --remote-only
+cd frontend && flyctl deploy --remote-only
 ```
+
+(If flyctl reports "the config for your app is missing an app name", it did not find a
+fly.toml at all — check which directory you are in. It reads a missing `--config` path
+as an empty config rather than reporting the missing file.)
 
 After this, pushing to `main` does it automatically.
 
