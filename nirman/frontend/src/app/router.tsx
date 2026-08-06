@@ -28,7 +28,14 @@ export const router = createBrowserRouter([
           return { Component: RootLayout };
         },
         children: [
-          { index: true, element: <Navigate to="/home" replace /> },
+          { index: true, element: <Navigate to="/today" replace /> },
+          {
+            path: 'today',
+            lazy: async () => {
+              const { TodayPage } = await import('../features/today/TodayPage');
+              return { Component: TodayPage };
+            },
+          },
           /*
             The one screen in the table that is not split out, because it is the only one
             whose whole purpose is to work with no signal. Every other route fetches its
@@ -192,5 +199,5 @@ export const router = createBrowserRouter([
       },
     ],
   },
-  { path: '*', element: <Navigate to="/home" replace /> },
+  { path: '*', element: <Navigate to="/today" replace /> },
 ]);

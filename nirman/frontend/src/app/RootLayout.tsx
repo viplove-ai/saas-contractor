@@ -1,34 +1,30 @@
-import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
-import {
-  AppBar,
-  Box,
-  Button,
-  Chip,
-  Container,
-  IconButton,
-  Stack,
-  Toolbar,
-  Typography,
-} from '@mui/material';
+import { Box, Button, Stack, Typography } from '@mui/material';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../features/auth/AuthContext';
 import { OfflineBanner } from '../shared/OfflineBanner';
+import { BottomNav, Initials, SideRail, Wordmark } from './AppNav';
+import { graphPaper } from './sketch';
+import { tokens } from './theme';
 
 /**
- * Shared frame for every signed-in screen. Phase 3 splits this into SupervisorShell and
- * DeskShell when the task screens arrive; the offline banner and the identity strip stay
- * common to both.
+ * Shared frame for every signed-in screen.
+ *
+ * <p>The AppBar is gone. It spent 56px of a phone screen carrying a wordmark, a role chip and
+ * a Sign out button — none of which anybody came to the screen for, and one of which (the home
+ * icon) existed only because the tiles were the only way back. Navigation now lives at the
+ * bottom of the phone, where a thumb already is, and down the left of a desk browser; identity
+ * and sign-out moved onto <b>More</b> and the profile screen, one tap from either.</p>
+ *
+ * <p>What stays common to both shells is what was always common: the offline banner above
+ * everything, and the paper ground under everything.</p>
+ *
+ * @param signoffCount rows waiting on this user's signature, for the Sign-off badge. Passed
+ *   down rather than fetched here so the shell owes nothing to the network on first paint.
  */
-export function RootLayout() {
+export function RootLayout({ signoffCount = 0 }: { signoffCount?: number }) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-
-  // Every task screen is a dead end without this. The icon carries the way out on a phone,
-  // where it is the only thing on the bar wide enough to hit reliably; the wordmark carries
-  // it on a desk browser, where clicking the brand is the habit. Both are hidden on /home
-  // itself rather than pointing at the screen you are already looking at.
-  const atHome = location.pathname === '/home';
+  const { pathname } = useLocation();
 
   const handleSignOut = async () => {
     await signOut();
@@ -36,92 +32,71 @@ export function RootLayout() {
   };
 
   return (
-    <Box sx={{ minHeight: '100dvh', bgcolor: 'background.default' }}>
-      <OfflineBanner />
-      <AppBar position="static" elevation={0} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Toolbar sx={{ gap: 1 }}>
-          {user && !atHome && (
-            <IconButton
-              component={Link}
-              to="/home"
-              color="inherit"
-              edge="start"
-              aria-label="Go to home"
-              sx={{ width: 48, height: 48, flexShrink: 0 }}
-            >
-              <HomeOutlinedIcon />
-            </IconButton>
+    <Box sx={{ minHeight: '100dvh', display: 'flex', ...graphPaper }}>
+      <SideRail signoffCount={signoffCount} />
+
+      <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
+        <OfflineBanner />
+
+        {/*
+          Phone only, and deliberately not an AppBar: no elevation, no fixed position, nothing
+          that survives a scroll. It is a masthead — you read it once on arrival. The desk
+          browser gets the same content in the rail instead.
+        */}
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{ display: { xs: 'flex', md: 'none' }, px: 2, pt: 1.75, pb: 1 }}
+        >
+          <Box component={Link} to="/today" sx={{ textDecoration: 'none' }}>
+            <Wordmark compact />
+          </Box>
+          {user && (
+            <Box component={Link} to="/profile" sx={{ textDecoration: 'none' }} aria-label="Your account">
+              <Initials name={user.fullName} />
+            </Box>
           )}
-          {/*
-            Smaller on a phone rather than truncated. A 375px bar carrying the home icon, the
-            identity strip and Sign out has about 210px left, and at h6 the name clips to
-            "Nirman Construc…" — which reads as a layout that broke rather than as a decision.
-            Dropping a couple of points fits it whole, and `noWrap` is the backstop: on a
-            narrower screen than any we target it clips rather than making the bar two lines
-            tall, which is the one thing the screen can least afford.
-          */}
-          <Typography
-            variant="h6"
-            component={user && !atHome ? Link : 'span'}
-            {...(user && !atHome ? { to: '/home' } : {})}
-            noWrap
+        </Stack>
+
+        <Box component="main" sx={{ flex: 1, px: { xs: 2, md: 4 }, py: { xs: 1, md: 3 }, maxWidth: 1180, width: '100%' }}>
+          <Outlet />
+        </Box>
+
+        {/*
+          Sign out belongs at the end of the page a desk user is reading, not on a bar over
+          every screen. On a phone it lives on /profile, reached from the avatar or from More.
+        */}
+        {user && (
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={2}
             sx={{
-              flexGrow: 1,
-              fontWeight: 700,
-              fontSize: { xs: '1rem', sm: '1.25rem' },
-              color: 'inherit',
-              textDecoration: 'none',
-              minWidth: 0,
+              display: { xs: 'none', md: 'flex' },
+              px: 4,
+              py: 2,
+              mt: 2,
+              borderTop: '1.4px dashed rgba(20,24,29,0.3)',
             }}
           >
-            Nirman Constructions
-          </Typography>
-          {user && (
-            <Stack direction="row" alignItems="center" spacing={1}>
-              {/*
-                A 375px phone has no room for the role, the full name and a button at once,
-                and wrapping them makes the bar two lines tall on the screen that can least
-                afford it. On a phone the name alone identifies who is signed in; the role
-                and the full name return once there is width for them.
-              */}
-              <Chip
-                label={user.roles.join(' · ')}
-                size="small"
-                variant="outlined"
-                sx={{
-                  display: { xs: 'none', md: 'flex' },
-                  color: 'inherit',
-                  borderColor: 'currentColor',
-                }}
-              />
-              {/* The name is the way into the account screen — the habit everywhere else. */}
-              <Typography
-                variant="body2"
-                component={Link}
-                to="/profile"
-                noWrap
-                sx={{
-                  display: { xs: 'none', sm: 'block' },
-                  color: 'inherit',
-                  textDecoration: 'none',
-                }}
-              >
-                {user.fullName}
-              </Typography>
-              <Button
-                color="inherit"
-                onClick={handleSignOut}
-                sx={{ minHeight: 48, whiteSpace: 'nowrap', flexShrink: 0 }}
-              >
-                Sign out
-              </Button>
-            </Stack>
-          )}
-        </Toolbar>
-      </AppBar>
-      <Container maxWidth="lg" sx={{ py: 2 }}>
-        <Outlet />
-      </Container>
+            <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1 }}>
+              Signed in as {user.fullName} · {user.roles.join(', ')}
+              {!user.allSites && ` · ${user.siteIds.length} site(s) assigned`}
+            </Typography>
+            <Button variant="text" onClick={handleSignOut} sx={{ color: tokens.muted }}>
+              Sign out
+            </Button>
+          </Stack>
+        )}
+
+        <BottomNav signoffCount={signoffCount} />
+      </Box>
+
+      {/* Screen-reader-only note on where you are, since the masthead no longer says it. */}
+      <Box component="span" sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+        {pathname}
+      </Box>
     </Box>
   );
 }

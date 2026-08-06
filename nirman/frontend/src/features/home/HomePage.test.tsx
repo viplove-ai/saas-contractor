@@ -127,7 +127,15 @@ describe('HomePage', () => {
     permissions = SUPERVISOR;
     renderHome();
 
-    expect(screen.getByText(/Signed in as Vivek Bisht/)).toBeVisible();
+    expect(screen.getByText(/Vivek Bisht/)).toBeVisible();
     expect(screen.getByText(/1 site\(s\) assigned/)).toBeVisible();
+  });
+
+  /** It is the index of the product now, not the landing screen, and it says so. */
+  it('is titled as the index rather than as the app', () => {
+    permissions = SUPERVISOR;
+    renderHome();
+
+    expect(screen.getByRole('heading', { name: 'All screens' })).toBeVisible();
   });
 });

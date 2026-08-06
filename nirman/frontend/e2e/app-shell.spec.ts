@@ -11,7 +11,7 @@ test('an anonymous visit lands on the sign-in screen', async ({ page }) => {
   await page.goto('/');
 
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole('heading', { level: 1, name: 'Nirman Constructions' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Good morning.' })).toBeVisible();
   await expect(page.getByLabel('Username')).toBeVisible();
   await expect(page.getByLabel('Password')).toBeVisible();
 });
@@ -20,7 +20,7 @@ test('a deep link is guarded and redirects to sign-in', async ({ page }) => {
   await page.goto('/attendance/mark');
 
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole('heading', { level: 1, name: 'Nirman Constructions' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Good morning.' })).toBeVisible();
 });
 
 test('an empty submit shows field errors instead of calling the API', async ({ page }) => {
@@ -49,7 +49,7 @@ test('the app boots without console errors', async ({ page }) => {
   page.on('pageerror', (error) => errors.push(error.message));
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1, name: 'Nirman Constructions' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Good morning.' })).toBeVisible();
 
   expect(errors).toEqual([]);
 });
