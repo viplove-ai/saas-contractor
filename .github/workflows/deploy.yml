@@ -59,7 +59,7 @@ jobs:
         working-directory: nirman/backend
         run: flyctl deploy --remote-only --wait-timeout 600
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_BACKEND }}
 
       - name: Smoke test
         run: |
@@ -89,7 +89,7 @@ jobs:
         working-directory: nirman/frontend
         run: flyctl deploy --remote-only --wait-timeout 600
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_FRONTEND }}
 
       - name: Smoke test
         run: |
