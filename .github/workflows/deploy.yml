@@ -1,8 +1,11 @@
 name: Deploy
 
+# Production deploys come off `release` only. `main` is the integration branch:
+# work lands there freely and CI proves it, but nothing ships until main is
+# merged into release.
 on:
   push:
-    branches: [main]
+    branches: [release]
   workflow_dispatch:
     inputs:
       target:
