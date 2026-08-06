@@ -113,10 +113,22 @@ export function ProjectsPage() {
               {projects.data.map((project) => (
                 <TableRow key={project.id} hover>
                   <TableCell>
-                    <Typography fontWeight={600}>{project.code}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {project.name}
-                    </Typography>
+                    {/*
+                      The link is on the name rather than the whole row: the row carries its
+                      own buttons, and a clickable row wrapped around them makes it a guess
+                      which one a click lands on.
+                    */}
+                    <Link
+                      to={`/projects/${project.id}`}
+                      style={{ textDecoration: 'none', color: 'inherit' }}
+                    >
+                      <Typography fontWeight={600} sx={{ '&:hover': { textDecoration: 'underline' } }}>
+                        {project.code}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {project.name}
+                      </Typography>
+                    </Link>
                   </TableCell>
                   <TableCell>{project.clientDepartment || '—'}</TableCell>
                   <TableCell align="right">

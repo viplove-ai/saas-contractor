@@ -169,6 +169,15 @@ export const router = createBrowserRouter([
             },
           },
           {
+            path: 'projects/:projectId',
+            lazy: async () => {
+              const { ProjectDetailPage } = await import(
+                '../features/admin/ProjectDetailPage'
+              );
+              return { Component: ProjectDetailPage };
+            },
+          },
+          {
             path: 'sites',
             lazy: async () => {
               const { SitesPage } = await import('../features/admin/SitesPage');

@@ -4,13 +4,16 @@ import type {
   AdminProject,
   AdminSite,
   AdminUser,
+  BoqItem,
   ConfirmedBoqLine,
+  NitDocument,
   NitFields,
   NitPreview,
   PageResponse,
   ProjectStatus,
   RoleOption,
   SiteStatus,
+  UnitOption,
 } from './types';
 
 export const adminKeys = {
@@ -20,6 +23,10 @@ export const adminKeys = {
   sites: (projectId: string) => ['admin', 'sites', projectId] as const,
   allSites: ['admin', 'sites'] as const,
   projects: ['admin', 'projects'] as const,
+  project: (id: string) => ['admin', 'project', id] as const,
+  boqItems: (projectId: string) => ['admin', 'boq-items', projectId] as const,
+  nitDocument: (projectId: string) => ['admin', 'nit-document', projectId] as const,
+  units: ['admin', 'units'] as const,
 };
 
 /** A contractor's whole staff fits on one page; paging this list would only hide people. */
@@ -331,5 +338,56 @@ export function useDiscardNitUpload() {
         // Nothing useful to say to somebody who has moved on.
       }
     },
+  });
+}
+
+// ------------------------------------------------------------------- project detail
+
+export function useProject(id: string | undefined) {
+  return useQuery({
+    queryKey: adminKeys.project(id ?? ''),
+    queryFn: async () => (await apiClient.get<AdminProject>(`/projects/${id}`)).data,
+    enabled: !!id,
+  });
+}
+
+/** The whole schedule for one project. Sorted by the server; a tender has a running order. */
+export function useBoqItems(projectId: string | undefined) {
+  return useQuery({
+    queryKey: adminKeys.boqItems(projectId ?? ''),
+    queryFn: async () =>
+      (await apiClient.get<BoqItem[]>('/boq-items', { params: { projectId } })).data,
+    enabled: !!projectId,
+  });
+}
+
+/**
+ * Units, for turning a BOQ line's unitId into something readable.
+ *
+ * <p>Master data changes about once a quarter, so this is cached for the session rather
+ * than refetched per screen.</p>
+ */
+export function useUnits() {
+  return useQuery({
+    queryKey: adminKeys.units,
+    queryFn: async () => (await apiClient.get<UnitOption[]>('/units')).data,
+    staleTime: 60 * 60_000,
+  });
+}
+
+/**
+ * The tender a project came from, if it was imported from one.
+ *
+ * <p>A project typed in by hand has no NIT document, and the endpoint 404s. That is an
+ * ordinary answer rather than a failure, so it is not retried and the page simply omits
+ * the tender section.</p>
+ */
+export function useNitDocument(projectId: string | undefined) {
+  return useQuery({
+    queryKey: adminKeys.nitDocument(projectId ?? ''),
+    queryFn: async () =>
+      (await apiClient.get<NitDocument>(`/nit-imports/projects/${projectId}`)).data,
+    enabled: !!projectId,
+    retry: false,
   });
 }

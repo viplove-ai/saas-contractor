@@ -151,3 +151,45 @@ export interface ConfirmedBoqLine {
   category?: string | null;
   synthetic: boolean;
 }
+
+/** A priced contract line as stored, with the unit resolved for display. */
+export interface BoqItem {
+  id: string;
+  projectId: string;
+  siteId: string | null;
+  itemNumber: string;
+  description: string;
+  unitId: string;
+  contractQuantity: number;
+  contractRate: number;
+  contractAmount: number;
+  completedQuantity: number;
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'ON_HOLD' | 'CANCELLED';
+  workPart: string | null;
+  category: string | null;
+  synthetic: boolean;
+  sortOrder: number;
+  version: number;
+}
+
+export interface UnitOption {
+  id: string;
+  code: string;
+  name: string;
+  decimalPlaces: number;
+  active: boolean;
+}
+
+/** The stored reading of the tender a project was created from. */
+export interface NitDocument {
+  id: string;
+  projectId: string;
+  attachmentId: string | null;
+  fileName: string;
+  pageCount: number;
+  parserVersion: string;
+  fields: NitFields;
+  boqTotal: number | null;
+  extractedItemCount: number;
+  warnings: string[];
+}
