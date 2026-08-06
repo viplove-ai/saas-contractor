@@ -1,0 +1,97 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Which app to deploy
+        type: choice
+        options: [both, backend, frontend]
+        default: both
+
+# One deploy at a time. Never cancel mid-deploy: a half-applied Flyway
+# migration is worse than a queued job.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/deploy.yml'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/deploy.yml'
+
+  backend:
+    name: Deploy backend
+    needs: changes
+    if: |
+      needs.changes.outputs.backend == 'true' ||
+      github.event.inputs.target == 'backend' ||
+      github.event.inputs.target == 'both'
+    runs-on: ubuntu-latest
+    # Configure required reviewers on this environment in GitHub settings
+    # if you want a manual gate before production.
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Flyway migrations run on boot. --strategy rolling with a single
+      # machine means brief downtime; see docs/deployment.md for the
+      # zero-downtime variant once you run 2+ machines.
+      - name: Deploy
+        working-directory: backend
+        run: flyctl deploy --remote-only --wait-timeout 600
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://nirman-constructions-api.fly.dev/actuator/health || true)
+            if [ "$code" = "200" ]; then echo "healthy"; exit 0; fi
+            echo "attempt $i: got $code"; sleep 6
+          done
+          echo "backend did not become healthy"; exit 1
+
+  frontend:
+    name: Deploy frontend
+    needs: [changes, backend]
+    # Runs even when the backend job was skipped, but not if it failed.
+    if: |
+      always() && needs.backend.result != 'failure' &&
+      (needs.changes.outputs.frontend == 'true' ||
+       github.event.inputs.target == 'frontend' ||
+       github.event.inputs.target == 'both')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy
+        working-directory: frontend
+        run: flyctl deploy --remote-only --wait-timeout 600
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Smoke test
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' https://nirman-constructions.fly.dev/)
+          test "$code" = "200" || { echo "frontend returned $code"; exit 1; }
