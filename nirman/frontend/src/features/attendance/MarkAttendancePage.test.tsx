@@ -3,6 +3,8 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createQueryClient } from '../../app/queryClient';
+import { offlineDb } from '../../offline/db';
 import { MarkAttendancePage } from './MarkAttendancePage';
 import type { Roster, Site } from './types';
 
@@ -63,8 +65,13 @@ const ROSTER: Roster = {
   ],
 };
 
-function renderPage() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+/**
+ * The `client` seam exists for the offline case at the bottom of this file: that one has to
+ * run against the app's own query defaults, because what it is checking is one of them.
+ */
+function renderPage(client?: QueryClient) {
+  const queryClient =
+    client ?? new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
@@ -294,6 +301,47 @@ describe('MarkAttendancePage', () => {
     expect(within(rameshRow).getByText('Verified')).toBeInTheDocument();
     expect(within(rameshRow).getByRole('button', { name: 'P' })).toBeDisabled();
     expect(within(rameshRow).getByRole('button', { name: 'A' })).toBeDisabled();
+  });
+
+  /**
+   * The muster marked in a valley. Covered by the Playwright suite too, but that suite only
+   * runs in CI and on macOS 13+, and this is the exact defect it caught: React Query pauses
+   * a mutation while the browser reports no connection, so `saveOrQueue` was never called
+   * and the marks reached neither the server nor the device.
+   *
+   * <p>The `offline` event is what matters, not the flag — React Query's online manager
+   * starts out believing there is a connection and only ever learns otherwise from the
+   * event, and it only listens once a QueryClientProvider is mounted. So the event is fired
+   * after the roster is on screen, which is also the only order a real phone can produce.</p>
+   */
+  it('keeps the marks on the phone when the signal goes, rather than stalling', async () => {
+    const onLine = Object.getOwnPropertyDescriptor(Navigator.prototype, 'onLine');
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
+    post.mockRejectedValue(new Error('Network Error'));
+
+    try {
+      const user = userEvent.setup({ delay: null });
+      renderPage(createQueryClient());
+      await screen.findByText('Karam Singh');
+
+      window.dispatchEvent(new Event('offline'));
+
+      await user.click(screen.getByRole('button', { name: 'Mark all present' }));
+      await user.click(screen.getByRole('button', { name: /^Save 2 mark/ }));
+
+      // Not an error, and not a button stuck on "Saving…": the marks are on the device.
+      expect(await screen.findByText(/saved on this phone/)).toBeInTheDocument();
+      expect(post).not.toHaveBeenCalled();
+      const queued = await offlineDb.drafts.toArray();
+      expect(queued).toHaveLength(1);
+      expect(queued[0]).toMatchObject({ entityType: 'ATTENDANCE', status: 'PENDING' });
+    } finally {
+      // Both are process-wide: the flag is read by saveOrQueue and the event by React
+      // Query's online manager, and a later test file inherits whatever is left here.
+      await offlineDb.drafts.clear();
+      if (onLine) Object.defineProperty(window.navigator, 'onLine', onLine);
+      window.dispatchEvent(new Event('online'));
+    }
   });
 
   it('blocks entry and says why when the month is closed', async () => {

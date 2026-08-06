@@ -3,6 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createQueryClient } from '../../app/queryClient';
+import { offlineDb } from '../../offline/db';
 import { AddExpensePage } from './AddExpensePage';
 import type { Expense, ExpenseCategory, PageResponse, Site } from './types';
 
@@ -65,8 +67,13 @@ const NO_EXPENSES: PageResponse<Expense> = {
   last: true,
 };
 
-function renderPage() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+/**
+ * The `client` seam exists for the offline case at the bottom of this file: that one has to
+ * run against the app's own query defaults, because what it is checking is one of them.
+ */
+function renderPage(client?: QueryClient) {
+  const queryClient =
+    client ?? new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
@@ -284,5 +291,45 @@ describe('AddExpensePage', () => {
 
     expect(await screen.findByText('EXP-2025-0008')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Send for approval' })).not.toBeInTheDocument();
+  });
+
+  /**
+   * The expense booked with no signal, which is the same defect as the muster: React Query
+   * pauses a mutation while the browser reports no connection, so `saveOrQueue` never runs
+   * and the expense reaches neither the server nor the device. The `offline` event is fired
+   * after the form is on screen because React Query's online manager starts out believing
+   * there is a connection and only listens once a provider is mounted — which is also the
+   * only order a real phone can produce.
+   */
+  it('keeps the expense on the phone when the signal goes, rather than stalling', async () => {
+    const onLine = Object.getOwnPropertyDescriptor(Navigator.prototype, 'onLine');
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
+    post.mockRejectedValue(new Error('Network Error'));
+
+    try {
+      const user = userEvent.setup({ delay: null });
+      renderPage(createQueryClient());
+      await screen.findByRole('combobox', { name: 'Site' });
+
+      window.dispatchEvent(new Event('offline'));
+
+      await user.click(screen.getByRole('combobox', { name: 'What kind' }));
+      await user.click(await screen.findByRole('option', { name: 'Site Expenses' }));
+      await user.type(screen.getByRole('textbox', { name: 'What was it for' }), 'Cartage');
+      await user.type(screen.getByRole('spinbutton', { name: 'Amount before tax' }), '3400');
+      await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+
+      expect(await screen.findByText(/saved on this phone/)).toBeInTheDocument();
+      expect(post).not.toHaveBeenCalled();
+      const queued = await offlineDb.drafts.toArray();
+      expect(queued).toHaveLength(1);
+      expect(queued[0]).toMatchObject({ entityType: 'EXPENSE', status: 'PENDING' });
+    } finally {
+      // Both are process-wide: the flag is read by saveOrQueue and the event by React
+      // Query's online manager, and a later test file inherits whatever is left here.
+      await offlineDb.drafts.clear();
+      if (onLine) Object.defineProperty(window.navigator, 'onLine', onLine);
+      window.dispatchEvent(new Event('online'));
+    }
   });
 });
