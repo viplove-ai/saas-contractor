@@ -24,6 +24,13 @@
         <jjwt.version>0.12.6</jjwt.version>
         <minio.version>8.5.13</minio.version>
         <poi.version>5.3.0</poi.version>
+        <!--
+          Pinned to what openhtmltopdf-pdfbox 1.0.10 already resolves. The NIT parser reads
+          tender PDFs with it, so the version is a dependency of ours now rather than an
+          accident of the PDF writer's. Do not move to 3.x: openhtmltopdf 1.0.x compiles
+          against the 2.0 API and DPR generation would break.
+        -->
+        <pdfbox.version>2.0.24</pdfbox.version>
         <testcontainers.version>1.20.3</testcontainers.version>
     </properties>
 
@@ -115,6 +122,13 @@
             <groupId>com.openhtmltopdf</groupId>
             <artifactId>openhtmltopdf-pdfbox</artifactId>
             <version>1.0.10</version>
+        </dependency>
+
+        <!-- NIT tender PDF text extraction -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
         </dependency>
         <dependency>
             <groupId>org.thymeleaf</groupId>

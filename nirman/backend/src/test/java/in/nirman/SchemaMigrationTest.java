@@ -29,7 +29,18 @@ class SchemaMigrationTest extends AbstractIntegrationTest {
                 "organisations", "users", "roles", "permissions", "projects", "sites",
                 "workers", "wage_rates", "attendance_records", "materials",
                 "stock_transactions", "stock_balances", "expenses", "payments",
-                "site_advances", "boq_items", "daily_progress_reports", "audit_logs");
+                "site_advances", "boq_items", "daily_progress_reports", "audit_logs",
+                "nit_documents");
+    }
+
+    /** V11: a project runs under one tender. A corrigendum replaces it rather than stacking. */
+    @Test
+    @DisplayName("a project has at most one live NIT document")
+    void oneLiveNitPerProject() {
+        List<String> indexes = jdbc.queryForList(
+                "SELECT indexname FROM pg_indexes WHERE tablename = 'nit_documents'",
+                String.class);
+        assertThat(indexes).contains("uq_nit_project");
     }
 
     @Test

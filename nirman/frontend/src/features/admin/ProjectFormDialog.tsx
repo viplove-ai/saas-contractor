@@ -14,9 +14,16 @@ import {
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { apiErrorDetail } from '../../shared/apiClient';
-import { useCreateProject, useUpdateProject, useUsers } from './api';
+import { NitImportPanel } from './NitImportPanel';
+import {
+  useCreateProject,
+  useCreateProjectFromNit,
+  useDiscardNitUpload,
+  useUpdateProject,
+  useUsers,
+} from './api';
 import { projectSchema, type ProjectForm } from './schema';
-import type { AdminProject, ProjectStatus } from './types';
+import type { AdminProject, NitPreview, ProjectStatus } from './types';
 
 interface Props {
   open: boolean;
@@ -24,6 +31,9 @@ interface Props {
   project: AdminProject | null;
   onClose: () => void;
 }
+
+/** How the user chose to start. Editing is always 'manual'. */
+type Mode = 'manual' | 'nit';
 
 const STATUSES: { value: ProjectStatus; label: string }[] = [
   { value: 'PLANNED', label: 'Planned' },
@@ -69,7 +79,15 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
   const managers = useUsers('', '');
   const createProject = useCreateProject();
   const updateProject = useUpdateProject();
+  const createFromNit = useCreateProjectFromNit();
+  const discardUpload = useDiscardNitUpload();
   const [serverError, setServerError] = useState<string | null>(null);
+  /**
+   * Null until the user chooses how to start. Editing never asks: the project already
+   * exists, and its tender was either imported once or never.
+   */
+  const [mode, setMode] = useState<Mode | null>(null);
+  const [preview, setPreview] = useState<NitPreview | null>(null);
 
   const {
     control,
@@ -84,6 +102,8 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
       return;
     }
     setServerError(null);
+    setMode(editing ? 'manual' : null);
+    setPreview(null);
     reset(
       project
         ? {
@@ -104,7 +124,31 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
           }
         : EMPTY,
     );
-  }, [open, project, reset]);
+  }, [open, project, editing, reset]);
+
+  /** Fills the form from a parsed notice, leaving every field editable. */
+  function applyPreview(parsed: NitPreview) {
+    setPreview(parsed);
+    setServerError(null);
+    reset({
+      ...EMPTY,
+      code: parsed.suggestedCode ?? '',
+      name: parsed.suggestedName ?? '',
+      clientDepartment: parsed.fields.division ? `CPWD ${parsed.fields.division}` : '',
+      nitNumber: parsed.nitNumber ?? '',
+      tenderReference: parsed.tenderReference ?? '',
+      contractValue: parsed.contractValue?.toString() ?? '',
+      description: parsed.fields.location ? `Location: ${parsed.fields.location}` : '',
+    });
+  }
+
+  /** Backing out of an import throws away the upload it left behind. */
+  function close() {
+    if (preview) {
+      discardUpload.mutate(preview.attachmentId);
+    }
+    onClose();
+  }
 
   const submit = handleSubmit(async (values) => {
     setServerError(null);
@@ -131,6 +175,28 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
           id: project.id,
           version: project.version,
         });
+      } else if (preview) {
+        // The lines sent are the ones on screen, edits included. The server derives each
+        // amount from the quantity and rate, so no total travels with them.
+        await createFromNit.mutateAsync({
+          attachmentId: preview.attachmentId,
+          pageCount: preview.pageCount,
+          project: payload,
+          fields: preview.fields,
+          warnings: preview.warnings,
+          boqLines: preview.boqLines.map((line) => ({
+            itemNumber: line.itemNumber,
+            description: line.description,
+            unitCode: line.unitCode,
+            quantity: line.quantity ?? 0,
+            rate: line.rate ?? 0,
+            workPart: line.workPart,
+            category: line.category,
+            synthetic: line.synthetic,
+          })),
+        });
+        // Saved, so the upload now belongs to the tender record and must not be discarded.
+        setPreview(null);
       } else {
         await createProject.mutateAsync(payload);
       }
@@ -140,12 +206,52 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
     }
   });
 
+  // Choosing how to start. Two buttons rather than a wizard step: the decision is one
+  // question, and a project typed by hand should not cost an extra screen.
+  if (mode === null) {
+    return (
+      <Dialog open={open} onClose={close} fullWidth maxWidth="sm">
+        <DialogTitle>Add a project</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              If you have the tender notice, start from it — the project details and the whole
+              schedule of quantities are read from the PDF for you to check.
+            </Typography>
+            <Button variant="contained" color="secondary" onClick={() => setMode('nit')}>
+              Import from NIT PDF
+            </Button>
+            <Button variant="outlined" onClick={() => setMode('manual')}>
+              Enter manually
+            </Button>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={close}>Cancel</Button>
+        </DialogActions>
+      </Dialog>
+    );
+  }
+
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>{editing ? `Edit ${project.code}` : 'Add a project'}</DialogTitle>
+    <Dialog open={open} onClose={close} fullWidth maxWidth={mode === 'nit' ? 'lg' : 'sm'}>
+      <DialogTitle>
+        {editing ? `Edit ${project.code}` : mode === 'nit' ? 'Import a project from its NIT' : 'Add a project'}
+      </DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           {serverError && <Alert severity="error">{serverError}</Alert>}
+
+          {mode === 'nit' && (
+            <NitImportPanel
+              preview={preview}
+              onParsed={applyPreview}
+              onLinesChange={(lines) =>
+                setPreview((current) => (current ? { ...current, boqLines: lines } : current))
+              }
+              disabled={isSubmitting}
+            />
+          )}
 
           <TextField
             label="Project code"
@@ -285,9 +391,19 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" color="secondary" onClick={submit} disabled={isSubmitting}>
-          {editing ? 'Save changes' : 'Add project'}
+        <Button onClick={close}>Cancel</Button>
+        <Button
+          variant="contained"
+          color="secondary"
+          onClick={submit}
+          // Nothing to save from an import until a notice has actually been read.
+          disabled={isSubmitting || (mode === 'nit' && !preview)}
+        >
+          {editing
+            ? 'Save changes'
+            : mode === 'nit'
+              ? `Create project with ${preview?.boqLines.length ?? 0} BOQ lines`
+              : 'Add project'}
         </Button>
       </DialogActions>
     </Dialog>

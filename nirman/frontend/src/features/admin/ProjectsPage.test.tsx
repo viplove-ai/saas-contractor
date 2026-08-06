@@ -112,6 +112,8 @@ describe('ProjectsPage', () => {
     await screen.findByText('KSN01');
 
     await user.click(screen.getByRole('button', { name: 'Add a project' }));
+    // Adding now opens on a choice: start from the tender PDF, or type it in.
+    await user.click(screen.getByRole('button', { name: 'Enter manually' }));
     await user.type(screen.getByLabelText('Project code'), 'ALM03');
     await user.type(screen.getByLabelText('Project name'), 'Almora Block C');
     await user.click(screen.getByRole('button', { name: 'Add project' }));
@@ -133,6 +135,8 @@ describe('ProjectsPage', () => {
     await screen.findByText('KSN01');
 
     await user.click(screen.getByRole('button', { name: 'Add a project' }));
+    // Adding now opens on a choice: start from the tender PDF, or type it in.
+    await user.click(screen.getByRole('button', { name: 'Enter manually' }));
     await user.type(screen.getByLabelText('Project code'), 'ALM03');
     await user.type(screen.getByLabelText('Project name'), 'Almora Block C');
     await user.type(screen.getByLabelText('Contract value (optional)'), '18.5 lakh');

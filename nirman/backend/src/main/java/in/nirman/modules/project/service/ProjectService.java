@@ -7,9 +7,11 @@ import in.nirman.modules.project.api.dto.ProjectDtos.CreateProjectRequest;
 import in.nirman.modules.project.api.dto.ProjectDtos.ProjectResponse;
 import in.nirman.modules.project.api.dto.ProjectDtos.ProjectSummaryResponse;
 import in.nirman.modules.project.api.dto.ProjectDtos.UpdateProjectRequest;
+import in.nirman.modules.project.domain.BoqItem;
 import in.nirman.modules.project.domain.Project;
 import in.nirman.modules.project.domain.Site;
 import in.nirman.modules.project.mapper.ProjectMapper;
+import in.nirman.modules.project.repository.BoqItemRepository;
 import in.nirman.modules.project.repository.ProjectRepository;
 import in.nirman.modules.project.repository.SiteRepository;
 import in.nirman.modules.project.repository.StoreRepository;
@@ -20,6 +22,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -31,20 +36,23 @@ import java.util.UUID;
  */
 @Service
 @Transactional
-public class ProjectService {
+public class ProjectService implements ProjectProvisioning {
 
     private final ProjectRepository projects;
     private final SiteRepository sites;
     private final StoreRepository stores;
+    private final BoqItemRepository boqItems;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
     private final ProjectMapper mapper;
 
     public ProjectService(ProjectRepository projects, SiteRepository sites, StoreRepository stores,
-                          CurrentUserProvider currentUser, AuditService audit, ProjectMapper mapper) {
+                          BoqItemRepository boqItems, CurrentUserProvider currentUser,
+                          AuditService audit, ProjectMapper mapper) {
         this.projects = projects;
         this.sites = sites;
         this.stores = stores;
+        this.boqItems = boqItems;
         this.currentUser = currentUser;
         this.audit = audit;
         this.mapper = mapper;
@@ -85,6 +93,53 @@ public class ProjectService {
 
     @PreAuthorize("hasAuthority('project:write')")
     public ProjectResponse create(CreateProjectRequest request) {
+        return mapper.toResponse(createProject(request));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>One transaction for the project and its schedule. A tender import that half
+     * succeeded would leave a project whose BOQ is a truncated guess at the contract, which
+     * is worse than no project: the numbers look complete and are not.</p>
+     */
+    @Override
+    @PreAuthorize("hasAuthority('project:write') and hasAuthority('boq:write')")
+    public ProvisionResult createWithBoq(ProvisionRequest request) {
+        Project project = createProject(request.project());
+
+        Set<String> itemNumbers = new LinkedHashSet<>();
+        List<BoqItem> items = new ArrayList<>(request.lines().size());
+        BigDecimal value = BigDecimal.ZERO;
+        for (ImportedBoqLine line : request.lines()) {
+            if (!itemNumbers.add(line.itemNumber())) {
+                throw BusinessException.conflict("boq.duplicate-item-number",
+                        "Item number '" + line.itemNumber() + "' appears more than once. "
+                                + "Each line needs its own number so work can be measured "
+                                + "against it.");
+            }
+            BoqItem item = new BoqItem(project.getOrgId(), project.getId(), line.itemNumber(),
+                    line.description(), line.unitId());
+            // Never trust a passed-in amount: priceAt is the only path that keeps
+            // contract_amount consistent with the quantity and rate beside it.
+            item.priceAt(line.quantity(), line.rate());
+            item.setWorkPart(line.workPart());
+            item.setCategory(line.category());
+            item.setSource(request.source());
+            item.setSynthetic(line.synthetic());
+            item.setSortOrder(line.sortOrder());
+            items.add(item);
+            value = value.add(item.getContractAmount());
+        }
+        boqItems.saveAll(items);
+
+        audit.record("PROJECT", project.getId(), "IMPORT_BOQ", null,
+                Map.of("code", project.getCode(), "source", request.source(),
+                        "lines", items.size(), "value", value), null);
+        return new ProvisionResult(mapper.toResponse(project), items.size(), value);
+    }
+
+    private Project createProject(CreateProjectRequest request) {
         UUID orgId = currentUser.currentOrgId();
         if (projects.existsByOrgIdAndCode(orgId, request.code())) {
             throw BusinessException.conflict("project.code-taken",
@@ -105,7 +160,7 @@ public class ProjectService {
         projects.save(project);
         audit.record("PROJECT", project.getId(), "CREATE", null,
                 Map.of("code", project.getCode(), "name", project.getName()), null);
-        return mapper.toResponse(project);
+        return project;
     }
 
     @PreAuthorize("hasAuthority('project:write')")

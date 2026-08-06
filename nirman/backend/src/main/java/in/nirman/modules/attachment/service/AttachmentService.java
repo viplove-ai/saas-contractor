@@ -136,6 +136,29 @@ public class AttachmentService {
         // The object stays in the store; a cleanup job for orphans is a later phase's task.
     }
 
+    /**
+     * Binds a draft upload to the record it belongs to.
+     *
+     * <p>A file uploaded before its owner exists — a tender PDF read to build a project, a
+     * bill photographed before the expense is entered — sits unclaimed until the save that
+     * gives it a home. Claiming is what stops {@link #delete} discarding it afterwards.</p>
+     *
+     * @throws BusinessException if the file already belongs to something else, which would
+     *                           mean two records disagreeing about who owns one file
+     */
+    @PreAuthorize("hasAuthority('attachment:upload')")
+    public AttachmentResponse claim(UUID id, UUID ownerEntityId) {
+        Attachment attachment = require(id);
+        if (attachment.getOwnerEntityId() != null
+                && !attachment.getOwnerEntityId().equals(ownerEntityId)) {
+            throw new BusinessException("attachment.claimed",
+                    "This file is already attached to another record.", HttpStatus.CONFLICT);
+        }
+        attachment.attachTo(ownerEntityId);
+        attachments.save(attachment);
+        return toResponse(attachment);
+    }
+
     private Attachment require(UUID id) {
         return attachments.findByIdAndOrgIdAndDeletedAtIsNull(id, currentUser.currentOrgId())
                 .orElseThrow(() -> BusinessException.notFound("Attachment", id));

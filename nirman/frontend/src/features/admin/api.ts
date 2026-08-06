@@ -4,6 +4,9 @@ import type {
   AdminProject,
   AdminSite,
   AdminUser,
+  ConfirmedBoqLine,
+  NitFields,
+  NitPreview,
   PageResponse,
   ProjectStatus,
   RoleOption,
@@ -255,6 +258,78 @@ export function useUpdateSite() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.allSites });
       void queryClient.invalidateQueries({ queryKey: adminKeys.allUsers });
+    },
+  });
+}
+
+// --------------------------------------------------------------------------- NIT import
+
+/**
+ * Reads an uploaded tender notice and returns what it appears to contain.
+ *
+ * <p>Nothing about the project is saved by this call. The PDF itself is stored, so the
+ * confirm step does not push fifteen megabytes over a site connection a second time; until
+ * the import is confirmed that upload is unowned, and {@link useDiscardNitUpload} throws it
+ * away if the user backs out.</p>
+ */
+export function useParseNit() {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      return (
+        await apiClient.post<NitPreview>('/nit-imports/preview', form, {
+          // apiClient sends JSON by default; a multipart body needs its own boundary.
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+      ).data;
+    },
+  });
+}
+
+export interface NitImportInput {
+  attachmentId: string;
+  pageCount: number;
+  project: ProjectInput;
+  fields: NitFields;
+  boqLines: ConfirmedBoqLine[];
+  warnings: string[];
+}
+
+/** Creates the project, its BOQ and its tender record from the reviewed preview. */
+export function useCreateProjectFromNit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: NitImportInput) =>
+      (
+        await apiClient.post<{
+          project: AdminProject;
+          nitDocumentId: string;
+          boqLineCount: number;
+          boqValue: number;
+        }>('/nit-imports', input)
+      ).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.projects });
+    },
+  });
+}
+
+/**
+ * Throws away a parsed upload the user decided not to use.
+ *
+ * <p>Failure is deliberately swallowed: the user has already closed the dialog and cannot
+ * act on an error about a file they abandoned. An orphan in object storage is a housekeeping
+ * problem, not theirs.</p>
+ */
+export function useDiscardNitUpload() {
+  return useMutation({
+    mutationFn: async (attachmentId: string) => {
+      try {
+        await apiClient.delete(`/attachments/${attachmentId}`);
+      } catch {
+        // Nothing useful to say to somebody who has moved on.
+      }
     },
   });
 }

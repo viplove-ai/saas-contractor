@@ -1,0 +1,138 @@
+{
+  "filename": "almora-25-asi-mess.pdf",
+  "page_count": 134,
+  "nit_no": "25/EE/ACD/CPWD/Almora/2026-27",
+  "work_name": "C/o ASI Mess (45 Nos. Suit) including electrical work for 36th Bn. ITBP campus at Lohaghat, Distt. Champawat (UK) (SH: Balance Road Work).",
+  "estimated_cost": 1263779.0,
+  "civil_estimated_cost": null,
+  "electrical_estimated_cost": null,
+  "emd_amount": 25276.0,
+  "completion_period": "02 Months",
+  "submission_closing": "2026-07-30 15:00:00",
+  "bid_opening": "2026-07-30 15:30:00",
+  "division": "Almora",
+  "location": "Lohaghat, Distt. Champawat (UK) (SH: Balance Road Work)",
+  "bid_type": "Percentage Rate",
+  "contractor_eligibility": "Only the enlisted contractors of Class-III, IV and V by the Enlisting authority i.e. SDG (Chandigarh), ADG (Chandigarh), ADG (Lucknow), ADG (Jammu), ADG (DR) and ADG (PRD) shall tender within their limit and tendering jurisdiction i.e. Punjab, Chandigarh, Rajasthan, Haryana, Uttarakhand, Himanchal Pradesh, Uttar Pradesh, Jammu & Kashmir, Leh & Ladakh and Delhi of North region (NR), as per the Rules for enlistment of Contractors in CPWD, 2026. Further, the enlisted contractors of Class-III, IV and V shall also have to meet the other requirements of eligibility as per NIT conditions.",
+  "similar_work_criteria": "The Contractor should have satisfactorily completed three similar works each of value not less than Rs. 11.91 lacs OR two similar work each of value not less than Rs. 17.87 lacs OR one similar work of value not less than Rs. 23.83 lacs in last 7 years ending last day of the previous month. Similar work would means “Work of Caretaking, Housekeeping and watch & ward and Similar work executed from any Holiday home/Guest house of Govt. of India who have minimum four years experience in Hilly area only having equivalent altitude or more in last seven years (Work experience certificate issued by the competent authority).” The value of executed works shall be brought to current costing level by enhancing the actual value of work at simple rate of 7% per annum, calculated from the date of completion to the last date of submission of tender.",
+  "performance_guarantee_percent": 5.0,
+  "security_deposit_percent": 2.5,
+  "civil_dsr_year": 2023,
+  "civil_cost_index_percent": 31.0,
+  "electrical_dsr_year": null,
+  "electrical_cost_index_percent": null,
+  "boq_items": [
+    {
+      "item_no": "1.1.1",
+      "description": "All kinds of soil",
+      "quantity": 8.0,
+      "unit": "cum",
+      "rate": 226.25,
+      "amount": 1810.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "2.1.1",
+      "description": "1:5:10 (1 cement : 5 coarse sand (zone-III) derived from natural sources : 10 graded stone aggregate 40 mm nominal size derived from natural sources)",
+      "quantity": 23.0,
+      "unit": "cum",
+      "rate": 8308.8,
+      "amount": 191102.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "3.1.1",
+      "description": "Foundations, footings, bases of columns, etc. for mass concrete",
+      "quantity": 39.0,
+      "unit": "sqm",
+      "rate": 499.85,
+      "amount": 19494.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "3.2.1",
+      "description": "Thermo-Mechanically Treated bars of grade Fe-500D or more.",
+      "quantity": 600.0,
+      "unit": "kg",
+      "rate": 137.5,
+      "amount": 82500.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "4.1.1",
+      "description": "Cement mortar 1:6 (1 cement : 6 coarse sand)",
+      "quantity": 7.0,
+      "unit": "cum",
+      "rate": 9091.0,
+      "amount": 63637.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "5.1.1",
+      "description": "1:6 (1 cement: 6 coarse sand)",
+      "quantity": 34.0,
+      "unit": "sqm",
+      "rate": 438.0,
+      "amount": 14892.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "5.2.1",
+      "description": "Two or more coats on new work",
+      "quantity": 34.0,
+      "unit": "sqm",
+      "rate": 198.75,
+      "amount": 6758.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "6.1.1",
+      "description": "Nominal concrete 1:3:6 or richer mix (i/c equivalent design mix)",
+      "quantity": 7.0,
+      "unit": "cum",
+      "rate": 3102.8,
+      "amount": 21720.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "7.1",
+      "description": "Preparation and consolidation of sub grade with power road roller of 8 to 12 tonne capacity after excavating earth to an average of 22.5 cm depth, dressing to camber and consolidating with road roller including making good the undulations etc. and re-rolling the sub grade and disposal of surplus earthwith lead upto 50 metres.",
+      "quantity": 221.0,
+      "unit": "Sqm",
+      "rate": 279.05,
+      "amount": 61670.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "7.3",
+      "description": "Providing and laying C.C. pavement of mix M-25 with ready mixed concrete from batching plant. The ready mixed concrete shall be laid and finished with screed board vibrator , vacuum dewatering process and finally finished by floating, brooming with wire brush etc. complete as per specifications and directions of Engineer-in- charge. (The panel shuttering work shall be paid for separately).(Note:- Cement content considered in this item is @ 330 kg/cum. Excess/less cement used as per design mix is payable/ recoverable separately).",
+      "quantity": 42.0,
+      "unit": "cum",
+      "rate": 12521.7,
+      "amount": 525911.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "7.4.1",
+      "description": "With material conforming to Grade-I (size range 75 mm to 0.075 mm) having CBR Value-30",
+      "quantity": 42.0,
+      "unit": "cum",
+      "rate": 3548.6,
+      "amount": 149041.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "7.4.2",
+      "description": "With material conforming to Grade-II (size range 53 mm to 0.075 mm) having CBR Value-25",
+      "quantity": 32.0,
+      "unit": "cum",
+      "rate": 3728.15,
+      "amount": 119301.0,
+      "work_part": "Civil Works"
+    }
+  ],
+  "boq_total": 1263779.0,
+  "warnings": [
+    "The similar-work eligibility appears unrelated to the tender scope and may be a copied clause."
+  ]
+}

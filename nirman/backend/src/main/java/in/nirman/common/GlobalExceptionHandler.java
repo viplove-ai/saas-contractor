@@ -14,6 +14,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.Instant;
@@ -118,6 +119,21 @@ public class GlobalExceptionHandler {
                 ApiError.of(TYPE_BASE + "unauthenticated", "Sign in required",
                         HttpStatus.UNAUTHORIZED.value(),
                         "Sign in again to continue.", request.getRequestURI(), correlationId()));
+    }
+
+    /**
+     * An upload past the configured multipart limit is thrown by the servlet container before
+     * any controller runs, so without this it surfaces as a bare 500 and the user is told
+     * nothing useful about a file they can see is large.
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiError> handleUploadTooLarge(MaxUploadSizeExceededException ex,
+                                                         HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(
+                ApiError.of(TYPE_BASE + "upload.too-large", "File too large",
+                        HttpStatus.PAYLOAD_TOO_LARGE.value(),
+                        "The file is larger than this server accepts. Try a smaller file.",
+                        request.getRequestURI(), correlationId()));
     }
 
     @ExceptionHandler(Exception.class)

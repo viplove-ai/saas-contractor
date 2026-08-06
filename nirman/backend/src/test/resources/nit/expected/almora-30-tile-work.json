@@ -1,0 +1,129 @@
+{
+  "filename": "almora-30-tile-work.pdf",
+  "page_count": 134,
+  "nit_no": "30/EE/ACD/CPWD/Almora/2026-27",
+  "work_name": "Tile work in Type-2 and Type-3 quarters at VPKAS, Hawalbagh and Almora (UK).",
+  "estimated_cost": 4226546.0,
+  "civil_estimated_cost": null,
+  "electrical_estimated_cost": null,
+  "emd_amount": 84531.0,
+  "completion_period": "06 Months",
+  "submission_closing": "2026-08-10 15:00:00",
+  "bid_opening": "2026-08-10 15:30:00",
+  "division": "Almora",
+  "location": "VPKAS, Hawalbagh and Almora (UK)",
+  "bid_type": "Percentage Rate",
+  "contractor_eligibility": "Only the enlisted contractors of Class-III, IV and V by the Enlisting authority i.e. SDG (Chandigarh), ADG (Chandigarh), ADG (Lucknow), ADG (Jammu), ADG (DR) and ADG (PRD) shall tender within their limit and tendering jurisdiction i.e. Punjab, Chandigarh, Rajasthan, Haryana, Uttarakhand, Himanchal Pradesh, Uttar Pradesh, Jammu & Kashmir, Leh & Ladakh and Delhi of North region (NR), as per the Rules for enlistment of Contractors in CPWD, 2026. Further, the enlisted contractors of Class-III, IV and V shall also have to meet the other requirements of eligibility as per NIT conditions.",
+  "similar_work_criteria": "The Contractor should have satisfactorily completed three similar works each of value not less than Rs. 11.91 lacs OR two similar work each of value not less than Rs. 17.87 lacs OR one similar work of value not less than Rs. 23.83 lacs in last 7 years ending last day of the previous month. Similar work would means “Work of Caretaking, Housekeeping and watch & ward and Similar work executed from any Holiday home/Guest house of Govt. of India who have minimum four years experience in Hilly area only having equivalent altitude or more in last seven years (Work experience certificate issued by the competent authority).” The value of executed works shall be brought to current costing level by enhancing the actual value of work at simple rate of 7% per annum, calculated from the date of completion to the last date of submission of tender.",
+  "performance_guarantee_percent": 5.0,
+  "security_deposit_percent": 2.5,
+  "civil_dsr_year": 2023,
+  "civil_cost_index_percent": 29.0,
+  "electrical_dsr_year": null,
+  "electrical_cost_index_percent": null,
+  "boq_items": [
+    {
+      "item_no": "1.1.1",
+      "description": "Size of Tile 600x600 mm",
+      "quantity": 155.0,
+      "unit": "sqm",
+      "rate": 2377.15,
+      "amount": 368458.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "1.2.1",
+      "description": "Size of Tile 600x600 mm",
+      "quantity": 1410.0,
+      "unit": "sqm",
+      "rate": 387.9,
+      "amount": 546939.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "1.3.1",
+      "description": "Size of Tile 600x600 mm",
+      "quantity": 1255.0,
+      "unit": "sqm",
+      "rate": 2165.6,
+      "amount": 2717828.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "2.1.1",
+      "description": "1:6 (1 cement: 6 fine sand)",
+      "quantity": 200.0,
+      "unit": "sqm",
+      "rate": 418.4,
+      "amount": 83680.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "2.2.1",
+      "description": "New work (two or more coats) over and including water thinnable priming coat with cement primer having VOC content less than 50 gram/litre",
+      "quantity": 200.0,
+      "unit": "sqm",
+      "rate": 233.05,
+      "amount": 46610.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "2.3",
+      "description": "Providing and applying white cement based putty of average thickness 1 mm, of approved brand and manufacturer, over the plastered wall surface to prepare the surface even and smooth complete.",
+      "quantity": 200.0,
+      "unit": "sqm",
+      "rate": 195.9,
+      "amount": 39180.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "3.1",
+      "description": "Hacking of CC flooring including cleaning for surface etc. complete as per direction of the Engineer-in-Charge.",
+      "quantity": 1390.0,
+      "unit": "sqm",
+      "rate": 4.3,
+      "amount": 5977.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "3.2",
+      "description": "Taking out existing wooden door shutter, repair by cutting, painting etc. and refixing of repaired door shutters to existing door frames, including replacement of hinges with screws, etc. as required, all complete as per the direction of the Engineer-in-charge.",
+      "quantity": 260.0,
+      "unit": "each",
+      "rate": 538.6,
+      "amount": 140036.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "50",
+      "description": "metres lead.",
+      "quantity": 200.0,
+      "unit": "sqm",
+      "rate": 68.55,
+      "amount": 13710.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "5.1",
+      "description": "Providing and laying rectified Glazed Ceramic floor tiles of size 300x300 mm or more (thickness to be specified by the manufacturer), of 1st quality conforming to IS : 15622, of approved make, in all colours, shades, laid with cement based high polymer modified quick set tile adhesive (water based) conforming to IS : 15477, in average 6 mm thickness, including grouting of joints (Payment for grouting of joints to be made separately).",
+      "quantity": 135.0,
+      "unit": "sqm",
+      "rate": 1575.9,
+      "amount": 212747.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "3",
+      "description": "mm width, using epoxy grout mix of 0.70 kg of organic coated filler of desired shade (0.10 kg of hardener and 0.20 kg of resin per kg), including filling / grouting and finishing complete as per direction of Engineer-in-charge. Size of Tile 300x300 mm",
+      "quantity": 135.0,
+      "unit": "sqm",
+      "rate": 380.6,
+      "amount": 51381.0,
+      "work_part": "Civil Works"
+    }
+  ],
+  "boq_total": 4226546.0,
+  "warnings": [
+    "The similar-work eligibility appears unrelated to the tender scope and may be a copied clause."
+  ]
+}

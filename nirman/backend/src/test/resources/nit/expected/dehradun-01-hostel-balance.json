@@ -1,0 +1,2280 @@
+{
+  "filename": "dehradun-01-hostel-balance.pdf",
+  "page_count": 222,
+  "nit_no": "01/2026-27/CE/CCU/CED-II/Dehradun",
+  "work_name": "Construction of New Hostel (G+2) of IGNFA, Dehradun (Balance work).",
+  "estimated_cost": null,
+  "civil_estimated_cost": null,
+  "electrical_estimated_cost": null,
+  "emd_amount": null,
+  "completion_period": null,
+  "submission_closing": null,
+  "bid_opening": "2026-07-01 15:30:00",
+  "division": null,
+  "location": "Dehradun, Uttarakhand",
+  "bid_type": "Percentage Rate",
+  "contractor_eligibility": null,
+  "similar_work_criteria": null,
+  "performance_guarantee_percent": 5.0,
+  "security_deposit_percent": 2.5,
+  "civil_dsr_year": null,
+  "civil_cost_index_percent": null,
+  "electrical_dsr_year": null,
+  "electrical_cost_index_percent": null,
+  "boq_items": [
+    {
+      "item_no": "1.1",
+      "description": "All kinds of soil",
+      "quantity": 3790.0,
+      "unit": "cum",
+      "rate": 186.52,
+      "amount": 706911.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "2.1",
+      "description": "Pipes, cables etc. exceeding 80 mm dia. but not exceeding 300 mm dia",
+      "quantity": 1011.0,
+      "unit": "Metre",
+      "rate": 370.05,
+      "amount": 374121.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "2.2",
+      "description": "Pipes, cables etc. exceeding 300 mm dia but not exceeding 600 mm.",
+      "quantity": 50.0,
+      "unit": "metre",
+      "rate": 577.7,
+      "amount": 28885.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "4.1",
+      "description": "All kinds of soil.",
+      "quantity": 964.0,
+      "unit": "Cum",
+      "rate": 133.25,
+      "amount": 128453.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "7.1",
+      "description": "Screened through sieve of l.S. designation 20 mm",
+      "quantity": 139.0,
+      "unit": "cum",
+      "rate": 391.35,
+      "amount": 54398.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "8",
+      "description": "Fine dressing the ground",
+      "quantity": 929.18,
+      "unit": "SQ.M",
+      "rate": 5.6,
+      "amount": 5203.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "8279.04",
+      "description": "16558 11.2 1:4:8 (1 Cement : 4 coarse sand (zone- Ill) derived from natural sources : 8 graded stone aggregate 40 mm nominal size derived from natural sources)",
+      "quantity": 470.0,
+      "unit": "cum",
+      "rate": 7158.32,
+      "amount": 3364410.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "20",
+      "description": "mm nominal size derived from natural sources) over 75 mm thick bed of dry brick ballast 40 mm nominal size, well rammed and consolidated and grouted with fine sand, including necessary excavation, levelling & dressing & finishing the top smooth.",
+      "quantity": 311.0,
+      "unit": "sqm",
+      "rate": 787.39,
+      "amount": 244878.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "13.1",
+      "description": "Foundations, footings, bases of columns etc. for mass concrete.",
+      "quantity": 543.0,
+      "unit": "sqm",
+      "rate": 412.09,
+      "amount": 223765.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "13.3",
+      "description": "Suspended floors, roofs, landings, balconies and access platform.",
+      "quantity": 3091.0,
+      "unit": "sqm",
+      "rate": 974.39,
+      "amount": 3011839.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "13.4",
+      "description": "Columns, Pillars, Piers, Abutments, Posts and Struts",
+      "quantity": 1472.0,
+      "unit": "sqm",
+      "rate": 1010.17,
+      "amount": 1486970.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "13.5",
+      "description": "Stairs, (excluding landings) except spiral-staircases",
+      "quantity": 67.0,
+      "unit": "sqm",
+      "rate": 803.84,
+      "amount": 53857.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "1",
+      "description": "metre or part thereof (Plan area to be measured). 14.1 Suspended floors, roofs, landings, beams and balconies (Plan area to be measured)",
+      "quantity": 172.0,
+      "unit": "sqm",
+      "rate": 403.84,
+      "amount": 69460.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "18.1.1",
+      "description": "Concrete of M30 grade with minimum cement content of 350 kg /cum",
+      "quantity": 745.0,
+      "unit": "cum",
+      "rate": 10146.6,
+      "amount": 7559217.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "18.2.1",
+      "description": "Concrete of M30 grade with minimum cement content of 350 kg /cum",
+      "quantity": 925.0,
+      "unit": "cum",
+      "rate": 10520.33,
+      "amount": 9731305.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "462.00",
+      "description": "quintal 770.79 356105 20 Providing and fixing of expansion joint system related with floor location as per drawings and direction of Engineer-In- Charge. The joints system will be of extruded aluminum base members, self aligning / self centering arrangement and support plates etc. as per ASTM B221- 02. The system shall be such that it provides floor to floor /floor to wall expansion control system for various vertical location in load application areas that accommodates multi directional seismic movement without stress to it's components. System shall consist of metal profiles with a universal aluminum Correction – Nil Insertion – Nil Deletion – Nil AE(P) EE (P) Page 102 base member designed to accommodate various project conditions and finish floor treatments. The cover plate shall be designed of width and thickness required to satisfy projects movement and loading requirements and secured to base members by utilizing manufacturer’s pre-engineered self- centering arrangement that freely rotates / moves in all directions. The Self - centering arrangement shall exhibit circular sphere ends that lock and slide inside the corresponding aluminum extrusion cavity to allow freedom of movement and flexure in all directions including vertical displacement. Provision of Moisture Barrier Membrane in the Joint System to have watertight joint is mandatory requirement all as per the manufactures design and as approved by Engineer -in-Charge. (Material shall confirm to ASTM 6063). Floor Joint of 100 mm gap",
+      "quantity": 14.0,
+      "unit": "metre",
+      "rate": 6717.55,
+      "amount": 94046.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "21.1",
+      "description": "wall Joint of 100 mm gap",
+      "quantity": 64.0,
+      "unit": "metre",
+      "rate": 5575.39,
+      "amount": 356825.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "22.1",
+      "description": "Roof Joint of 100 mm gap",
+      "quantity": 17.0,
+      "unit": "metre",
+      "rate": 6290.01,
+      "amount": 106930.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "23.1",
+      "description": "Cement mortar 1:6 (1 cement : 6 course sand)",
+      "quantity": 307.0,
+      "unit": "cum",
+      "rate": 7494.85,
+      "amount": 2300919.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "25.1",
+      "description": "Cement mortar 1:6 (1 cement : 6 coarse sand)",
+      "quantity": 633.0,
+      "unit": "cum",
+      "rate": 9557.44,
+      "amount": 6049860.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "26.1",
+      "description": "Cement mortar 1:4 (1 cement :4 coarse sand)",
+      "quantity": 2445.0,
+      "unit": "sqm",
+      "rate": 1162.02,
+      "amount": 2841139.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "650",
+      "description": "kg/cum conforming to 1S:2185 (Part 3) in super structure above plinth level up to floor V level with RCC band at sill level and lintel level with approved block laying polymer modified adhesive mortar all complete as per direction of Engineer-in-Charge. (The payment of RCC band and reinforcement shall be made for seperately).",
+      "quantity": 9.0,
+      "unit": "cum",
+      "rate": 8757.33,
+      "amount": 78816.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "28.1.1",
+      "description": "Area of slab upto 0.50 sqm",
+      "quantity": 351.0,
+      "unit": "sqm",
+      "rate": 5688.72,
+      "amount": 1996741.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "29.1",
+      "description": "Granite work",
+      "quantity": 220.0,
+      "unit": "metre",
+      "rate": 536.93,
+      "amount": 118125.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "150",
+      "description": "mm with epoxy resin based adhesive, including cleaning etc. complete.",
+      "quantity": 491.0,
+      "unit": "metre",
+      "rate": 597.46,
+      "amount": 293353.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "15622",
+      "description": "(thickness to be specified by the manufacturer), of approved make, in all colours, shades except burgundy, bottle green, black of any size as approved by Engineer-in-Charge, in skirting, risers of steps and dados, over 12 mm thick bed of cement mortar 1:3 (1 cement : 3 coarse sand) and jointing with grey cement slurry @ 3.3kg per sqm, including pointing in white cement mixed with pigment of matching shade complete.",
+      "quantity": 2303.0,
+      "unit": "sqm",
+      "rate": 1332.41,
+      "amount": 3068540.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "32.1",
+      "description": "Second Class Teak Wood",
+      "quantity": 8.0,
+      "unit": "cum",
+      "rate": 150217.26,
+      "amount": 1201738.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "33.1.1",
+      "description": "5.0 mm thick glass panes (weight not less than 12.50 kg/sqm).",
+      "quantity": 130.0,
+      "unit": "sqm",
+      "rate": 2732.66,
+      "amount": 355246.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "35",
+      "description": "mm thick including ISI marked Stainless Steel butt hinges with necessary screws",
+      "quantity": 390.0,
+      "unit": "sqm",
+      "rate": 2514.29,
+      "amount": 980573.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "10",
+      "description": "mm diameter bolts, nuts and wooden plugs and embedding in cement concrete block 30x10x15cm 1:3:6 mix (1 cement : 3 coarse sand : 6 graded stone aggregate 20mm nominal size).",
+      "quantity": 1188.0,
+      "unit": "each",
+      "rate": 240.48,
+      "amount": 285690.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "1000",
+      "description": "mm), with double speed adjustment with necessary accessories and screws etc. complete.",
+      "quantity": 63.0,
+      "unit": "each",
+      "rate": 1033.13,
+      "amount": 65087.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "37.1",
+      "description": "1.0 mm thick",
+      "quantity": 519.0,
+      "unit": "sqm",
+      "rate": 942.92,
+      "amount": 489375.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "35",
+      "description": "mm thick shutters with ISI marked M.S. pressed butt hinges bright finished of required size Second class teak wood",
+      "quantity": 157.0,
+      "unit": "sqm",
+      "rate": 5279.58,
+      "amount": 828894.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "39.1",
+      "description": "Three track three panels sliding window with two glazed & one wire mesh panels Correction – Nil Insertion – Nil Deletion – Nil AE(P) EE (P) Page 108 with Aluminium channel for roller track, wool pile, nylon rollers with SS 304 body. 39.1.1 Using R2 series with frame (70mm & above) x (40mm & above) & both glazed and fly screen sash (25mm & above) x (50mm & above) with zinc alloy (zamak) powder coated touch locks with hook. (Height upto 1.2 meter).",
+      "quantity": 242.0,
+      "unit": "sqm",
+      "rate": 11552.46,
+      "amount": 2795695.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "0.90",
+      "description": "meter)",
+      "quantity": 37.0,
+      "unit": "sqm",
+      "rate": 8666.54,
+      "amount": 320662.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "2.5",
+      "description": "metre)",
+      "quantity": 11.0,
+      "unit": "sqm",
+      "rate": 7440.0,
+      "amount": 81840.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "710",
+      "description": "of approved brand including 2mm thick PVC edge banding tape with hot glue by edge bending machine etc. with auto closing spring loaded hinges (hydraulic type) etc. complete as per direction of Engineer-in- charge.(Payment of providing and fixing auto closing hinges shall be paid separately)",
+      "quantity": 189.0,
+      "unit": "sqm",
+      "rate": 2973.09,
+      "amount": 561914.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "710",
+      "description": "of approved brand boxes, shelves, racks, almirah, cupboard and drawer etc. including necessary nails, screws etc. complete as per direction of Engineer-in- charge.",
+      "quantity": 166.0,
+      "unit": "sqm",
+      "rate": 2724.99,
+      "amount": 452348.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "43.1",
+      "description": "200 mm",
+      "quantity": 698.0,
+      "unit": "Each",
+      "rate": 196.14,
+      "amount": 136906.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "206.00",
+      "description": "One Set 930.10 191601 46 Providing and fixing 2 mm thick 16 to 19 mm wide PVC edge binding tape of approved quality for cupboard/wardrobe shutters including necessary synthetic resin hot pressed to edges on binding machine etc. complete as per direction of Engineer- in-charge.",
+      "quantity": 1188.0,
+      "unit": "metre",
+      "rate": 46.03,
+      "amount": 54684.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "47.1",
+      "description": "Hot finished welded type tubes",
+      "quantity": 15309.0,
+      "unit": "kg",
+      "rate": 204.28,
+      "amount": 3127323.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "6",
+      "description": "grade sleeve, including drilling of hole",
+      "quantity": 948.0,
+      "unit": "each",
+      "rate": 235.91,
+      "amount": 223643.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "49.1",
+      "description": "10 x 160 mm 50 Providing and fixing stainless steel (Grade 304) railing made of Hollow tubes, channels, plates etc., including welding, grinding, buffing, polishing and making curvature (wherever required) and fitting the same with necessary stainless steel nuts and bolts complete, i/c fixing the railing with necessary accessories & stainless steel dash fasteners , stainless steel bolts etc., of required size, on the top of the floor or the side of waist slab with suitable arrangement as per approval of Engineer-in-charge, (for payment purpose only weight of stainless steel members shall be considered excluding fixing accessories such as nuts, bolts, fasteners etc.).",
+      "quantity": 1853.0,
+      "unit": "kg",
+      "rate": 811.67,
+      "amount": 1504025.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "52.1.1",
+      "description": "Size of Tile 600 x 600 mm",
+      "quantity": 769.0,
+      "unit": "sqm",
+      "rate": 1579.15,
+      "amount": 1214366.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "52.1.2",
+      "description": "Size of Tile 600 x 1200 mm",
+      "quantity": 1001.0,
+      "unit": "sqm",
+      "rate": 1890.25,
+      "amount": 1892140.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "53.1",
+      "description": "Size of Tile 600x600 mm",
+      "quantity": 112.0,
+      "unit": "sqm",
+      "rate": 1990.19,
+      "amount": 222901.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "55.1",
+      "description": "Polished Granite stone slab colour of Black, Cherry/Ruby Red or equivalent",
+      "quantity": 1136.0,
+      "unit": "sqm",
+      "rate": 4709.13,
+      "amount": 5349572.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "57.1",
+      "description": "110 mm diameter",
+      "quantity": 313.0,
+      "unit": "Metre",
+      "rate": 396.59,
+      "amount": 124133.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "110",
+      "description": "mm diameter",
+      "quantity": 102.0,
+      "unit": "Each",
+      "rate": 143.07,
+      "amount": 14593.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "110",
+      "description": "mm diameter",
+      "quantity": 80.0,
+      "unit": "Each",
+      "rate": 157.99,
+      "amount": 12639.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "58.3",
+      "description": "Shoe 110mm shoe",
+      "quantity": 36.0,
+      "unit": "Each",
+      "rate": 138.55,
+      "amount": 4988.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "8",
+      "description": "mm drop; made of Gl sheet having galvanizing of 100 gms/sgm (both sides inclusive) and 20% perforation area with 1.8 mm dia holes and having NRC (Noise Reduction Coefficient ) of 0.5, electro statically polyester powder",
+      "quantity": 373.0,
+      "unit": "sqm",
+      "rate": 2173.93,
+      "amount": 810876.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "2.50",
+      "description": "W/m2k",
+      "quantity": 9.0,
+      "unit": "Sqm",
+      "rate": 978.0,
+      "amount": 8802.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "62.1",
+      "description": "1:6 (1 cement : 6 coarse sand)",
+      "quantity": 5896.0,
+      "unit": "sqm",
+      "rate": 361.12,
+      "amount": 2129164.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "63.1",
+      "description": "1:6 (1 cement : 6 coarse sand)",
+      "quantity": 2620.0,
+      "unit": "sqm",
+      "rate": 415.45,
+      "amount": 1088479.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "64.1",
+      "description": "1:6 (1 cement: 6 coarse sand)",
+      "quantity": 3706.0,
+      "unit": "sqm",
+      "rate": 489.74,
+      "amount": 1814976.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "65.1",
+      "description": "1:3 (1 cement : 3 fine sand)",
+      "quantity": 2898.0,
+      "unit": "sqm",
+      "rate": 315.72,
+      "amount": 914957.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "67",
+      "description": "Finishing walls with textured exterior paint of required shade : 67.1 New work (Two or more coats applied @ 3.28 ltr/10 sqm) over and including priming coat of exterior primer applied @ 2.20kg/10 sqm",
+      "quantity": 262.0,
+      "unit": "sqm",
+      "rate": 234.97,
+      "amount": 61562.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "1.67",
+      "description": "Itr/10 sqm over and including priming coat of exterior primer applied @ 0.90 litre/10 sqm)",
+      "quantity": 3770.0,
+      "unit": "sqm",
+      "rate": 168.76,
+      "amount": 636225.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "69.1",
+      "description": "Two or more coats on new work",
+      "quantity": 2000.0,
+      "unit": "sqm",
+      "rate": 163.83,
+      "amount": 327660.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "71.1",
+      "description": "Two coats",
+      "quantity": 11684.0,
+      "unit": "sqm",
+      "rate": 144.44,
+      "amount": 1687637.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "76.1",
+      "description": "Cement concrete prepared with batch mixing machine",
+      "quantity": 145.0,
+      "unit": "cum",
+      "rate": 11064.66,
+      "amount": 1604376.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "81.1",
+      "description": "Kitchen sink with drain board 510x1040 mm bowl depth 200 mm",
+      "quantity": 20.0,
+      "unit": "Each",
+      "rate": 7522.96,
+      "amount": 150459.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "84.1",
+      "description": "15 mm nominal dia",
+      "quantity": 20.0,
+      "unit": "Each",
+      "rate": 7293.62,
+      "amount": 145872.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "85.1.1",
+      "description": "40 mm dia.",
+      "quantity": 21.0,
+      "unit": "Each",
+      "rate": 122.63,
+      "amount": 2575.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "86.1",
+      "description": "C.P. brass",
+      "quantity": 87.0,
+      "unit": "Each",
+      "rate": 844.56,
+      "amount": 73477.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "87.1",
+      "description": "100 mm dia. 87.1.1 Hubless centrifugally cast (spun) iron pipes epoxy coated inside & outside IS:15905",
+      "quantity": 935.0,
+      "unit": "Metre",
+      "rate": 1228.75,
+      "amount": 1148881.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "88.1",
+      "description": "100 mm dia. 88.1.1 Hubless centrifugally cast (spun) iron epoxy coated inside & outside as per IS:15905",
+      "quantity": 106.0,
+      "unit": "Each",
+      "rate": 596.04,
+      "amount": 63180.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "89.1",
+      "description": "100 mm dia. 89.1.1 Hubless centrifugally cast (spun) iron pipes epoxy coated inside & outside IS:15905.",
+      "quantity": 191.0,
+      "unit": "Each",
+      "rate": 386.71,
+      "amount": 73862.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "90.1",
+      "description": "100x100x100x100 mm 90.1.1 Hubless centrifugally cast (spun) iron pipes epoxy coated inside & outside IS:15905",
+      "quantity": 88.0,
+      "unit": "Each",
+      "rate": 799.37,
+      "amount": 70345.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "91.1",
+      "description": "100x100x100 mm 91.1.1 Hubless centrifugally cast (spun) iron pipes epoxy coated inside & outside IS:15905",
+      "quantity": 88.0,
+      "unit": "Each",
+      "rate": 611.01,
+      "amount": 53769.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "92.1",
+      "description": "100x100x75 mm 92.1.1 Hubless centrifugally cast (spun) iron pipes epoxy coated inside & outside IS:15905",
+      "quantity": 88.0,
+      "unit": "Each",
+      "rate": 579.59,
+      "amount": 51004.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "93.1.1",
+      "description": "With 100 mm dia",
+      "quantity": 22.0,
+      "unit": "Each",
+      "rate": 664.81,
+      "amount": 14626.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "94.1",
+      "description": "100 mm 94.1.1 Hubless centrifugally cast (spun) iron epoxy coated inside & outside as per IS:15905",
+      "quantity": 72.0,
+      "unit": "Each",
+      "rate": 449.55,
+      "amount": 32368.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "95.1.1",
+      "description": "SS 304 grade coupling with EPDM rubber gasket",
+      "quantity": 2755.0,
+      "unit": "Each",
+      "rate": 454.02,
+      "amount": 1250825.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "96.1",
+      "description": "100 mm dia",
+      "quantity": 35.0,
+      "unit": "Each",
+      "rate": 146.8,
+      "amount": 5138.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "97.1",
+      "description": "100 mm inlet and 100 mm outlet 97.1.1 Hubless centrifugally cast (spun) iron epoxy coated inside & outside as per IS:15905",
+      "quantity": 170.0,
+      "unit": "Each",
+      "rate": 898.0,
+      "amount": 152660.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "98.1",
+      "description": "100 mm diameter pipe",
+      "quantity": 935.0,
+      "unit": "Metre",
+      "rate": 87.01,
+      "amount": 81354.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "100.1",
+      "description": "20 mm nominal dia .Pipes.",
+      "quantity": 1000.0,
+      "unit": "Metre",
+      "rate": 564.93,
+      "amount": 564930.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "100.2",
+      "description": "25 mm nominal dia .Pipes.",
+      "quantity": 276.0,
+      "unit": "Metre",
+      "rate": 659.14,
+      "amount": 181923.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "100.3",
+      "description": "32 mm nominal dia .Pipes.",
+      "quantity": 213.0,
+      "unit": "Metre",
+      "rate": 776.89,
+      "amount": 165478.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "101.1",
+      "description": "15 mm dia nominal bore",
+      "quantity": 25.0,
+      "unit": "Metre",
+      "rate": 385.03,
+      "amount": 9626.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "101.2",
+      "description": "20 mm dia nominal bore",
+      "quantity": 98.0,
+      "unit": "Metre",
+      "rate": 459.53,
+      "amount": 45034.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "101.3",
+      "description": "25 mm dia nominal bore",
+      "quantity": 83.0,
+      "unit": "Metre",
+      "rate": 579.75,
+      "amount": 48119.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "101.4",
+      "description": "32 mm dia nominal bore",
+      "quantity": 70.0,
+      "unit": "Metre",
+      "rate": 700.91,
+      "amount": 49064.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "101.5",
+      "description": "40 mm dia nominal bore",
+      "quantity": 115.0,
+      "unit": "Metre",
+      "rate": 853.18,
+      "amount": 98116.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "101.6",
+      "description": "50 mm dia nominal bore",
+      "quantity": 120.0,
+      "unit": "Metre",
+      "rate": 1101.65,
+      "amount": 132198.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "102.1",
+      "description": "25 mm dia nominal bore",
+      "quantity": 90.0,
+      "unit": "Metre",
+      "rate": 491.53,
+      "amount": 44238.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "102.2",
+      "description": "40 mm dia nominal bore",
+      "quantity": 25.0,
+      "unit": "Metre",
+      "rate": 648.42,
+      "amount": 16211.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "102.3",
+      "description": "50 mm dia nominal bore",
+      "quantity": 150.0,
+      "unit": "Metre",
+      "rate": 800.9,
+      "amount": 120135.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "102.4",
+      "description": "65 mm dia nominal bore",
+      "quantity": 90.0,
+      "unit": "Metre",
+      "rate": 942.18,
+      "amount": 84796.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "102.5",
+      "description": "80 mm dia nominal bore",
+      "quantity": 50.0,
+      "unit": "Metre",
+      "rate": 1094.66,
+      "amount": 54733.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "103.1",
+      "description": "25 mm nominal bore",
+      "quantity": 5.0,
+      "unit": "Each",
+      "rate": 487.64,
+      "amount": 2438.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "104.1.1",
+      "description": "15 mm nominal bore",
+      "quantity": 268.0,
+      "unit": "Each",
+      "rate": 102.72,
+      "amount": 27529.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "105.1",
+      "description": "150 mm dia.",
+      "quantity": 20.0,
+      "unit": "Each",
+      "rate": 233.65,
+      "amount": 4673.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "106.1",
+      "description": "With common burnt clay F.P.S.(non modular) bricks of class designation 7.5",
+      "quantity": 18.0,
+      "unit": "Each",
+      "rate": 2093.9,
+      "amount": 37690.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "107.1",
+      "description": "With common burnt clay F.P.S. (non modular) bricks of class designation 7.5",
+      "quantity": 8.0,
+      "unit": "Each",
+      "rate": 11414.64,
+      "amount": 91317.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "108.1",
+      "description": "With common burnt clay F.P.S.(non modular) bricks of class designation 7.5",
+      "quantity": 4.0,
+      "unit": "Each",
+      "rate": 19857.41,
+      "amount": 79430.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "109.1",
+      "description": "15 mm dia pipe",
+      "quantity": 25.0,
+      "unit": "Metre",
+      "rate": 12.66,
+      "amount": 317.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "109.2",
+      "description": "20 mm dia pipe",
+      "quantity": 98.0,
+      "unit": "Metre",
+      "rate": 15.18,
+      "amount": 1488.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "109.3",
+      "description": "25 mm dia pipe",
+      "quantity": 173.0,
+      "unit": "Metre",
+      "rate": 19.28,
+      "amount": 3335.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "109.4",
+      "description": "32 mm dia pipe",
+      "quantity": 70.0,
+      "unit": "Metre",
+      "rate": 23.33,
+      "amount": 1633.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "109.5",
+      "description": "40 mm dia pipe",
+      "quantity": 140.0,
+      "unit": "Metre",
+      "rate": 26.53,
+      "amount": 3714.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "109.6",
+      "description": "50 mm dia pipe",
+      "quantity": 270.0,
+      "unit": "Metre",
+      "rate": 32.05,
+      "amount": 8654.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "109.7",
+      "description": "65 mm dia pipe",
+      "quantity": 190.0,
+      "unit": "Metre",
+      "rate": 39.77,
+      "amount": 7556.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "109.8",
+      "description": "80 mm dia pipe",
+      "quantity": 160.0,
+      "unit": "Metre",
+      "rate": 46.24,
+      "amount": 7398.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "110.1",
+      "description": "25 mm dia pipe",
+      "quantity": 90.0,
+      "unit": "Metre",
+      "rate": 168.87,
+      "amount": 15198.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "110.2",
+      "description": "40 mm dia pipe",
+      "quantity": 25.0,
+      "unit": "Metre",
+      "rate": 175.49,
+      "amount": 4387.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "110.3",
+      "description": "50 mm dia pipe",
+      "quantity": 150.0,
+      "unit": "Metre",
+      "rate": 182.06,
+      "amount": 27309.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "110.4",
+      "description": "65 mm dia pipe",
+      "quantity": 90.0,
+      "unit": "Metre",
+      "rate": 287.35,
+      "amount": 25862.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "110.5",
+      "description": "80 mm dia pipe",
+      "quantity": 50.0,
+      "unit": "Metre",
+      "rate": 296.13,
+      "amount": 14807.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "111.1",
+      "description": "20 mm dia nominal bore",
+      "quantity": 22.0,
+      "unit": "Each",
+      "rate": 364.43,
+      "amount": 8017.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "111.2",
+      "description": "25 mm dia nominal bore",
+      "quantity": 32.0,
+      "unit": "Each",
+      "rate": 461.58,
+      "amount": 14771.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "111.3",
+      "description": "32 mm dia nominal bore",
+      "quantity": 17.0,
+      "unit": "Each",
+      "rate": 513.91,
+      "amount": 8736.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "111.4",
+      "description": "40 mm dia nominal bore",
+      "quantity": 27.0,
+      "unit": "Each",
+      "rate": 663.4,
+      "amount": 17912.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "111.5",
+      "description": "50 mm dia nominal bore",
+      "quantity": 22.0,
+      "unit": "Each",
+      "rate": 865.68,
+      "amount": 19045.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "111.6",
+      "description": "65 mm dia nominal bore",
+      "quantity": 5.0,
+      "unit": "Each",
+      "rate": 1194.59,
+      "amount": 5973.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "111.7",
+      "description": "80 mm dia nominal bore",
+      "quantity": 5.0,
+      "unit": "Each",
+      "rate": 1269.36,
+      "amount": 6347.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "113.1",
+      "description": "15 mm nominal bore",
+      "quantity": 25.0,
+      "unit": "Each",
+      "rate": 532.57,
+      "amount": 13314.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "114.1",
+      "description": "15 mm nominal bore",
+      "quantity": 84.0,
+      "unit": "Each",
+      "rate": 839.57,
+      "amount": 70524.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "115.1",
+      "description": "15 mm nominal bore",
+      "quantity": 436.0,
+      "unit": "Each",
+      "rate": 603.5,
+      "amount": 263126.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "118.1",
+      "description": "250 mm dia RCC pipe",
+      "quantity": 826.0,
+      "unit": "Metre",
+      "rate": 1068.6,
+      "amount": 882664.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "118.2",
+      "description": "300 mm dia RCC pipe",
+      "quantity": 170.0,
+      "unit": "Metre",
+      "rate": 1233.0,
+      "amount": 209610.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "119.1",
+      "description": "With common burnt clay F.P.S. (non modular) bricks of class designation 7.5",
+      "quantity": 97.0,
+      "unit": "Each",
+      "rate": 2944.61,
+      "amount": 285627.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "120.1",
+      "description": "250 mm dia RCC pipe",
+      "quantity": 826.0,
+      "unit": "Metre",
+      "rate": 945.55,
+      "amount": 781024.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "120.2",
+      "description": "300 mm dia RCC pipe",
+      "quantity": 170.0,
+      "unit": "Metre",
+      "rate": 1044.85,
+      "amount": 177625.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "120.3",
+      "description": "450 mm dia. R.C.C. pipe",
+      "quantity": 50.0,
+      "unit": "metre",
+      "rate": 1703.36,
+      "amount": 85168.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "121.1.1",
+      "description": "With common burnt clay F.P.S. (non modular) bricks of class designation 7.5",
+      "quantity": 35.0,
+      "unit": "Each",
+      "rate": 13419.8,
+      "amount": 469693.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "121.2.1",
+      "description": "With common burnt clay F.P.S. (non modular) bricks of class designation 7.5",
+      "quantity": 15.0,
+      "unit": "Each",
+      "rate": 27747.96,
+      "amount": 416219.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "122.1.1",
+      "description": "With common burnt clay F.P.S. (non modular) bricks of class designation 7.5",
+      "quantity": 23.0,
+      "unit": "metre",
+      "rate": 9274.08,
+      "amount": 213304.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "122.2.1",
+      "description": "With common burnt clay F.P.S. (non modular) bricks of class designation 7.5",
+      "quantity": 10.0,
+      "unit": "metre",
+      "rate": 11123.67,
+      "amount": 111237.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "123.1.1",
+      "description": "With common burnt clay F.P.S. (non modular) bricks of class designation 7.5",
+      "quantity": 2.0,
+      "unit": "Each",
+      "rate": 25958.64,
+      "amount": 51917.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "124.1",
+      "description": "With common burnt clay F.P.S. (non modular) bricks of class designation 7.5",
+      "quantity": 2.0,
+      "unit": "metre",
+      "rate": 10362.81,
+      "amount": 20726.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "263",
+      "description": "mm and width as 165mm with minimum 112 mm space between protruded legs having 2 mm tread on top surface by ribbing or chequering besides necessary and adequate anchoring projections on tail length on 138 mm as per standard drawing and suitable to with stand the bend test and chemical resistance test as per specifications and having manufacture's permanent identification mark to be visible even after fixing, including fixing in manholes with 30x20x15 cm cement concrete block 1:3:6 (1 cement : 3 coarse sand : 6 graded stone aggregate 20 mm nominal size) complete as per design.",
+      "quantity": 137.0,
+      "unit": "Each",
+      "rate": 581.85,
+      "amount": 79713.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "126.1",
+      "description": "circular shape 560 mm internal diameter.",
+      "quantity": 6.0,
+      "unit": "Each",
+      "rate": 1760.89,
+      "amount": 10565.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "127.1",
+      "description": "For pipes 100 to 250 mm dia.",
+      "quantity": 2.0,
+      "unit": "EACH",
+      "rate": 851.65,
+      "amount": 1703.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "128.1",
+      "description": "With common burnt clay F.P.S. (non modular) bricks of class designation 7.5",
+      "quantity": 35.0,
+      "unit": "Each",
+      "rate": 6260.8,
+      "amount": 219128.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "129.1.1",
+      "description": "Powder coated aluminium (minimum thickness of powder coating 50 micron)",
+      "quantity": 164.0,
+      "unit": "kg",
+      "rate": 557.89,
+      "amount": 91494.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "129.2.1",
+      "description": "Powder coated aluminium (minimum thickness of powder coating 50 micron)",
+      "quantity": 32.0,
+      "unit": "kg",
+      "rate": 666.71,
+      "amount": 21335.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "8",
+      "description": "cudm/sqm thoroughly embedded in the 2nd layer Using rough kota stone.",
+      "quantity": 297.0,
+      "unit": "sqm",
+      "rate": 1592.65,
+      "amount": 473017.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "4.4",
+      "description": "kg/sqm mixed with water proofing compound conforming to IS 2645 in recommended proportions including rounding off junction of vertical and horizontal surface. (ii) IInd course of 20 mm cement plaster 1:3 (1 cement : 3 coarse sand) mixed with water proofing compound in recommended proportion including rounding off junction of vertical and horizontal surface. (iii) IIIrd course of applying blown or residual bitumen applied hot at 1.7 kg. per sqm of area. (iv) IVth course of 400 micron thick PVC sheet. (Overlaps at joints of PVC sheet should be 100 mm wide and pasted to each other with bitumen @ 1.7 kg/sqm).",
+      "quantity": 299.0,
+      "unit": "sqm",
+      "rate": 808.73,
+      "amount": 241810.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "133.1",
+      "description": "With average thickness of 120 mm and minimum thickness at khurra as 65 mm.",
+      "quantity": 1621.0,
+      "unit": "sqm",
+      "rate": 1770.25,
+      "amount": 2869575.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "134.1",
+      "description": "For vertical surface two coats @ 0.70 kg per sqm per coat",
+      "quantity": 308.0,
+      "unit": "sq.m",
+      "rate": 496.94,
+      "amount": 153058.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "135.1.1",
+      "description": "300 mm dia",
+      "quantity": 250.0,
+      "unit": "Metre",
+      "rate": 1781.28,
+      "amount": 445320.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "136.1.1",
+      "description": "300 mm dia",
+      "quantity": 120.0,
+      "unit": "Metre",
+      "rate": 1965.7,
+      "amount": 235884.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "141.1",
+      "description": "200 mm nominal size dia having minimum wall thickness 5.40 mm",
+      "quantity": 120.0,
+      "unit": "Metre",
+      "rate": 2566.94,
+      "amount": 308033.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "142.1",
+      "description": "200 mm nominal size dia",
+      "quantity": 180.0,
+      "unit": "Metre",
+      "rate": 2701.76,
+      "amount": 486317.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "144.1",
+      "description": "200 mm dia",
+      "quantity": 2.0,
+      "unit": "Each",
+      "rate": 337.48,
+      "amount": 675.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "145.1",
+      "description": "200 mm clamp",
+      "quantity": 2.0,
+      "unit": "Each",
+      "rate": 2410.26,
+      "amount": 4821.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "200",
+      "description": "mm dia",
+      "quantity": 2.0,
+      "unit": "Each",
+      "rate": 375.78,
+      "amount": 752.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "147.1",
+      "description": "Frame size 65 x 125 mm",
+      "quantity": 711.0,
+      "unit": "metre",
+      "rate": 1451.84,
+      "amount": 1032258.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "148.1",
+      "description": "35 mm thick",
+      "quantity": 193.0,
+      "unit": "sqm",
+      "rate": 5270.33,
+      "amount": 1017174.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "149.1",
+      "description": "18 mm thick",
+      "quantity": 714.0,
+      "unit": "sqm",
+      "rate": 3145.06,
+      "amount": 2245573.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "149.2",
+      "description": "25 mm thick",
+      "quantity": 256.0,
+      "unit": "sqm",
+      "rate": 4086.87,
+      "amount": 1046239.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "150.1",
+      "description": "6 mm thick",
+      "quantity": 256.0,
+      "unit": "sqm",
+      "rate": 1155.24,
+      "amount": 295741.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "151.2.1",
+      "description": "Column 1 (2.85M)",
+      "quantity": 53.0,
+      "unit": "Nos",
+      "rate": 26896.5,
+      "amount": 1425515.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "151.2.2",
+      "description": "Column 4 (4.35 M)",
+      "quantity": 10.0,
+      "unit": "Nos",
+      "rate": 39426.95,
+      "amount": 394270.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "151.3",
+      "description": "GRC Jaali (With 50mm of border and 35mm internal thkness)",
+      "quantity": 232.0,
+      "unit": "Sqm",
+      "rate": 4433.85,
+      "amount": 1028653.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "128.00",
+      "description": "cm 83.55 10694 153 Tile work (GRC) for wall lining with cement based high polymer modified quick set tile adhesive in average 3 mm thickness including pointing in grey cement complete of required brand, shade & texture including scaffiolding for all heights as per direction of Engineer in Charge.",
+      "quantity": 387.0,
+      "unit": "sqm",
+      "rate": 2769.35,
+      "amount": 1071738.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "775.00",
+      "description": "RnMt. 590.25 457444 155 Providing and fixing 15mm C.P brass Sink Mixer for kitchen sink with swinging spout complete. Including cutting and making good the walls wherever required .",
+      "quantity": 20.0,
+      "unit": "Each",
+      "rate": 3543.8,
+      "amount": 70876.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "156.1",
+      "description": "250x10 mm",
+      "quantity": 329.0,
+      "unit": "each",
+      "rate": 416.0,
+      "amount": 136864.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "156.2",
+      "description": "200x10 mm",
+      "quantity": 329.0,
+      "unit": "each",
+      "rate": 350.35,
+      "amount": 115265.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "158.1",
+      "description": "125x75x3 mm",
+      "quantity": 474.0,
+      "unit": "each",
+      "rate": 477.0,
+      "amount": 226098.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "159.1",
+      "description": "125 mm",
+      "quantity": 880.0,
+      "unit": "each",
+      "rate": 105.1,
+      "amount": 92488.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "160.1",
+      "description": "Twin rubber stopper",
+      "quantity": 263.0,
+      "unit": "each",
+      "rate": 269.85,
+      "amount": 70971.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "161.1",
+      "description": "125 mm nominal dia",
+      "quantity": 218.0,
+      "unit": "Each",
+      "rate": 712.1,
+      "amount": 155238.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "162.1",
+      "description": "Polished Granite stone slab colour of Black, Cherry/Ruby Red or equivalent",
+      "quantity": 292.0,
+      "unit": "sqm",
+      "rate": 5427.3,
+      "amount": 1584772.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "304",
+      "description": "wire gauge to uPVC windows and clerestory windows using wire gauge with average width of aperture 1.4 mm in both directions with wire of dia 0.50 mm all complete as per direction of Engineer in charge.",
+      "quantity": 113.0,
+      "unit": "sqm",
+      "rate": 1165.0,
+      "amount": 131645.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "165.1",
+      "description": "(a) 15 mm nominal dia",
+      "quantity": 63.0,
+      "unit": "each",
+      "rate": 5126.9,
+      "amount": 322995.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "166.1",
+      "description": "(a) 15 mm nominal dia",
+      "quantity": 63.0,
+      "unit": "each",
+      "rate": 6461.35,
+      "amount": 407065.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "168.1",
+      "description": "(a) 32 mm dia",
+      "quantity": 63.0,
+      "unit": "each",
+      "rate": 347.95,
+      "amount": 21921.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "172.1",
+      "description": "(a) 15 mm nominal dia",
+      "quantity": 63.0,
+      "unit": "each",
+      "rate": 2015.1,
+      "amount": 126951.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "173.1",
+      "description": "600 mm long towel rail",
+      "quantity": 63.0,
+      "unit": "each",
+      "rate": 2292.55,
+      "amount": 144431.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "174.1.1",
+      "description": "80 mm dia nominal bore",
+      "quantity": 30.0,
+      "unit": "metre",
+      "rate": 1328.55,
+      "amount": 39857.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "175.1",
+      "description": "White Vitreous China Wash basin size 410x355 mm",
+      "quantity": 63.0,
+      "unit": "each",
+      "rate": 2086.85,
+      "amount": 131472.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "176.1",
+      "description": "(a) 15 mm nominal dia",
+      "quantity": 63.0,
+      "unit": "each",
+      "rate": 1769.45,
+      "amount": 111475.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "177.1",
+      "description": "Size of Tile 600X1200 mm",
+      "quantity": 151.0,
+      "unit": "sqm",
+      "rate": 1882.8,
+      "amount": 284303.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "178.1.1",
+      "description": "30x12 mm",
+      "quantity": 995.0,
+      "unit": "metre",
+      "rate": 191.8,
+      "amount": 190841.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "179.1.1",
+      "description": "15x12 mm",
+      "quantity": 995.0,
+      "unit": "metre",
+      "rate": 167.4,
+      "amount": 166563.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "300",
+      "description": "mm long all complete as per direction of Engineer incharge.",
+      "quantity": 63.0,
+      "unit": "each",
+      "rate": 2586.7,
+      "amount": 162962.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "184.1",
+      "description": "6mm thick toughened glass",
+      "quantity": 137.0,
+      "unit": "sqm",
+      "rate": 2373.6,
+      "amount": 325183.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "1",
+      "description": "No. slats of size 65mm x 25mm and side rails of size 150mm x 25mm. Height of Head from ply is 300mm. Ply painted with synthetic enamel paint and all other wooden parts of bed will be melamine polished matt finish. Side rails to be joined with Head & Foot with nuts and bolts. Head Side are of Hight is 760mm respectively & Foot Side are Hight is 460mm respectively. Bed structure consisting of Head Side of two nos. end rails of size 70mm x 55mm 8 Nos. vertical members between them of size 50mm x 25mm. teak wood planks between the Head side legs of size is 125 height x 19mm thk. Length of Head Top Rail shall be of size 1160 & thickness of top rail is 65mm x 12mm. The foot side consisting of two posts of 70mm x 55mm and of height 448mm and having Top rail of size length is 1160 & thickness of top rail is 65mm x 12mm teak wood planks between the Foot side legs of size is 250mm height x 19mm thk. Bed having One Sliding Drawer of size 990W x 1130D x 240H mm are",
+      "quantity": 63.0,
+      "unit": "each",
+      "rate": 55027.2,
+      "amount": 3466714.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "Group A ( Staff Quarters)",
+      "quantity": 286.0,
+      "unit": "Point",
+      "rate": 1021.0,
+      "amount": 292006.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "b)",
+      "description": "Group C (Lounge)",
+      "quantity": 59.0,
+      "unit": "Point",
+      "rate": 1425.0,
+      "amount": 84075.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "710",
+      "description": "Metre 615.47 436983.70 Circuit / Sub main wiring in PVC Conduit :- 5 Wiring for circuit/ submain wiring alongwith earth wire with the following sizes of FRLS/ HFFR PVC insulated copper conductor, single core cable in surface/ recessed medium class PVC conduit as required (a) 2 X 1.5 sq. mm + 1 X 1.5 sq. mm earth wire.",
+      "quantity": 1000.0,
+      "unit": "Metre",
+      "rate": 279.95,
+      "amount": 279950.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "3 x 1.5 sq. mm",
+      "quantity": 900.0,
+      "unit": "Metre",
+      "rate": 109.04,
+      "amount": 98136.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "b)",
+      "description": "3 x 4 sq. mm",
+      "quantity": 700.0,
+      "unit": "Metre",
+      "rate": 232.77,
+      "amount": 162939.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "c)",
+      "description": "3 x 6 sq. mm",
+      "quantity": 450.0,
+      "unit": "Metre",
+      "rate": 341.81,
+      "amount": 153814.5,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "2 Pair",
+      "quantity": 1600.0,
+      "unit": "Metre",
+      "rate": 40.89,
+      "amount": 65424.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "1560",
+      "description": "Metre 56.62 88327.20 9 Supplying and fixing of following sizes of medium class PVC conduit along with accessories in surface/recess including cutting the wall and making good the same in case of recessed conduit as required (a) 20 mm",
+      "quantity": 1900.0,
+      "unit": "Metre",
+      "rate": 158.32,
+      "amount": 300808.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "15/16 A Switch",
+      "quantity": 25.0,
+      "unit": "Each",
+      "rate": 184.54,
+      "amount": 4613.5,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "b)",
+      "description": "3 Pin 5/6 A Socket Outlet",
+      "quantity": 20.0,
+      "unit": "Each",
+      "rate": 142.6,
+      "amount": 2852.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "46",
+      "description": "Each 49.28 2266.88 12 Supplying and Fixing Following Size/ Modules, GI Box Alongwith Modular Base & Cover Plate for Modular Switches in Recess etc. as required. (a) 1 or 2 Module (75 mm x 75 mm)",
+      "quantity": 82.0,
+      "unit": "Each",
+      "rate": 371.17,
+      "amount": 30435.94,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "1.5",
+      "description": "sq. mm FRLS/ HFFR PVC insulated copper conductor single core cable in already laid PVC/ Steel conduit, and earthing the point with 1.5 sq. mm FRLS PVC insulated copper conductor single core cable etc. as required. (a) Group A",
+      "quantity": 76.0,
+      "unit": "Point",
+      "rate": 706.0,
+      "amount": 53656.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "40 pair krone",
+      "quantity": 1.0,
+      "unit": "Each",
+      "rate": 1982.0,
+      "amount": 1982.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "Group A",
+      "quantity": 662.0,
+      "unit": "Point",
+      "rate": 1509.84,
+      "amount": 999514.08,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "2 X 1.5 sq. mm + 1 X 1.5 sq. mm earth wire",
+      "quantity": 900.0,
+      "unit": "Metre",
+      "rate": 387.95,
+      "amount": 349155.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "b)",
+      "description": "2 X 6 sq. mm + 1 X 6 sq. mm earth wire",
+      "quantity": 1000.0,
+      "unit": "Metre",
+      "rate": 683.62,
+      "amount": 683620.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "c)",
+      "description": "2 X 10 sq. mm + 1 X 6 sq. mm earth wire",
+      "quantity": 500.0,
+      "unit": "Metre",
+      "rate": 815.73,
+      "amount": 407865.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "d)",
+      "description": "4 X 10 sq. mm + 2 X 6 sq. mm earth wire",
+      "quantity": 250.0,
+      "unit": "Metre",
+      "rate": 1313.77,
+      "amount": 328442.5,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "40 Amps",
+      "quantity": 30.0,
+      "unit": "Each",
+      "rate": 494.89,
+      "amount": 14846.7,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "63 Amps",
+      "quantity": 32.0,
+      "unit": "Each",
+      "rate": 1169.08,
+      "amount": 37410.56,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "For 8 way, Double door SPN MCBDB",
+      "quantity": 3.0,
+      "unit": "Each",
+      "rate": 962.52,
+      "amount": 2887.56,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "b)",
+      "description": "For 14 way, Double door SPN MCBDB",
+      "quantity": 27.0,
+      "unit": "Each",
+      "rate": 1038.02,
+      "amount": 28026.54,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "For 4 way, Double door TPN MCBDB",
+      "quantity": 24.0,
+      "unit": "Each",
+      "rate": 1234.08,
+      "amount": 29617.92,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "b)",
+      "description": "For 6 way, Double door TPN MCBDB",
+      "quantity": 1.0,
+      "unit": "Each",
+      "rate": 1282.32,
+      "amount": 1282.32,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "c)",
+      "description": "For 8 way, Double door TPN MCBDB",
+      "quantity": 7.0,
+      "unit": "Each",
+      "rate": 1518.23,
+      "amount": 10627.61,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "12 -15 watt",
+      "quantity": 184.0,
+      "unit": "Each",
+      "rate": 749.68,
+      "amount": 137941.12,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "b)",
+      "description": "18 watt",
+      "quantity": 289.0,
+      "unit": "Each",
+      "rate": 987.69,
+      "amount": 285442.41,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "18-22 watt",
+      "quantity": 123.0,
+      "unit": "Each",
+      "rate": 769.6,
+      "amount": 94660.8,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "2",
+      "description": "Windows Spare - 1 Set Digital Ammeter with inbuilt selector switch - 1 Set Digital Voltmeter with inbuilt selector switch - 1 Set A set of breaker ON/OFF/Trip/DC control supply healthy/Trip circuit healthy/ Spring Charged VCB in test / VCB in service & R,Y,B phase indication lamps. - 1 Set Emergency stop push button - 1 Set Limit switches with 6 NO/ 6 NC breaker auxiliary contacts - 1 Set Control:- T-N-C (Trip, Neutral, Close) breaker control switch with indication arrangement. - 1 Set All control wiring with protection & test terminal block as required. - 1 Set Space heater with thermostat for moisture absorption. - 1 Set Correction – Nil Insertion – Nil Deletion – Nil AE(E) EE (E) Page 184 Suitable for connection to 3C x 240 sq.mm. Cross linked polythelene (XLPE) 11kV cables or as called for. - 1 Set Cable box for 3C x 240 sq.mm 11kV XLPE Al. conductor cable. - 1 Set HT Danger Plate - 2 Set Incoming as described above. 1 Sets Powerpack as Required to Be Included (220V/24V DC), 7AH Battery for Each Breaker Module. SINGLE PANEL 11KV HT VCB PANEL AS DESCRIBED ABOVE",
+      "quantity": 1.0,
+      "unit": "SET",
+      "rate": 593854.0,
+      "amount": 593854.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "2",
+      "description": "windows spare Emergency Stop Push Button - 1 Set Limit Switches With 4 NO/ 4 NC Breaker Auxiliary Contacts - 1 Set Control:- T-N-C (Trip, Neutral, Close) Breaker Control Switch With Indication Arrangement. - 1 Set All control wiring with protection & test terminal block as required. - 1 Set Strip heater with thermostat for moisture absorption. - 1 Set Cable box for 3C x 240 sq.mm 11kV XLPE Al. conductor cable. - 1 Set HT Danger Plate - 1 Set Outgoing as described above. - 3 Set Powerpack as Required to Be Included (220V/24V DC), 7AH Battery for Each Breaker Module. Correction – Nil Insertion – Nil Deletion – Nil AE(E) EE (E) Page 187 FOUR PANEL 11KV HT VCB PANEL AS DESCRIBED ABOVE",
+      "quantity": 1.0,
+      "unit": "SET",
+      "rate": 1943523.0,
+      "amount": 1943523.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "250 KVA",
+      "quantity": 3.0,
+      "unit": "Nos",
+      "rate": 652467.92,
+      "amount": 1957403.76,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "1.00",
+      "description": "1310219.23 1310219.23 TOTAL FOR SUB HEAD V : - DG SYSTEM 1310219.23 SUB HEAD VI : - H T CABLE, LT CABLE AND ACCESSORIES 47 Supplying of one number Earthed armoured Aluminium conductor XLPE power cable of 11 KV grade confirming to IS:7098 (Part-II)1985 as ameded up to date. a 3 C x 240 Sq. mm 11 KV (E)",
+      "quantity": 100.0,
+      "unit": "Metre",
+      "rate": 3664.0,
+      "amount": 366400.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "4",
+      "description": "each 627.00 2508.00 52 Laying of one number PVC insulated and PVC sheathed / XLPE power cable of 11 KV grade of following size direct in ground including excavation, sand cushioning, protective covering and refilling the trench etc as required. a Above 120 sq. mm and upto 400 sq. mm",
+      "quantity": 20.0,
+      "unit": "Metre",
+      "rate": 727.66,
+      "amount": 14553.2,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "Above 120 sq. mm and upto 400 sq. mm",
+      "quantity": 80.0,
+      "unit": "Metre",
+      "rate": 178.25,
+      "amount": 14260.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "3½ X 25 sq. mm (28mm)",
+      "quantity": 20.0,
+      "unit": "Each",
+      "rate": 388.99,
+      "amount": 7779.8,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "300",
+      "description": "Metre 300.92 90276.00 73 Providing and Fixing 6 SWG dia GI wire on surface or in recess for loop earthing along",
+      "quantity": 1000.0,
+      "unit": "Metre",
+      "rate": 52.43,
+      "amount": 52430.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "140",
+      "description": "Metre 231.72 32440.80 TOTAL SUB HEAD IX :- LIGHTNING CONDUCTOR :- 358773.46 SUB HEAD X :- PIPE LAYING 80 Providing, laying and fixing following dia RCC pipe NP2 class (light duty) in ground complete with RCC collars, jointing with cement mortar 1:2 (1 cement : 2 fine sand) including trenching (75 cm deep) and refilling etc as required. a 150 mm dia",
+      "quantity": 30.0,
+      "unit": "Metre",
+      "rate": 887.03,
+      "amount": 26610.9,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "3",
+      "description": "coarse sand : 6 graded stone aggregate 40 mm nominal size) foundation including excavation and refilling etc. as required. a Above 4.5 metre and upto 6.5 metre",
+      "quantity": 18.0,
+      "unit": "Each",
+      "rate": 6419.97,
+      "amount": 115559.46,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "18",
+      "description": "Nos. 46151.00 830718.00 85 Supplying of Following Sizes of 1.1 KV Grade Multicore Aluminium Conductor XLPE Insulated armoured power cable conforming to IS: 7098 (Part - I) or as per Correction – Nil Insertion – Nil Deletion – Nil AE(E) EE (E) Page 199 Relevant IS Code complete with all Amendments etc as required. a 4 C X 16 Sq.mm Al. XLPE arm.",
+      "quantity": 400.0,
+      "unit": "Metre",
+      "rate": 363.0,
+      "amount": 145200.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "10 G SFP + Single Mode/Multi Mode",
+      "quantity": 6.0,
+      "unit": "Each",
+      "rate": 15698.14,
+      "amount": 94188.84,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "Single Mode 6 Core Optical fibre cable",
+      "quantity": 350.0,
+      "unit": "Meter",
+      "rate": 67.1,
+      "amount": 23485.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "1 Run of cable",
+      "quantity": 500.0,
+      "unit": "Meter",
+      "rate": 65.01,
+      "amount": 32505.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "b)",
+      "description": "2 Run of cable",
+      "quantity": 420.0,
+      "unit": "Meter",
+      "rate": 103.8,
+      "amount": 43596.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "6U Rack",
+      "quantity": 2.0,
+      "unit": "Nos",
+      "rate": 7275.54,
+      "amount": 14551.08,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "b)",
+      "description": "15U Rack",
+      "quantity": 2.0,
+      "unit": "Nos",
+      "rate": 13976.51,
+      "amount": 27953.02,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "Copper Patch Cords of length 1m (3ft)",
+      "quantity": 95.0,
+      "unit": "Each",
+      "rate": 181.39,
+      "amount": 17232.05,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "8 passenger (544kg)",
+      "quantity": 4.0,
+      "unit": "No",
+      "rate": 1794866.0,
+      "amount": 7179464.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "i)",
+      "description": "For 2 x 1.5 HP Flushing Water Transfer Pumps for STP (1 Duty + 1 Stand by) ii) For 2 x 1.0 HP Sewage Water Transfer Pumps for STP (1 Duty + 1 Stand by) - only feeder to sub panels iii) For 2 x 2.0 HP irrigation System Feed Pumps (1 duty + 1 stand by) - only feeder to sub panels. All elctrical works including all wiring and accessories in side STP. Capacity : 45 M3 / Day",
+      "quantity": 1.0,
+      "unit": "Job",
+      "rate": 2861885.0,
+      "amount": 2861885.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "450 lpm at 35 m Head",
+      "quantity": 2.0,
+      "unit": "Each",
+      "rate": 95816.12,
+      "amount": 191632.24,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "30 m",
+      "quantity": 8.0,
+      "unit": "Each",
+      "rate": 9897.84,
+      "amount": 79182.72,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "4 way - 150 mm dia M.S. Pipe",
+      "quantity": 1.0,
+      "unit": "Each",
+      "rate": 15538.77,
+      "amount": 15538.77,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "150 mm dia",
+      "quantity": 2.0,
+      "unit": "Each",
+      "rate": 12248.58,
+      "amount": 24497.16,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "65 mm dia",
+      "quantity": 8.0,
+      "unit": "Each",
+      "rate": 7248.28,
+      "amount": 57986.24,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "b)",
+      "description": "100 mm dia",
+      "quantity": 4.0,
+      "unit": "Each",
+      "rate": 12427.87,
+      "amount": 49711.48,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "c)",
+      "description": "150 mm dia",
+      "quantity": 3.0,
+      "unit": "Each",
+      "rate": 19799.87,
+      "amount": 59399.61,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "65 mm dia",
+      "quantity": 8.0,
+      "unit": "Each",
+      "rate": 4940.53,
+      "amount": 39524.24,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "b)",
+      "description": "100 mmm dia",
+      "quantity": 4.0,
+      "unit": "Each",
+      "rate": 7623.64,
+      "amount": 30494.56,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "c)",
+      "description": "150 mm dia",
+      "quantity": 3.0,
+      "unit": "Each",
+      "rate": 10209.24,
+      "amount": 30627.72,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "150 mm. Dia",
+      "quantity": 15.0,
+      "unit": "Meter",
+      "rate": 5351.54,
+      "amount": 80273.1,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "100 mm dia",
+      "quantity": 100.0,
+      "unit": "Meter",
+      "rate": 3226.23,
+      "amount": 322623.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "b)",
+      "description": "65 mm dia",
+      "quantity": 50.0,
+      "unit": "Meter",
+      "rate": 2049.82,
+      "amount": 102491.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "25 mm",
+      "quantity": 2.0,
+      "unit": "Each",
+      "rate": 1247.0,
+      "amount": 2494.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "Speaker cable Single pair, 2-core, 1.5 sqmm",
+      "quantity": 120.0,
+      "unit": "Metre",
+      "rate": 63.96,
+      "amount": 7675.2,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "3 Core 6 Sq. mm Flat Cable",
+      "quantity": 100.0,
+      "unit": "Meter",
+      "rate": 278.9,
+      "amount": 27890.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "65 mm dia",
+      "quantity": 2.0,
+      "unit": "Each",
+      "rate": 7248.28,
+      "amount": 14496.56,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "50 mm dia",
+      "quantity": 2.0,
+      "unit": "Each",
+      "rate": 8263.23,
+      "amount": 16526.46,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "10 KVA",
+      "quantity": 4.0,
+      "unit": "Each",
+      "rate": 176678.54,
+      "amount": 706714.16,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "a)",
+      "description": "3C X 16 Sq.mm",
+      "quantity": 100.0,
+      "unit": "Meter",
+      "rate": 1304.0,
+      "amount": 130400.0,
+      "work_part": "Civil Works"
+    }
+  ],
+  "boq_total": null,
+  "warnings": [
+    "Estimated cost was not detected."
+  ]
+}

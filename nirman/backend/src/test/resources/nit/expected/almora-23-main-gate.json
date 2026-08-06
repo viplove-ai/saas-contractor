@@ -1,0 +1,687 @@
+{
+  "filename": "almora-23-main-gate.pdf",
+  "page_count": 146,
+  "nit_no": "23/EE/ACD/CPWD/Almora/2026-27",
+  "work_name": "Construction of Main Gate and Boundary wall with various miscellaneous repair works at Kendriya Vidyalaya Almora (UK).",
+  "estimated_cost": 4972713.0,
+  "civil_estimated_cost": null,
+  "electrical_estimated_cost": null,
+  "emd_amount": 99455.0,
+  "completion_period": "06 Months",
+  "submission_closing": "2026-07-23 15:00:00",
+  "bid_opening": "2026-07-23 15:30:00",
+  "division": "Almora",
+  "location": "Kendriya Vidyalaya Almora (UK)",
+  "bid_type": "Percentage Rate",
+  "contractor_eligibility": "Only the enlisted contractors of Class-III, IV and V by the Enlisting authority i.e. SDG (Chandigarh), ADG (Chandigarh), ADG (Lucknow), ADG (Jammu), ADG (DR) and ADG (PRD) shall tender within their limit and tendering jurisdiction i.e. Punjab, Chandigarh, Rajasthan, Haryana, Uttarakhand, Himanchal Pradesh, Uttar Pradesh, Jammu & Kashmir, Leh & Ladakh and Delhi of North region (NR), as per the Rules for enlistment of Contractors in CPWD, 2026. Further, the enlisted contractors of Class-III, IV and V shall also have to meet the other requirements of eligibility as per NIT conditions.",
+  "similar_work_criteria": "The Contractor should have satisfactorily completed three similar works each of value not less than Rs. 11.91 lacs OR two similar work each of value not less than Rs. 17.87 lacs OR one similar work of value not less than Rs. 23.83 lacs in last 7 years ending last day of the previous month. Similar work would means “Work of Caretaking, Housekeeping and watch & ward and Similar work executed from any Holiday home/Guest house of Govt. of India who have minimum four years experience in Hilly area only having equivalent altitude or more in last seven years (Work experience certificate issued by the competent authority).” The value of executed works shall be brought to current costing level by enhancing the actual value of work at simple rate of 7% per annum, calculated from the date of completion to the last date of submission of tender.",
+  "performance_guarantee_percent": 5.0,
+  "security_deposit_percent": 2.5,
+  "civil_dsr_year": 2023,
+  "civil_cost_index_percent": 29.0,
+  "electrical_dsr_year": null,
+  "electrical_cost_index_percent": null,
+  "boq_items": [
+    {
+      "item_no": "1.1.1",
+      "description": "All kinds of soil.",
+      "quantity": 89.0,
+      "unit": "cum",
+      "rate": 222.8,
+      "amount": 19829.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "1.2.1",
+      "description": "Ordinary rock",
+      "quantity": 31.0,
+      "unit": "cum",
+      "rate": 626.25,
+      "amount": 19414.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "1.3.1",
+      "description": "All kinds of soil.",
+      "quantity": 14.0,
+      "unit": "cum",
+      "rate": 326.7,
+      "amount": 4574.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "1.4",
+      "description": "Filling available excavated earth (excluding rock) in trenches, plinth, sides of foundations etc. in layers not exceeding 20cm in depth, consolidating each deposited layer by ramming and watering, lead up to 50 and for all lift.",
+      "quantity": 81.0,
+      "unit": "cum",
+      "rate": 246.0,
+      "amount": 19926.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "2.1.1",
+      "description": "1:1½:3 (1 Cement: 1½ coarse sand (zone- III) derived from natural sources : 3 graded stone aggregate 20 mm nominal size",
+      "quantity": 5.0,
+      "unit": "cum",
+      "rate": 10469.2,
+      "amount": 52346.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "2.1.2",
+      "description": "1:5:10 (1 cement : 5 coarse sand (zone-III) derived from natural sources : 10 graded stone aggregate 40 mm nominal size derived from natural sources)",
+      "quantity": 12.0,
+      "unit": "cum",
+      "rate": 8181.95,
+      "amount": 98183.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "2.2.1",
+      "description": "Foundations, footings, bases for columns",
+      "quantity": 21.0,
+      "unit": "sqm",
+      "rate": 492.2,
+      "amount": 10336.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "3.1.1",
+      "description": "1:1.5:3 (1 cement : 1.5 coarse sand (zone- III) derived from natural sources : 3 graded stone aggregate 20 mm nominal size derived from natural sources)",
+      "quantity": 21.0,
+      "unit": "cum",
+      "rate": 11353.95,
+      "amount": 238433.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "3.2.1",
+      "description": "1:1.5:3 (1 cement : 1.5 coarse sand(zone- III) derived from natural sources : 3 graded stone aggregate 20 mm nominal size derived from natural sources)",
+      "quantity": 10.0,
+      "unit": "cum",
+      "rate": 13622.25,
+      "amount": 136223.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "3.3",
+      "description": "Reinforced cement concrete work in beams, suspended floors, roofs having slope up to 15° landings, balconies, shelves, chajjas, lintels, bands, plain window sills, staircases and spiral stair cases above plinth level up to floor five level, excluding the cost of centering, shuttering, finishing and reinforcement with 1:1.5:3 (1 cement : 1.5 coarse sand(zone-III) derived from natural sources : 3 graded stone aggregate 20 mm nominal size derived from natural sources).",
+      "quantity": 3.0,
+      "unit": "cum",
+      "rate": 14441.35,
+      "amount": 43324.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "3.4.1",
+      "description": "Foundations, footings, bases of columns, etc. for mass concrete",
+      "quantity": 31.0,
+      "unit": "sqm",
+      "rate": 492.2,
+      "amount": 15258.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "3.4.2",
+      "description": "Suspended floors, roofs, landings, balconies and access platform",
+      "quantity": 4.0,
+      "unit": "sqm",
+      "rate": 1163.85,
+      "amount": 4655.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "3.4.3",
+      "description": "Lintels, beams, plinth beams, girders, bressumers and cantilevers",
+      "quantity": 59.0,
+      "unit": "sqm",
+      "rate": 924.3,
+      "amount": 54534.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "3.4.4",
+      "description": "Columns, Pillars, Piers, Abutments, Posts and Struts",
+      "quantity": 96.0,
+      "unit": "sqm",
+      "rate": 1206.6,
+      "amount": 115834.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "3.4.5",
+      "description": "Small lintels not exceeding 1.5 m clear span, moulding as in cornices, window sills, string courses, bands, copings, bed plates, anchor blocks and the like",
+      "quantity": 10.0,
+      "unit": "sqm",
+      "rate": 492.2,
+      "amount": 4922.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "3.5.1",
+      "description": "Suspended floors, roofs, landing, beams and balconies (Plan area to be measured)",
+      "quantity": 10.0,
+      "unit": "sqm",
+      "rate": 482.35,
+      "amount": 4824.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "3.6.1",
+      "description": "Thermo-Mechanically Treated bars of grade Fe-500D or more.",
+      "quantity": 3400.0,
+      "unit": "Kg",
+      "rate": 135.4,
+      "amount": 460360.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "4.1.1",
+      "description": "Cement mortar 1:6 (1 cement : 6 coarse sand)",
+      "quantity": 21.0,
+      "unit": "cum",
+      "rate": 8952.2,
+      "amount": 187996.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "4.2.1",
+      "description": "Cement mortar 1:6 (1 cement : 6 coarse sand)",
+      "quantity": 7.0,
+      "unit": "cum",
+      "rate": 11429.55,
+      "amount": 80007.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "5.1.1",
+      "description": "Cement mortar 1:6 (1 cement : 6 coarse sand)",
+      "quantity": 22.0,
+      "unit": "cum",
+      "rate": 9176.85,
+      "amount": 201891.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "5.2.1",
+      "description": "Cement mortar 1:6 (1 cement : 6 coarse sand)",
+      "quantity": 19.0,
+      "unit": "cum",
+      "rate": 11642.25,
+      "amount": 221203.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "6.1.1.1",
+      "description": "Area of slab upto 0.50 sqm",
+      "quantity": 1.0,
+      "unit": "sqm",
+      "rate": 6794.9,
+      "amount": 6795.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "6.2",
+      "description": "Designing, fabricating, testing, installing and fixing in position Curtain Wall with Aluminium Composite Panel Cladding, with open grooves for linear as well as curvilinear portions of the building , for all heights and all levels etc. including: (a) Structural analysis & design and preparation of shop drawings for pressure equalisation or rain screen principle as required, proper drainage of water to make it watertight including checking of all the structural and functional design. (b) Providing, fabricating and supplying and fixing panels of aluminium composite panel cladding in pan shape in metalic colour of approved shades made out of 4mm thick aluminium composite panel material consisting of 3mm thick FR grade mineral core sandwiched between two Aluminium sheets (each 0.5mm thick). The aluminium composite panel cladding sheet shall be coil coated, with Kynar 500 based PVDF / Lumiflon based fluoropolymer resin coating of approved colour and shade on face # 1 and polymer (Service) coating on face # 2 as specified using stainless steel screws, nuts, bolts, washers, cleats, weather silicone sealant, backer rods etc. (c) The fastening brackets of Aluminium alloy 6005 T5 / MS with Hot Dip Galvanised with serrations and serrated washers to arrest the wind load movement, fasteners, SS 316 Pins and anchor bolts of",
+      "quantity": 107.0,
+      "unit": "sqm",
+      "rate": 6294.75,
+      "amount": 673538.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "7.1.1",
+      "description": "35 mm thick including ISI marked Stainless Steel butt hinges with necessary screws",
+      "quantity": 2.0,
+      "unit": "sqm",
+      "rate": 3003.2,
+      "amount": 6006.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "7.2.1",
+      "description": "100X58X1.90 mm",
+      "quantity": 3.0,
+      "unit": "each",
+      "rate": 134.4,
+      "amount": 403.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "7.3.1",
+      "description": "300x16 mm",
+      "quantity": 2.0,
+      "unit": "each",
+      "rate": 380.6,
+      "amount": 761.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "7.4.1",
+      "description": "250x10 mm",
+      "quantity": 2.0,
+      "unit": "each",
+      "rate": 144.55,
+      "amount": 289.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "7.5.1",
+      "description": "125 mm",
+      "quantity": 2.0,
+      "unit": "each",
+      "rate": 83.15,
+      "amount": 166.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "7.6.1",
+      "description": "Twin rubber stopper",
+      "quantity": 2.0,
+      "unit": "each",
+      "rate": 90.8,
+      "amount": 182.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "8.1",
+      "description": "Structural steel work riveted, bolted or welded in built up sections, trusses and framed work, including cutting, hoisting, fixing in position and applying a priming coat of approved steel primer all complete.",
+      "quantity": 700.0,
+      "unit": "Kg",
+      "rate": 167.85,
+      "amount": 117495.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "8.2.1",
+      "description": "Using M.S. angels 40x40x6 mm for diagonal braces",
+      "quantity": 1.0,
+      "unit": "sqm",
+      "rate": 7285.45,
+      "amount": 7285.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "8.3.1",
+      "description": "Fixing with 15x3 mm lugs 10 cm long embedded in cement concrete block 15x10x10 cm of C.C. 1:3:6 (1 Cement : 3 coarse sand : 6 graded stone aggregate 20 mm nominal size)",
+      "quantity": 592.0,
+      "unit": "Kg",
+      "rate": 164.45,
+      "amount": 97354.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "8.4.1",
+      "description": "Hot finished welded type tubes",
+      "quantity": 2305.0,
+      "unit": "Kg",
+      "rate": 244.0,
+      "amount": 562420.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "8.5.1",
+      "description": "10 x 120 mm",
+      "quantity": 16.0,
+      "unit": "Nos",
+      "rate": 214.6,
+      "amount": 3434.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "8.6.1",
+      "description": "Stainless steel (grade 304) wire gauze of 0.5 mm dia wire and 1.4 mm aperture on both sides",
+      "quantity": 54.0,
+      "unit": "sqm",
+      "rate": 1422.8,
+      "amount": 76831.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "8.7.1",
+      "description": "4.0 mm thick glass panes",
+      "quantity": 27.0,
+      "unit": "sqm",
+      "rate": 1336.3,
+      "amount": 36080.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "9.1.1",
+      "description": "Dark shade pigment using ordinary cement",
+      "quantity": 6.0,
+      "unit": "sqm",
+      "rate": 1405.15,
+      "amount": 8431.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "9.2.1",
+      "description": "25 mm thick",
+      "quantity": 31.0,
+      "unit": "sqm",
+      "rate": 2445.4,
+      "amount": 75807.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "9.3",
+      "description": "Kota stone slabs 20 mm thick in risers of steps, skirting, dado and pillars laid on 12 mm (average) thick cement mortar 1:3 (1 cement: 3 coarse sand) and jointed with grey cement slurry mixed with pigment to match the shade of the slabs, including rubbing and polishing complete.",
+      "quantity": 16.0,
+      "unit": "sqm",
+      "rate": 2955.5,
+      "amount": 47288.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "9.4.1",
+      "description": "Size of Tile 600x600 mm",
+      "quantity": 4.0,
+      "unit": "sqm",
+      "rate": 1949.85,
+      "amount": 7799.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "9.5.1",
+      "description": "Size of Tile 600x600 mm",
+      "quantity": 1.0,
+      "unit": "sqm",
+      "rate": 2037.25,
+      "amount": 2037.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "10.1.1",
+      "description": "110 mm diameter",
+      "quantity": 8.0,
+      "unit": "meter",
+      "rate": 473.7,
+      "amount": 3790.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "10.2.1.1",
+      "description": "110 mm",
+      "quantity": 4.0,
+      "unit": "each",
+      "rate": 188.75,
+      "amount": 755.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "10.2.2.1",
+      "description": "110 mm",
+      "quantity": 2.0,
+      "unit": "each",
+      "rate": 165.5,
+      "amount": 331.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "10.3",
+      "description": "Providing and fixing precoated galvanised iron profile sheets (size, shape and pitch of corrugation as approved by Engineer-in- Charge) of total coated thickness 0.50mm (base metal of minimum 0.45mm thickness with total coating thickness of 0.05mm) with zinc coating 120 grams per sqm as per IS: 277, in 240 mpa steel grade, 5-7 microns epoxy primer on both side of the sheet and polyester top coat 15-18 microns. Sheet should have protective guard film of 25 microns minimum to avoid scratches during transportation and should be supplied in single length upto 12 metre or as desired by Engineer-in-charge. The sheet shall be fixed using self drilling /self tapping screws of size (5.5x 55 mm) with EPDM seal, complete upto any pitch in horizontal/ vertical or curved surfaces, excluding the cost of purlins, rafters and trusses and including cutting to size and shape wherever required.",
+      "quantity": 139.0,
+      "unit": "sqm",
+      "rate": 927.1,
+      "amount": 128867.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "10.4.1",
+      "description": "Ridges plain (500 - 600mm)",
+      "quantity": 11.0,
+      "unit": "meter",
+      "rate": 668.2,
+      "amount": 7350.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "10.4.2",
+      "description": "Gutter (600 mm over all girth)",
+      "quantity": 22.0,
+      "unit": "meter",
+      "rate": 1648.9,
+      "amount": 36276.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "11.1.1",
+      "description": "1:4 (1 cement: 4 coarse sand)",
+      "quantity": 119.0,
+      "unit": "sqm",
+      "rate": 448.55,
+      "amount": 53377.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "11.2.1",
+      "description": "1:6 (1 cement: 6 coarse sand)",
+      "quantity": 124.0,
+      "unit": "sqm",
+      "rate": 496.25,
+      "amount": 61535.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "11.3.1",
+      "description": "12 mm cement plaster",
+      "quantity": 2.0,
+      "unit": "sqm",
+      "rate": 564.25,
+      "amount": 1129.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "11.4.1",
+      "description": "1:3 (1 cement : 3 fine sand)",
+      "quantity": 14.0,
+      "unit": "sqm",
+      "rate": 377.15,
+      "amount": 5280.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "11.5.1",
+      "description": "Raised and cut pointing",
+      "quantity": 33.0,
+      "unit": "sqm",
+      "rate": 879.9,
+      "amount": 29037.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "11.6.1",
+      "description": "New work (two or more coats) over and including water thinnable priming coat with cement primer having VOC content less than 50 gram/litre",
+      "quantity": 412.0,
+      "unit": "sqm",
+      "rate": 233.05,
+      "amount": 96017.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "1.43",
+      "description": "litre/ 10 sqm over and including priming coat of exterior primer applied @ 0.90 litre/10 sqm.",
+      "quantity": 266.0,
+      "unit": "sqm",
+      "rate": 227.5,
+      "amount": 60515.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "11.8.1",
+      "description": "Two or more coats on new work",
+      "quantity": 272.0,
+      "unit": "sqm",
+      "rate": 195.7,
+      "amount": 53230.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "11.9",
+      "description": "Providing and applying white cement based putty of average thickness 1 mm, of approved brand and manufacturer, over the plastered wall surface to prepare the surface even and smooth complete.",
+      "quantity": 678.0,
+      "unit": "sqm",
+      "rate": 195.9,
+      "amount": 132820.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "11.10",
+      "description": "Removing dry or oil bound distemper, water proofing cement paint and the like by scrapping, sand papering and preparing the surface smooth including necessary repairs to scratches etc. complete.",
+      "quantity": 412.0,
+      "unit": "sqm",
+      "rate": 31.55,
+      "amount": 12999.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "12.1.1",
+      "description": "Nominal concrete 1:3:6 or richer mix (i/c equivalent design mix)",
+      "quantity": 5.0,
+      "unit": "cum",
+      "rate": 3055.45,
+      "amount": 15277.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "12.2.1",
+      "description": "In cement mortar",
+      "quantity": 17.0,
+      "unit": "cum",
+      "rate": 2585.85,
+      "amount": 43959.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "12.3.1",
+      "description": "In cement mortar",
+      "quantity": 28.0,
+      "unit": "cum",
+      "rate": 3086.4,
+      "amount": 86419.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "43.478",
+      "description": "gm/ metre (cost of M.S. angle, C.C. blocks shall be paid separately)",
+      "quantity": 25.0,
+      "unit": "metre",
+      "rate": 471.7,
+      "amount": 11793.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "13.2.1",
+      "description": "Overhead informatory road signage",
+      "quantity": 4.0,
+      "unit": "sqm",
+      "rate": 7380.3,
+      "amount": 29521.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "14.1.1.1",
+      "description": "Powder coated aluminium (minimum thickness of powder coating 50 micron)",
+      "quantity": 19.0,
+      "unit": "Kg",
+      "rate": 666.35,
+      "amount": 12661.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "14.2.1",
+      "description": "With float glass panes of 5 mm thickness (weight not less than 12.50 kg/sqm)",
+      "quantity": 3.0,
+      "unit": "sqm",
+      "rate": 1889.35,
+      "amount": 5668.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "14.3",
+      "description": "Providing and fixing anodised aluminium grill (anodised transparent or dyed to required shade according to IS: 1868 with minimum anodic coating of grade AC 15) of approved design/pattern, with approved standard section and fixed to the existing window frame with C.P. brass/ stainless steel screws @ 200 mm centre to centre, including cutting the grill to proper opening size for fixing and operation of handles and fixing approved anodised aluminium standard section around the opening, all complete as per requirement and direction of Engineer-in-charge. (Only weight of grill to be measured for payment).",
+      "quantity": 5.0,
+      "unit": "Kg",
+      "rate": 801.2,
+      "amount": 4006.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "15.1",
+      "description": "Providing and applying fibre reinforced elastomeric liquid water proofing membrane with resilient acrylic polymers having Sun Reflectivity Index (SRI) of 105 on top of concrete roof in three coats @10.76 litre/ 10 sqm. One coat of self-priming of elastomeric waterproofing liquid (dilution with water in the ratio of 3:1) and two coats of undiluted elastomeric waterproofing liquid (dry film thickness of complete application/system not less than 500 microns). The operation shall be carried out after scrapping and properly cleaning the surface to remove loose particles with wire brushes, complete in all respect as per the direction of Engineer-in-Charge.",
+      "quantity": 31.0,
+      "unit": "sqm",
+      "rate": 706.8,
+      "amount": 21911.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "16.1",
+      "description": "Supplying, filling, spreading & leveling stone boulders of size range 5 cm to 20 cm, in recharge pit, in the required thickness, for all leads & lifts, all complete as per direction of Engineer-in-charge.",
+      "quantity": 11.0,
+      "unit": "cum",
+      "rate": 1895.05,
+      "amount": 20846.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "17.1",
+      "description": "Providing and supplying aluminium extruded tubular and other aluminium sections as per the architectural drawings and approved shop drawings , the aluminium quality as per grade 6063 T5 or T6 as per BS 1474,including super durable powder coating of 60-80 microns conforming to AAMA 2604 of required colour and shade as approved by the Engineer-in-Charge. ( The item includes cost of material such as cleats, sleeves, screws etc. necessary for fabrication of extruded aluminium frame work. Nothing extra shall be paid on this account). The weight of aluminium extruded section shall be taken for purpose of payment.",
+      "quantity": 210.0,
+      "unit": "Kg",
+      "rate": 520.0,
+      "amount": 109200.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "18.1",
+      "description": "Providing and Fixing Bush Male & Female of required size and strength for M.S Gate inclusive of smooth movement of door etc. complete as per direction as per direction of Engineer-in-Charge.",
+      "quantity": 6.0,
+      "unit": "Nos",
+      "rate": 2580.85,
+      "amount": 15485.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "18.2",
+      "description": "Providing CnC Cutting on M.S Plate as required as per design and shape with clean finish etc. complete as per direction of Engineer-in-Charge.",
+      "quantity": 4.0,
+      "unit": "sqm",
+      "rate": 11862.2,
+      "amount": 47449.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "300",
+      "description": "mm having 50mm depth and logo with IP65 LED backlit illumination complete with acrylic diffuser,LED modules, power supply ,wiring, fixing arrangement, template including all accessories complete etc complete including installation and preparing surface as well as Stagging as approved by Engineer-in-Charge.",
+      "quantity": 1.0,
+      "unit": "Job",
+      "rate": 138427.55,
+      "amount": 138428.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "18.5",
+      "description": "Providing and fixing 110mm diameter PVC Pipe (working pressure 4 kg/sqm) confirming to IS : 13592 Type A in CC retaining wall as weep hole etc all complete as per direction of Engineer-in-charge.",
+      "quantity": 37.0,
+      "unit": "metre",
+      "rate": 276.25,
+      "amount": 10221.0,
+      "work_part": "Civil Works"
+    },
+    {
+      "item_no": "18.6",
+      "description": "Credit of old bricks after bricks demolished and stacked properly (uncleaned bricks stacks after demolishing is to be measured) complete as per direction of Engineer-in- charge.",
+      "quantity": 14.0,
+      "unit": "cum",
+      "rate": 582.9,
+      "amount": 8161.0,
+      "work_part": "Civil Works"
+    }
+  ],
+  "boq_total": 4972713.0,
+  "warnings": [
+    "The similar-work eligibility appears unrelated to the tender scope and may be a copied clause."
+  ]
+}
