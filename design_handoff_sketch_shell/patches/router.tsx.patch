@@ -1,0 +1,23 @@
+Two changes to frontend/src/app/router.tsx.
+
+1. /today becomes the index route, and /home keeps working as the index of screens.
+
+   -          { index: true, element: <Navigate to="/home" replace /> },
+   +          { index: true, element: <Navigate to="/today" replace /> },
+   +          {
+   +            path: 'today',
+   +            lazy: async () => {
+   +              const { TodayPage } = await import('../features/today/TodayPage');
+   +              return { Component: TodayPage };
+   +            },
+   +          },
+
+2. The catch-all at the bottom points at /today for the same reason.
+
+   -  { path: '*', element: <Navigate to="/home" replace /> },
+   +  { path: '*', element: <Navigate to="/today" replace /> },
+
+Note on the Sign-off badge: RootLayout takes signoffCount as a prop so the shell owes nothing
+to the network on first paint. The simplest wiring is a tiny wrapper route element that calls
+useToday(...) and passes the count down; the alternative — calling it inside RootLayout — makes
+every screen in the app wait on the site dashboard query, which is why it is a prop.
