@@ -30,6 +30,7 @@ Fidelity: **high**. Colors, type, spacing and copy in the code match the mock.
 | `src/features/today/TodayPage.tsx` | **new** | The Today screen. Also exports `HandRule`. |
 | `src/features/auth/LoginPage.tsx` | **replace** | Same form, same schema, same submit logic. Labels above fields, Show/Hide password, offline note. |
 | `src/features/home/HomePage.tsx` | **replace** | Same `GROUPS` table verbatim; retitled "All screens", restyled tiles. |
+| `SCREENS.md` | **read** | Spec for the other twelve screens — phase 2. |
 | `patches/index.html.patch` | apply | Adds Kalam to the existing font request. |
 | `patches/router.tsx.patch` | apply | `/today` route + index/catch-all redirects. |
 
@@ -74,6 +75,10 @@ Inked edge: `1.5–1.8px solid ink`, radius from `edgeRadius()`, shadow `3px 4px
 Fonts: Kalam 400/700, IBM Plex Sans 400/500/600/700, IBM Plex Mono 500/600.
 
 ## Not in this bundle
+The twelve remaining screens ship as a written spec (`SCREENS.md`), not as code — they are
+larger and more behaviour-bound than the four in `src/`, and a spec Claude Code applies file by
+file beats a wholesale replacement you cannot review.
+
 The landing page (`2d` in the mock) is marketing-site content, not part of the PWA — say the word
 and it becomes its own route or a separate static page. The muster, material, expense, DPR and
 dashboard screens inherit the new theme automatically (outlined `Paper`, `Button` and
