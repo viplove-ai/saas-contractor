@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from 'react-router-dom';
 import { AuthProvider } from '../features/auth/AuthContext';
 import { SyncProvider } from '../offline/SyncProvider';
+import { InstallPrompt } from '../shared/InstallPrompt';
 import { router } from './router';
 import { theme } from './theme';
 
@@ -36,6 +37,11 @@ export function App() {
             <RouterProvider router={router} />
           </SyncProvider>
         </AuthProvider>
+        {/*
+          Outside the router on purpose: the offer is worth most on the login screen, which
+          is where a first-time visitor lands, and it has no business changing per route.
+        */}
+        <InstallPrompt />
       </ThemeProvider>
     </QueryClientProvider>
   );
