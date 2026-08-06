@@ -3,6 +3,7 @@ package in.nirman.modules.dashboard;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.nirman.AbstractIntegrationTest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,6 +56,27 @@ class DashboardIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    /**
+     * Removes the bills this class books.
+     *
+     * <p>They are approved and carried on a seeded vendor, so left behind they become that
+     * vendor's outstanding balance for every test that runs afterwards. The suite's class
+     * order is the filesystem's, which differs between a developer's machine and CI, so the
+     * damage shows up as an unrelated assertion failing on one platform only — which is
+     * exactly how this was found.</p>
+     *
+     * <p>Every test here measures a delta against a snapshot taken at its own start, so
+     * clearing between methods changes nothing they assert.</p>
+     */
+    @AfterEach
+    void removeBookedBills() {
+        String mine = "SELECT id FROM expenses WHERE bill_number LIKE 'DASH-%'";
+        jdbc.update("DELETE FROM advance_settlement_expenses WHERE expense_id IN (" + mine + ")");
+        jdbc.update("DELETE FROM approvals WHERE entity_id IN (" + mine + ")");
+        jdbc.update("DELETE FROM payments WHERE expense_id IN (" + mine + ")");
+        jdbc.update("DELETE FROM expenses WHERE bill_number LIKE 'DASH-%'");
+    }
 
     // ---------------------------------------------------------------- the exit criterion
 

@@ -178,6 +178,22 @@
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!--
+                      Surefire's default is filesystem order, which is the directory listing
+                      and therefore differs between macOS and the Linux runner. The suite
+                      shares one database, so any test that leaves a row behind fails a
+                      different test on one platform and not the other — a green laptop and a
+                      red pipeline, on identical code. Alphabetical is arbitrary too, but it
+                      is the same arbitrary everywhere, so a leak surfaces for whoever wrote
+                      it rather than for whoever pushes next.
+                    -->
+                    <runOrder>alphabetical</runOrder>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <annotationProcessorPaths>
