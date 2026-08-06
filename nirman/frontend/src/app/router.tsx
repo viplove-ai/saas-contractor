@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { RequireAuth } from '../features/auth/AuthContext';
+import { SyncPage } from '../features/sync/SyncPage';
 
 /**
  * Route table. Everything under '/' sits behind {@link RequireAuth}: an anonymous visit
@@ -28,13 +29,16 @@ export const router = createBrowserRouter([
         },
         children: [
           { index: true, element: <Navigate to="/home" replace /> },
-          {
-            path: 'sync',
-            lazy: async () => {
-              const { SyncPage } = await import('../features/sync/SyncPage');
-              return { Component: SyncPage };
-            },
-          },
+          /*
+            The one screen in the table that is not split out, because it is the only one
+            whose whole purpose is to work with no signal. Every other route fetches its
+            chunk when it is opened; the offline banner's Review link would then lead to a
+            network request that cannot succeed — an alarm pointing at a door that does not
+            open. The service worker precaches the chunks and covers this from the second
+            visit onwards, but the first spell with no signal can arrive before it has taken
+            control, and this screen is exactly the one that must not depend on that.
+          */
+          { path: 'sync', element: <SyncPage /> },
           {
             path: 'home',
             lazy: async () => {
