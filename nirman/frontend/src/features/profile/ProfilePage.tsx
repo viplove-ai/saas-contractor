@@ -18,7 +18,7 @@ import { changePasswordSchema, type ChangePasswordForm } from './schema';
  * wrong with the screen they asked for.</p>
  */
 export function ProfilePage() {
-  const { user, changePassword } = useAuth();
+  const { user, changePassword, signOut } = useAuth();
   const navigate = useNavigate();
   const [serverError, setServerError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -33,6 +33,11 @@ export function ProfilePage() {
     resolver: zodResolver(changePasswordSchema),
     defaultValues: { currentPassword: '', newPassword: '', confirmPassword: '' },
   });
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login', { replace: true });
+  };
 
   const onSubmit = handleSubmit(async (form) => {
     setServerError(null);
@@ -130,6 +135,30 @@ export function ProfilePage() {
             </Button>
           </Stack>
         </form>
+      </Paper>
+
+      {/*
+        The only sign-out a phone has. RootLayout's is in a footer that is `md` and up, so
+        without this one a supervisor on site cannot hand the phone to the next shift. Last
+        on the page for the same reason it is last in the rail: leaving is not what anybody
+        opened the screen to do.
+      */}
+      <Paper elevation={0} sx={{ p: 3, border: 1, borderColor: 'divider' }}>
+        <Stack spacing={1.5}>
+          <Typography variant="h3">Sign out</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Anything not sent yet stays on this phone. Signing out does not discard it.
+          </Typography>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={handleSignOut}
+            /* 48px: the app's floor for anything meant to be hit with a glove on. */
+            sx={{ alignSelf: 'flex-start', minHeight: 48 }}
+          >
+            Sign out
+          </Button>
+        </Stack>
       </Paper>
     </Stack>
   );

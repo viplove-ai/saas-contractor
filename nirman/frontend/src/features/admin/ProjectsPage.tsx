@@ -96,8 +96,42 @@ export function ProjectsPage() {
       )}
       {projects.isError && <Alert severity="error">{apiErrorDetail(projects.error)}</Alert>}
 
+      {/*
+        Phone: a card each. The table has six columns and the last two are Status and
+        Actions, so on a 375px screen Edit and Sites sat past the right edge — reachable
+        only by scrolling a table sideways, which nobody thinks to try. The card keeps the
+        same six facts and drops the horizontal scroll.
+      */}
       {projects.data && (
-        <Paper elevation={0} sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
+        <Stack
+          component="ul"
+          aria-label="Projects"
+          spacing={2}
+          sx={{ display: { xs: 'flex', md: 'none' }, listStyle: 'none', m: 0, p: 0 }}
+        >
+          {projects.data.map((project) => (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              siteCount={siteCount(project.id)}
+              canWrite={canWrite}
+              onEdit={() => openEdit(project)}
+            />
+          ))}
+          {projects.data.length === 0 && (
+            <Typography component="li" color="text.secondary">
+              No projects yet. Add the contract you are working under, then add its sites and
+              post an engineer and a supervisor to each.
+            </Typography>
+          )}
+        </Stack>
+      )}
+
+      {projects.data && (
+        <Paper
+          elevation={0}
+          sx={{ display: { xs: 'none', md: 'block' }, border: 1, borderColor: 'divider', overflowX: 'auto' }}
+        >
           <Table size="small">
             <TableHead>
               <TableRow>
@@ -183,5 +217,94 @@ export function ProjectsPage() {
 
       <ProjectFormDialog open={formOpen} project={editing} onClose={() => setFormOpen(false)} />
     </Stack>
+  );
+}
+
+/**
+ * One project on a phone.
+ *
+ * <p>The code and the status go on the top line together, because those are what somebody
+ * scanning the list is matching against. The name is given a single line and cut with an
+ * ellipsis rather than allowed to wrap: "Kausani Guest House Extension" over four lines
+ * pushed every card past a screen height and made the list unscannable, and the full name
+ * is one tap away on the detail screen.</p>
+ *
+ * <p>Contract value and the site count sit on one row as a pair. The site count is the one
+ * that decides what you do next — a project with no sites can have nothing recorded against
+ * it — so it keeps the words rather than being reduced to a bare number.</p>
+ */
+function ProjectCard({
+  project,
+  siteCount,
+  canWrite,
+  onEdit,
+}: {
+  project: AdminProject;
+  siteCount: number;
+  canWrite: boolean;
+  onEdit: () => void;
+}) {
+  return (
+    <Paper component="li" elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
+      <Stack spacing={1.5}>
+        <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
+          <Box
+            component={Link}
+            to={`/projects/${project.id}`}
+            sx={{ textDecoration: 'none', color: 'inherit', minWidth: 0, flex: 1 }}
+          >
+            <Typography fontWeight={700}>{project.code}</Typography>
+            {/* noWrap needs the parent to be allowed to shrink, hence minWidth: 0 above. */}
+            <Typography variant="body2" color="text.secondary" noWrap>
+              {project.name}
+            </Typography>
+          </Box>
+          <Chip
+            size="small"
+            color={STATUS_COLOR[project.status]}
+            label={STATUS_LABEL[project.status]}
+          />
+        </Stack>
+
+        <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="baseline">
+          <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+            <Typography variant="caption" color="text.secondary">
+              Contract value
+            </Typography>
+            <Typography variant="body2" fontWeight={600}>
+              {project.contractValue == null ? '—' : formatAmount(project.contractValue)}
+            </Typography>
+          </Stack>
+          <Stack spacing={0.25} alignItems="flex-end">
+            <Typography variant="caption" color="text.secondary">
+              Client
+            </Typography>
+            <Typography variant="body2">{project.clientDepartment || '—'}</Typography>
+          </Stack>
+        </Stack>
+
+        <Typography variant="body2" color="text.secondary">
+          {siteCount === 0 ? 'No sites yet' : `${siteCount} site${siteCount === 1 ? '' : 's'}`}
+        </Typography>
+
+        {canWrite && (
+          <Stack direction="row" spacing={1}>
+            {/* 48px: the app's floor for anything meant to be hit with a glove on. */}
+            <Button size="small" variant="outlined" onClick={onEdit} sx={{ minHeight: 48, flex: 1 }}>
+              Edit
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              component={Link}
+              to="/sites"
+              sx={{ minHeight: 48, flex: 1 }}
+            >
+              Sites
+            </Button>
+          </Stack>
+        )}
+      </Stack>
+    </Paper>
   );
 }

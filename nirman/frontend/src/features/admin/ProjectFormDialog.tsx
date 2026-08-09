@@ -2,10 +2,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Alert,
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   MenuItem,
   Stack,
   TextField,
@@ -18,6 +20,7 @@ import { NitImportPanel } from './NitImportPanel';
 import {
   useCreateProject,
   useCreateProjectFromNit,
+  useCreateSite,
   useDiscardNitUpload,
   useUpdateProject,
   useUsers,
@@ -60,6 +63,16 @@ const EMPTY: ProjectForm = {
   description: '',
 };
 
+/**
+ * Carries a site failure that happened *after* the project was written, so the dialog can
+ * say which of the two succeeded instead of reporting a bare error over a saved project.
+ */
+class SiteFailedError extends Error {}
+
+/** Same defaults SiteFormDialog opens on, so the two routes to a site agree. */
+const DEFAULT_SHIFT_HOURS = 8;
+const DEFAULT_WAGE_DAYS = 26;
+
 /** Empty stays empty: an amount left blank is unknown, not zero. */
 function toAmount(value: string | undefined): number | undefined {
   return value ? Number(value) : undefined;
@@ -88,14 +101,37 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
    */
   const [mode, setMode] = useState<Mode | null>(null);
   const [preview, setPreview] = useState<NitPreview | null>(null);
+  /**
+   * Off by default, and off means nothing happens: a project with no site yet is a normal
+   * state, and the Projects list already calls it out as the next thing to do. This only
+   * saves the trip to Sites for the common case where the first site is known at the time
+   * the contract is entered.
+   */
+  const [alsoSite, setAlsoSite] = useState(false);
+  const [siteCode, setSiteCode] = useState('');
+  const [siteName, setSiteName] = useState('');
+  /**
+   * Set once the project write has gone through. Two writes cannot be one transaction from
+   * here, so if the site fails the project still exists — retrying must add the site to the
+   * project that was made, not make a second one.
+   */
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
+  const createSite = useCreateSite();
 
   const {
     control,
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<ProjectForm>({ resolver: zodResolver(projectSchema), defaultValues: EMPTY });
+
+  // Only to seed the site fields when the box is ticked; the project code is the natural stem.
+  const watchedCode = watch('code');
+  const watchedName = watch('name');
+  /** Ticking the box makes these two required — the server would refuse them empty anyway. */
+  const siteIncomplete = alsoSite && (!siteCode.trim() || !siteName.trim());
 
   useEffect(() => {
     if (!open) {
@@ -104,6 +140,10 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
     setServerError(null);
     setMode(editing ? 'manual' : null);
     setPreview(null);
+    setAlsoSite(false);
+    setSiteCode('');
+    setSiteName('');
+    setCreatedProjectId(null);
     reset(
       project
         ? {
@@ -167,6 +207,19 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
       description: values.description || undefined,
     };
     try {
+      // The project is already saved and only the site failed last time; do not send it again.
+      if (createdProjectId) {
+        await createSite.mutateAsync({
+          projectId: createdProjectId,
+          code: siteCode.trim(),
+          name: siteName.trim(),
+          status: 'ACTIVE',
+          standardShiftHours: DEFAULT_SHIFT_HOURS,
+          monthlyWageDays: DEFAULT_WAGE_DAYS,
+        });
+        onClose();
+        return;
+      }
       if (project) {
         await updateProject.mutateAsync({
           ...payload,
@@ -178,7 +231,7 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
       } else if (preview) {
         // The lines sent are the ones on screen, edits included. The server derives each
         // amount from the quantity and rate, so no total travels with them.
-        await createFromNit.mutateAsync({
+        const imported = await createFromNit.mutateAsync({
           attachmentId: preview.attachmentId,
           pageCount: preview.pageCount,
           project: payload,
@@ -197,14 +250,44 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
         });
         // Saved, so the upload now belongs to the tender record and must not be discarded.
         setPreview(null);
+        await addFirstSite(imported.project.id);
       } else {
-        await createProject.mutateAsync(payload);
+        const created = await createProject.mutateAsync(payload);
+        await addFirstSite(created.id);
       }
       onClose();
     } catch (error) {
-      setServerError(apiErrorDetail(error));
+      setServerError(
+        error instanceof SiteFailedError
+          ? `The project was saved. Its site was not: ${error.message} Correct the site and save again, or close — the site can be added from Sites later.`
+          : apiErrorDetail(error),
+      );
     }
   });
+
+  /**
+   * The second write, when the box is ticked. Its failure is reported against the project
+   * that already exists rather than rolled back — there is no transaction spanning the two,
+   * and silently discarding a saved contract to undo a site would be the worse trade.
+   */
+  async function addFirstSite(projectId: string) {
+    if (!alsoSite) {
+      return;
+    }
+    setCreatedProjectId(projectId);
+    try {
+      await createSite.mutateAsync({
+        projectId,
+        code: siteCode.trim(),
+        name: siteName.trim(),
+        status: 'ACTIVE',
+        standardShiftHours: DEFAULT_SHIFT_HOURS,
+        monthlyWageDays: DEFAULT_WAGE_DAYS,
+      });
+    } catch (error) {
+      throw new SiteFailedError(apiErrorDetail(error));
+    }
+  }
 
   // Choosing how to start. Two buttons rather than a wizard step: the decision is one
   // question, and a project typed by hand should not cost an extra screen.
@@ -388,6 +471,50 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
             helperText={errors.description?.message ?? 'What the work covers, in a line or two.'}
             {...register('description')}
           />
+
+          {/*
+            Offered on the way past, not imposed. A project with no site records nothing, so
+            the first site usually follows within the minute — but the site details are not
+            always known when the contract is entered, and a required site here would be
+            answered with a placeholder that outlives the guess.
+          */}
+          {!editing && (
+            <>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={alsoSite}
+                    onChange={(event) => {
+                      const on = event.target.checked;
+                      setAlsoSite(on);
+                      // Prefill on the way in, so the common case is one tick and no typing.
+                      if (on) {
+                        setSiteCode((current) => current || `${watchedCode || 'SITE'}-01`);
+                        setSiteName((current) => current || watchedName || '');
+                      }
+                    }}
+                  />
+                }
+                label="Also set up its first site"
+              />
+              {alsoSite && (
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                  <TextField
+                    label="Site code"
+                    value={siteCode}
+                    onChange={(event) => setSiteCode(event.target.value)}
+                    helperText="Unique, e.g. KSN-A."
+                  />
+                  <TextField
+                    label="Site name"
+                    value={siteName}
+                    onChange={(event) => setSiteName(event.target.value)}
+                    helperText="Where the work actually happens."
+                  />
+                </Stack>
+              )}
+            </>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -397,13 +524,17 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
           color="secondary"
           onClick={submit}
           // Nothing to save from an import until a notice has actually been read.
-          disabled={isSubmitting || (mode === 'nit' && !preview)}
+          disabled={isSubmitting || (mode === 'nit' && !preview) || siteIncomplete}
         >
-          {editing
-            ? 'Save changes'
-            : mode === 'nit'
-              ? `Create project with ${preview?.boqLines.length ?? 0} BOQ lines`
-              : 'Add project'}
+          {createdProjectId
+            ? 'Add the site'
+            : editing
+              ? 'Save changes'
+              : mode === 'nit'
+                ? `Create project with ${preview?.boqLines.length ?? 0} BOQ lines`
+                : alsoSite
+                  ? 'Add project and site'
+                  : 'Add project'}
         </Button>
       </DialogActions>
     </Dialog>
