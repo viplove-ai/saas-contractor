@@ -164,9 +164,17 @@ export function UsersPage() {
                       A blank cell would read as "no access" for an admin, who in fact
                       reaches everything — so the company-wide roles say so in words.
                     */}
-                    {isSiteScoped(member)
-                      ? member.siteIds.map(siteLabel).join(', ') || 'None yet'
-                      : 'All sites'}
+                    {/*
+                      "None yet" in grey read as a detail. It is the reason a supervisor
+                      rings up to say his screens are empty, so it is a warning chip.
+                    */}
+                    {!isSiteScoped(member) && 'All sites'}
+                    {isSiteScoped(member) &&
+                      (member.siteIds.length === 0 ? (
+                        <Chip size="small" color="warning" variant="outlined" label="Not posted" />
+                      ) : (
+                        member.siteIds.map(siteLabel).join(', ')
+                      ))}
                   </TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={0.5}>

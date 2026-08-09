@@ -22,7 +22,8 @@ export const adminKeys = {
   roles: ['admin', 'roles'] as const,
   sites: (projectId: string) => ['admin', 'sites', projectId] as const,
   allSites: ['admin', 'sites'] as const,
-  projects: ['admin', 'projects'] as const,
+  projects: (q: string, status: string) => ['admin', 'projects', q, status] as const,
+  allProjects: ['admin', 'projects'] as const,
   project: (id: string) => ['admin', 'project', id] as const,
   boqItems: (projectId: string) => ['admin', 'boq-items', projectId] as const,
   nitDocument: (projectId: string) => ['admin', 'nit-document', projectId] as const,
@@ -160,12 +161,24 @@ export function useAdminSites(projectId: string) {
   });
 }
 
-export function useProjects() {
+/**
+ * Filtering is the server's, not the browser's: a contractor's project list is small today
+ * but the status filter has to agree with what the server considers visible — a field role
+ * sees only the projects its sites belong to — and a narrowed list that was cut client-side
+ * would silently disagree with the page count on any list that grows past one page.
+ *
+ * <p>Both filters are optional so the pickers elsewhere (a site's project, for one) can go on
+ * asking for the whole list.</p>
+ */
+export function useProjects(q = '', status = '') {
   return useQuery({
-    queryKey: adminKeys.projects,
+    queryKey: adminKeys.projects(q, status),
     queryFn: async () =>
-      (await apiClient.get<PageResponse<AdminProject>>('/projects', { params: { size: PAGE_SIZE } }))
-        .data.content,
+      (
+        await apiClient.get<PageResponse<AdminProject>>('/projects', {
+          params: { q: q || undefined, status: status || undefined, size: PAGE_SIZE },
+        })
+      ).data.content,
     staleTime: 15 * 60_000,
   });
 }
@@ -193,7 +206,7 @@ export function useCreateProject() {
     mutationFn: async (input: ProjectInput) =>
       (await apiClient.post<AdminProject>('/projects', input)).data,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: adminKeys.projects });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allProjects });
     },
   });
 }
@@ -206,7 +219,7 @@ export function useUpdateProject() {
       (await apiClient.put<AdminProject>(`/projects/${input.id}`, { ...input, code: undefined }))
         .data,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: adminKeys.projects });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allProjects });
     },
   });
 }
@@ -317,7 +330,7 @@ export function useCreateProjectFromNit() {
         }>('/nit-imports', input)
       ).data,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: adminKeys.projects });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allProjects });
     },
   });
 }

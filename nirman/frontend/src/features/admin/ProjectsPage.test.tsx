@@ -205,4 +205,36 @@ describe('ProjectsPage', () => {
     // Once in each view; both must point at the same next step.
     expect(await screen.findAllByText(/Add the contract you are working under/)).toHaveLength(2);
   });
+
+  // The filters are the server's answer, not a cut of what is already on screen: a closed
+  // contract from four years ago need never be loaded to be excluded.
+  it('asks the server for the search text and the status', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('KSN01');
+
+    await user.type(screen.getByLabelText('Search by code, name or client'), 'bag');
+    await waitFor(() =>
+      expect(get).toHaveBeenCalledWith('/projects', {
+        params: { q: 'bag', status: undefined, size: 100 },
+      }),
+    );
+
+    await user.click(screen.getByRole('combobox', { name: 'Status' }));
+    await user.click(await screen.findByRole('option', { name: 'On hold' }));
+    await waitFor(() =>
+      expect(get).toHaveBeenCalledWith('/projects', {
+        params: { q: 'bag', status: 'ON_HOLD', size: 100 },
+      }),
+    );
+  });
+
+  it('does not tell someone with twelve projects to add their first', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage([]);
+    await user.type(screen.getByLabelText('Search by code, name or client'), 'zzz');
+
+    expect(await screen.findAllByText(/No project matches that/)).toHaveLength(2);
+    expect(screen.queryByText(/Add the contract you are working under/)).toBeNull();
+  });
 });

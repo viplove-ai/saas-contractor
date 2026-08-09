@@ -4,6 +4,7 @@ import {
   Button,
   Chip,
   CircularProgress,
+  MenuItem,
   Paper,
   Stack,
   Table,
@@ -11,6 +12,7 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  TextField,
   Typography,
 } from '@mui/material';
 import { useState } from 'react';
@@ -38,6 +40,18 @@ const STATUS_LABEL: Record<ProjectStatus, string> = {
   CLOSED: 'Closed',
 };
 
+/** Life of a contract, not the alphabet: the filter reads as the order work moves through. */
+const STATUS_ORDER: ProjectStatus[] = ['PLANNED', 'ACTIVE', 'ON_HOLD', 'COMPLETED', 'CLOSED'];
+
+/*
+ * An empty list means two different things now, and telling somebody to add their first
+ * contract when they have twelve and mistyped a code would be the wrong instruction.
+ */
+const NO_PROJECTS_YET =
+  'No projects yet. Add the contract you are working under, then add its sites and post an ' +
+  'engineer and a supervisor to each.';
+const NOTHING_MATCHED = 'No project matches that. Clear the search or the status to see them all.';
+
 /**
  * The contracts the company is running. First stop in setting the system up: a site belongs
  * to a project, and everything else — attendance, stock, expenses — belongs to a site.
@@ -50,10 +64,13 @@ export function ProjectsPage() {
   const { hasPermission } = useAuth();
   const [editing, setEditing] = useState<AdminProject | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('');
 
-  const projects = useProjects();
+  const projects = useProjects(search, status);
   const sites = useAdminSites('');
   const canWrite = hasPermission('project:write');
+  const filtered = search !== '' || status !== '';
 
   const siteCount = (projectId: string): number =>
     sites.data?.filter((site) => site.projectId === projectId).length ?? 0;
@@ -89,6 +106,37 @@ export function ProjectsPage() {
         )}
       </Stack>
 
+      {/*
+        Two filters and no more. Code, name and client are one box because that is how a
+        project is asked for out loud — "the Kausani one", "the CPWD Bageshwar job" — and
+        which of the three fields it matched is of no interest. Status is the second because
+        a company running for a few years accumulates closed contracts that are never the
+        one being looked for. Both are the server's answer, not a cut of the loaded page.
+      */}
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <TextField
+          label="Search by code, name or client"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          // flex alone gives a zero basis and collapses the box to its border.
+          sx={{ flex: 1, minWidth: 280 }}
+        />
+        <TextField
+          select
+          label="Status"
+          value={status}
+          onChange={(event) => setStatus(event.target.value)}
+          sx={{ minWidth: 200 }}
+        >
+          <MenuItem value="">Any status</MenuItem>
+          {STATUS_ORDER.map((code) => (
+            <MenuItem key={code} value={code}>
+              {STATUS_LABEL[code]}
+            </MenuItem>
+          ))}
+        </TextField>
+      </Stack>
+
       {projects.isLoading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress />
@@ -120,8 +168,7 @@ export function ProjectsPage() {
           ))}
           {projects.data.length === 0 && (
             <Typography component="li" color="text.secondary">
-              No projects yet. Add the contract you are working under, then add its sites and
-              post an engineer and a supervisor to each.
+              {filtered ? NOTHING_MATCHED : NO_PROJECTS_YET}
             </Typography>
           )}
         </Stack>
@@ -204,8 +251,7 @@ export function ProjectsPage() {
                 <TableRow>
                   <TableCell colSpan={canWrite ? 6 : 5}>
                     <Typography color="text.secondary" sx={{ py: 2 }}>
-                      No projects yet. Add the contract you are working under, then add its
-                      sites and post an engineer and a supervisor to each.
+                      {filtered ? NOTHING_MATCHED : NO_PROJECTS_YET}
                     </Typography>
                   </TableCell>
                 </TableRow>

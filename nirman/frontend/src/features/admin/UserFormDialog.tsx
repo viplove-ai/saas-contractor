@@ -267,6 +267,18 @@ export function UserFormDialog({ open, user, onClose }: Props) {
                       No sites yet. Add one on the Sites screen, then post them to it.
                     </FormHelperText>
                   )}
+                  {/*
+                    Not an error: an engineer has to exist before the site he runs can be
+                    created, so "no posting yet" is a real intermediate state. It is still
+                    worth saying out loud, because until he is posted he signs in to an empty
+                    app — nothing in any site picker and a dead "Take on a worker" button.
+                  */}
+                  {(sites.data?.length ?? 0) > 0 && field.value.length === 0 && (
+                    <Alert severity="warning" sx={{ mt: 1 }}>
+                      Not posted anywhere yet. They can sign in, but will see no sites and no
+                      workers until you post them here or name them on a site.
+                    </Alert>
+                  )}
                 </Stack>
               )}
             />

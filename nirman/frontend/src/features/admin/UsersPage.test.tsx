@@ -133,6 +133,7 @@ describe('UsersPage', () => {
     await user.type(screen.getByLabelText('Username'), 'ramesh.k');
     await user.type(screen.getByLabelText('Full name'), 'Ramesh Kumar');
     await user.type(screen.getByLabelText('Mobile'), '+91-9800000123');
+    await user.click(screen.getByRole('checkbox', { name: 'KSN-A — Kausani Main Block' }));
     await user.click(screen.getByRole('button', { name: 'Onboard member' }));
 
     await waitFor(() => expect(post).toHaveBeenCalledOnce());
@@ -146,6 +147,21 @@ describe('UsersPage', () => {
     expect(body.roleCodes).toEqual(['SUPERVISOR']);
     // Pre-filled rather than left to the admin's imagination, and long enough to matter.
     expect(body.temporaryPassword.length).toBeGreaterThanOrEqual(8);
+  });
+
+  // A supervisor with no posting signs in to an empty app: no site in any picker and a dead
+  // "Take on a worker" button. It is allowed — an engineer exists before the site he runs —
+  // but the admin is told, not left to hear about it from the field.
+  it('warns while a site-scoped member has no posting', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findByText('Vivek Aggarwal');
+
+    await user.click(screen.getByRole('button', { name: 'Onboard a member' }));
+    expect(await screen.findByText(/Not posted anywhere yet/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: 'KSN-A — Kausani Main Block' }));
+    await waitFor(() => expect(screen.queryByText(/Not posted anywhere yet/)).toBeNull());
   });
 
   it('drops site postings when a member is moved to a company-wide role', async () => {
