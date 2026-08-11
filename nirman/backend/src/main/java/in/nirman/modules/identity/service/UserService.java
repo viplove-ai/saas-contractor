@@ -2,6 +2,7 @@ package in.nirman.modules.identity.service;
 
 import in.nirman.common.BusinessException;
 import in.nirman.common.PageResponse;
+import in.nirman.common.SitePostingGuard;
 import in.nirman.modules.audit.AuditService;
 import in.nirman.modules.identity.api.dto.UserDtos.AssignRolesRequest;
 import in.nirman.modules.identity.api.dto.UserDtos.AssignSitesRequest;
@@ -52,6 +53,7 @@ public class UserService {
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
     private final UserMapper mapper;
+    private final SitePostingGuard postings;
 
     public UserService(UserRepository users, RoleRepository roles,
                        PermissionRepository permissions,
@@ -60,7 +62,8 @@ public class UserService {
                        PasswordEncoder passwordEncoder,
                        CurrentUserProvider currentUser,
                        AuditService audit,
-                       UserMapper mapper) {
+                       UserMapper mapper,
+                       SitePostingGuard postings) {
         this.users = users;
         this.roles = roles;
         this.permissions = permissions;
@@ -70,6 +73,7 @@ public class UserService {
         this.currentUser = currentUser;
         this.audit = audit;
         this.mapper = mapper;
+        this.postings = postings;
     }
 
     @Transactional(readOnly = true)
@@ -210,6 +214,12 @@ public class UserService {
      * closure takes effect immediately, not at midnight; see
      * {@link UserSiteAssignment#revoke}. A previously closed assignment for a re-added site
      * is reopened, because the schema keeps one row per user and site.
+     *
+     * <p>What it will not do is withdraw a site from the engineer or supervisor named on it.
+     * The sites register and these assignment rows are two different facts — who runs the
+     * site, and who may open it — and the sync between them runs one way, from the register
+     * to the rows. Letting this screen cut a row the register still implies is the one way
+     * the two can end up contradicting each other; see {@link SitePostingGuard}.</p>
      */
     @PreAuthorize("hasAuthority('user:write')")
     public List<SiteAssignmentResponse> putSites(UUID id, AssignSitesRequest request) {
@@ -217,6 +227,14 @@ public class UserService {
         LocalDate today = LocalDate.now();
         Set<UUID> wanted = new HashSet<>(request.siteIds());
         List<UserSiteAssignment> existing = assignments.findByUserId(id);
+
+        // Checked before anything is written, and over the whole withdrawal at once, so an
+        // admin clearing two sites learns about both in one refusal rather than one per try.
+        postings.assertNotPosted(id, existing.stream()
+                .filter(assignment -> assignment.isActiveOn(today))
+                .map(UserSiteAssignment::getSiteId)
+                .filter(siteId -> !wanted.contains(siteId))
+                .toList());
 
         for (UserSiteAssignment assignment : existing) {
             boolean shouldBeActive = wanted.remove(assignment.getSiteId());

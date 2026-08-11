@@ -22,7 +22,7 @@ import { hasSiteScopedRole, ROLE_LABEL, seesAllSites } from '../../shared/roles'
 import { useAdminSites, useCreateUser, useRoles, useUpdateUser } from './api';
 import { generatePassword } from './password';
 import { userFormSchema, type UserForm } from './schema';
-import type { AdminUser } from './types';
+import type { AdminSite, AdminUser } from './types';
 
 interface Props {
   open: boolean;
@@ -113,11 +113,20 @@ export function UserFormDialog({ open, user, onClose }: Props) {
   const showSites = hasSiteScopedRole(selectedRoles);
   const companyWide = seesAllSites(selectedRoles);
 
+  /** Sites this member is named on, which the register grants and this screen cannot take. */
+  const posted = (sites.data ?? [])
+    .filter((site) => postOn(site, user?.id) !== null)
+    .map((site) => site.id);
+
   const submit = handleSubmit(async (values) => {
     setServerError(null);
     // Postings are meaningless once no site-scoped role is left, and sending them would
-    // leave stale rows behind when someone stops being a supervisor.
-    const siteIds = hasSiteScopedRole(values.roleCodes) ? values.siteIds : [];
+    // leave stale rows behind when someone stops being a supervisor. The sites he is named
+    // on go with the request whatever the switches say — the server refuses to drop them,
+    // and sending a set that omits them would only turn a save into an error message.
+    const siteIds = hasSiteScopedRole(values.roleCodes)
+      ? [...new Set([...values.siteIds, ...posted])]
+      : posted;
     try {
       if (user) {
         await updateUser.mutateAsync({
@@ -265,10 +274,21 @@ export function UserFormDialog({ open, user, onClose }: Props) {
                 <Stack spacing={0.5}>
                   <Typography variant="subtitle2">Sites</Typography>
                   {(sites.data ?? []).map((site) => {
-                    const checked = field.value.includes(site.id);
+                    /*
+                      Two different facts meet on this switch. The sites register names one
+                      engineer and one supervisor per site; these postings say who may open
+                      it, and any number of people can. Naming somebody on a site grants them
+                      the site — that sync already runs — but this screen could take the site
+                      back off the very engineer named on it, leaving the register saying he
+                      runs KSN-A and the door shut to him. So a site he is named on is shown
+                      as held rather than as a choice, and the server refuses it too.
+                    */
+                    const post = postOn(site, user?.id);
+                    const checked = field.value.includes(site.id) || post !== null;
                     return (
                       <FormControlLabel
                         key={site.id}
+                        disabled={post !== null}
                         control={
                           <Switch
                             checked={checked}
@@ -281,7 +301,11 @@ export function UserFormDialog({ open, user, onClose }: Props) {
                             }
                           />
                         }
-                        label={`${site.code} — ${site.name}`}
+                        label={
+                          post === null
+                            ? `${site.code} — ${site.name}`
+                            : `${site.code} — ${site.name} · ${post} here, change it on the Sites screen`
+                        }
                       />
                     );
                   })}
@@ -325,4 +349,23 @@ export function UserFormDialog({ open, user, onClose }: Props) {
       </DialogActions>
     </Dialog>
   );
+}
+
+/**
+ * What this member is called on a site, or null if nothing.
+ *
+ * <p>Read off the sites register rather than asked for separately: the register is already
+ * loaded to draw this list, and it carries both names.</p>
+ */
+function postOn(site: AdminSite, userId: string | undefined): string | null {
+  if (!userId) {
+    return null;
+  }
+  if (site.siteEngineerId === userId) {
+    return 'Site engineer';
+  }
+  if (site.supervisorId === userId) {
+    return 'Supervisor';
+  }
+  return null;
 }
