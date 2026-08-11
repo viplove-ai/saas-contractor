@@ -151,6 +151,26 @@ describe('importing a project from its NIT', () => {
     expect(screen.getByLabelText(/contract value/i)).toHaveValue('4226546');
   });
 
+  /**
+   * The values arrive after mount, through {@code reset}. MUI decides whether a label floats
+   * by reading its input's value once, at mount, so on an uncontrolled field it never learns
+   * the box has been filled — and every label sat across the text read out of the PDF.
+   */
+  it('floats the labels clear of the values it filled in', async () => {
+    renderDialog();
+    await uploadNit();
+
+    await waitFor(() => expect(screen.getByLabelText(/project code/i)).not.toHaveValue(''));
+
+    for (const field of [/project code/i, /project name/i, /nit number/i, /contract value/i]) {
+      const input = screen.getByLabelText(field);
+      const label = input.closest('.MuiFormControl-root')?.querySelector('label');
+      expect(label).not.toBeNull();
+      // The class MUI adds when the label moves up out of the box.
+      expect(label?.className).toContain('MuiInputLabel-shrink');
+    }
+  });
+
   it('shows what the reader was unsure about, and keeps the schedule out of the way', async () => {
     renderDialog();
     await uploadNit();

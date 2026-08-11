@@ -3,13 +3,16 @@ package in.nirman.modules.labour.service;
 import in.nirman.modules.labour.domain.AttendanceRecord;
 import in.nirman.modules.labour.domain.AttendanceStatus;
 import in.nirman.modules.labour.domain.WorkflowStatus;
+import in.nirman.modules.labour.domain.SiteLabourCount;
 import in.nirman.modules.labour.domain.Worker;
 import in.nirman.modules.labour.repository.AttendanceRecordRepository;
+import in.nirman.modules.labour.repository.SiteLabourCountRepository;
 import in.nirman.modules.labour.repository.WorkerRepository;
 import in.nirman.modules.masterdata.domain.LabourContractor;
 import in.nirman.modules.masterdata.domain.SkillCategory;
 import in.nirman.modules.masterdata.repository.LabourContractorRepository;
 import in.nirman.modules.masterdata.repository.SkillCategoryRepository;
+import in.nirman.modules.project.service.SiteLookup;
 import in.nirman.security.CurrentUserProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,19 +48,64 @@ public class LabourLookupService implements LabourLookup {
 
     private final AttendanceRecordRepository records;
     private final WorkerRepository workers;
+    private final SiteLabourCountRepository labourCounts;
     private final SkillCategoryRepository skillCategories;
     private final LabourContractorRepository contractors;
+    private final SiteLookup sites;
     private final CurrentUserProvider currentUser;
 
     public LabourLookupService(AttendanceRecordRepository records, WorkerRepository workers,
+                              SiteLabourCountRepository labourCounts,
                               SkillCategoryRepository skillCategories,
                               LabourContractorRepository contractors,
+                              SiteLookup sites,
                               CurrentUserProvider currentUser) {
         this.records = records;
         this.workers = workers;
+        this.labourCounts = labourCounts;
         this.skillCategories = skillCategories;
         this.contractors = contractors;
+        this.sites = sites;
         this.currentUser = currentUser;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>{@code enabled} is answered from the site rather than from whether any rows exist,
+     * so the DPR can tell "this site does not work that way" from "this site does, and
+     * nobody was counted today" — the second is worth printing as a zero, the first is a
+     * section that should not appear at all.</p>
+     */
+    @Override
+    public OutsourcedDay outsourced(UUID siteId, LocalDate date) {
+        boolean enabled = sites.require(siteId).usesOutsourcedLabour();
+        List<SiteLabourCount> rows = labourCounts.findBySiteIdAndCountDate(siteId, date);
+        if (rows.isEmpty()) {
+            return new OutsourcedDay(date, enabled, 0, List.of());
+        }
+        UUID orgId = currentUser.currentOrgId();
+        Map<UUID, String> skillNames = skillCategories.findByOrgIdOrderByCode(orgId).stream()
+                .collect(Collectors.toMap(SkillCategory::getId, SkillCategory::getName));
+        Map<UUID, String> contractorNames = contractors
+                .findByOrgIdAndDeletedAtIsNullOrderByCode(orgId).stream()
+                .collect(Collectors.toMap(LabourContractor::getId, LabourContractor::getName));
+
+        List<OutsourcedGroup> groups = rows.stream()
+                .map(row -> new OutsourcedGroup(row.getSkillCategoryId(),
+                        skillNames.get(row.getSkillCategoryId()),
+                        row.getLabourContractorId(),
+                        row.getLabourContractorId() == null
+                                ? null : contractorNames.get(row.getLabourContractorId()),
+                        row.getHeadCount()))
+                .sorted(Comparator.comparing((OutsourcedGroup g) ->
+                                g.skillCategoryName() == null ? "" : g.skillCategoryName())
+                        .thenComparing(g -> g.labourContractorName() == null
+                                ? "" : g.labourContractorName()))
+                .toList();
+
+        return new OutsourcedDay(date, enabled,
+                groups.stream().mapToInt(OutsourcedGroup::headCount).sum(), groups);
     }
 
     @Override

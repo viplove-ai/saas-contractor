@@ -32,13 +32,23 @@ export function useCompanyDashboard(from: string, to: string) {
   });
 }
 
-export function useSiteDashboard(siteId: string | undefined, from: string, to: string) {
+/**
+ * @param enabled pass false where the caller may not hold {@code dashboard:site} — a
+ *                supervisor does not, and firing the request anyway would answer his
+ *                landing screen with a 403 he can do nothing about.
+ */
+export function useSiteDashboard(
+  siteId: string | undefined,
+  from: string,
+  to: string,
+  enabled = true,
+) {
   return useQuery({
     queryKey: dashboardKeys.site(siteId ?? '', from, to),
     queryFn: async () =>
       (await apiClient.get<SiteDashboard>(`/dashboard/site/${siteId}`, { params: { from, to } }))
         .data,
-    enabled: Boolean(siteId),
+    enabled: Boolean(siteId) && enabled,
   });
 }
 

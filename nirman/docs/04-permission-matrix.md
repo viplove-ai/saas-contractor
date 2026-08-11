@@ -51,7 +51,7 @@ Legend: **Y** = allowed. **A** = allowed only for assigned sites. **O** = only o
 | `report:financial` | Y | — | — | Y |
 | `report:export` | Y | A | — | Y |
 | `dashboard:company` | Y | — | — | Y |
-| `dashboard:site` | Y | A | A | — |
+| `dashboard:site` | Y | A | — | — |
 | `dashboard:dataquality` | Y | A | — | — |
 | `audit:read` | Y | — | — | — |
 | `import:run` | Y | — | — | — |
@@ -65,3 +65,10 @@ Legend: **Y** = allowed. **A** = allowed only for assigned sites. **O** = only o
 5. **State** — approved, locked or cancelled records reject writes regardless of permission. Checked by `PeriodLockGuard` and per-module state machines.
 
 The Accountant is deliberately read-only on operational records: they hold `expense:read` and `payment:record` but no `expense:create`, `attendance:*` or `inventory:*` write permission.
+
+The Supervisor lost `dashboard:site` in V13. Cost per contract line, budget burn and variance
+are the engineer's and the accountant's questions; what a supervisor is answerable for is what
+happened at site today, which is his muster, his entries and the report he sends. He keeps
+`expense:read` — his own bills, which he entered — and holds no approval permission, so
+Approvals and payments is gated on `expense:approve:*`/`payment:record` rather than on being
+able to read an expense.

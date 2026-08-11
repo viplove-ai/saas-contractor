@@ -1,6 +1,21 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import type { ComponentType } from 'react';
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-dom';
 import { RequireAuth } from '../features/auth/AuthContext';
 import { SyncPage } from '../features/sync/SyncPage';
+import { RouteError } from './RouteError';
+
+/**
+ * One code-split screen, with the boundary that catches it failing to download.
+ *
+ * <p>The boundary goes on the leaf and not on the shell above it, which is the difference
+ * between a screen that will not open and an app that will not open. React Router replaces
+ * the element of whichever route owns the boundary — put it on the layout and a missing
+ * chunk takes the navigation, the unsent-records banner and the way to the sync screen down
+ * with it, at the exact moment the supervisor most needs all three.</p>
+ */
+function screen(path: string, load: () => Promise<{ Component: ComponentType }>): RouteObject {
+  return { path, lazy: load, errorElement: <RouteError /> };
+}
 
 /**
  * Route table. Everything under '/' sits behind {@link RequireAuth}: an anonymous visit
@@ -13,29 +28,21 @@ import { SyncPage } from '../features/sync/SyncPage';
 export const router = createBrowserRouter([
   {
     path: '/login',
-    lazy: async () => {
-      const { LoginPage } = await import('../features/auth/LoginPage');
-      return { Component: LoginPage };
-    },
+    // Its own boundary, because it sits outside the shell — and it is where a phone with no
+    // signal and no session lands. The one thing worse than a sign-in screen that cannot be
+    // satisfied is a blank one.
+    errorElement: <RouteError />,
+    lazy: async () => ({ Component: (await import('../features/auth/LoginPage')).LoginPage }),
   },
   {
     path: '/',
     element: <RequireAuth />,
+    errorElement: <RouteError />,
     children: [
       {
-        lazy: async () => {
-          const { RootLayout } = await import('./RootLayout');
-          return { Component: RootLayout };
-        },
+        lazy: async () => ({ Component: (await import('./RootLayout')).RootLayout }),
         children: [
           { index: true, element: <Navigate to="/today" replace /> },
-          {
-            path: 'today',
-            lazy: async () => {
-              const { TodayPage } = await import('../features/today/TodayPage');
-              return { Component: TodayPage };
-            },
-          },
           /*
             The one screen in the table that is not split out, because it is the only one
             whose whole purpose is to work with no signal. Every other route fetches its
@@ -46,155 +53,77 @@ export const router = createBrowserRouter([
             control, and this screen is exactly the one that must not depend on that.
           */
           { path: 'sync', element: <SyncPage /> },
-          {
-            path: 'home',
-            lazy: async () => {
-              const { HomePage } = await import('../features/home/HomePage');
-              return { Component: HomePage };
-            },
-          },
-          {
-            path: 'attendance/mark',
-            lazy: async () => {
-              const { MarkAttendancePage } = await import(
-                '../features/attendance/MarkAttendancePage'
-              );
-              return { Component: MarkAttendancePage };
-            },
-          },
-          {
-            path: 'attendance/verify',
-            lazy: async () => {
-              const { VerifyAttendancePage } = await import(
-                '../features/attendance/VerifyAttendancePage'
-              );
-              return { Component: VerifyAttendancePage };
-            },
-          },
-          {
-            path: 'inventory/receive',
-            lazy: async () => {
-              const { ReceiveMaterialPage } = await import(
-                '../features/inventory/ReceiveMaterialPage'
-              );
-              return { Component: ReceiveMaterialPage };
-            },
-          },
-          {
-            path: 'inventory/issue',
-            lazy: async () => {
-              const { IssueMaterialPage } = await import(
-                '../features/inventory/IssueMaterialPage'
-              );
-              return { Component: IssueMaterialPage };
-            },
-          },
-          {
-            path: 'inventory/stock',
-            lazy: async () => {
-              const { StockPage } = await import('../features/inventory/StockPage');
-              return { Component: StockPage };
-            },
-          },
-          {
-            path: 'expenses/new',
-            lazy: async () => {
-              const { AddExpensePage } = await import('../features/expenses/AddExpensePage');
-              return { Component: AddExpensePage };
-            },
-          },
-          {
-            path: 'approvals',
-            lazy: async () => {
-              const { ApprovalsPage } = await import('../features/expenses/ApprovalsPage');
-              return { Component: ApprovalsPage };
-            },
-          },
-          {
-            path: 'dpr/new',
-            lazy: async () => {
-              const { DprWizardPage } = await import('../features/dpr/DprWizardPage');
-              return { Component: DprWizardPage };
-            },
-          },
-          {
-            path: 'dprs',
-            lazy: async () => {
-              const { DprListPage } = await import('../features/dpr/DprListPage');
-              return { Component: DprListPage };
-            },
-          },
-          {
-            path: 'dashboard',
-            lazy: async () => {
-              const { CompanyDashboardPage } = await import(
-                '../features/dashboard/CompanyDashboardPage'
-              );
-              return { Component: CompanyDashboardPage };
-            },
-          },
-          {
-            // Without a site id the screen resolves the first one the caller can see.
-            path: 'dashboard/site/:siteId?',
-            lazy: async () => {
-              const { SiteDashboardPage } = await import(
-                '../features/dashboard/SiteDashboardPage'
-              );
-              return { Component: SiteDashboardPage };
-            },
-          },
-          {
-            path: 'dashboard/quality',
-            lazy: async () => {
-              const { DataQualityPage } = await import('../features/dashboard/DataQualityPage');
-              return { Component: DataQualityPage };
-            },
-          },
-          {
-            path: 'workers',
-            lazy: async () => {
-              const { WorkersPage } = await import('../features/labour/WorkersPage');
-              return { Component: WorkersPage };
-            },
-          },
-          {
-            // Also where RequireAuth parks anyone still on an admin-issued password.
-            path: 'profile',
-            lazy: async () => {
-              const { ProfilePage } = await import('../features/profile/ProfilePage');
-              return { Component: ProfilePage };
-            },
-          },
-          {
-            path: 'users',
-            lazy: async () => {
-              const { UsersPage } = await import('../features/admin/UsersPage');
-              return { Component: UsersPage };
-            },
-          },
-          {
-            path: 'projects',
-            lazy: async () => {
-              const { ProjectsPage } = await import('../features/admin/ProjectsPage');
-              return { Component: ProjectsPage };
-            },
-          },
-          {
-            path: 'projects/:projectId',
-            lazy: async () => {
-              const { ProjectDetailPage } = await import(
-                '../features/admin/ProjectDetailPage'
-              );
-              return { Component: ProjectDetailPage };
-            },
-          },
-          {
-            path: 'sites',
-            lazy: async () => {
-              const { SitesPage } = await import('../features/admin/SitesPage');
-              return { Component: SitesPage };
-            },
-          },
+          screen('today', async () => ({
+            Component: (await import('../features/today/TodayPage')).TodayPage,
+          })),
+          screen('home', async () => ({
+            Component: (await import('../features/home/HomePage')).HomePage,
+          })),
+          screen('attendance/mark', async () => ({
+            Component: (await import('../features/attendance/MarkAttendancePage'))
+              .MarkAttendancePage,
+          })),
+          screen('attendance/verify', async () => ({
+            Component: (await import('../features/attendance/VerifyAttendancePage'))
+              .VerifyAttendancePage,
+          })),
+          screen('inventory/receive', async () => ({
+            Component: (await import('../features/inventory/ReceiveMaterialPage'))
+              .ReceiveMaterialPage,
+          })),
+          screen('inventory/issue', async () => ({
+            Component: (await import('../features/inventory/IssueMaterialPage')).IssueMaterialPage,
+          })),
+          screen('inventory/stock', async () => ({
+            Component: (await import('../features/inventory/StockPage')).StockPage,
+          })),
+          screen('expenses/new', async () => ({
+            Component: (await import('../features/expenses/AddExpensePage')).AddExpensePage,
+          })),
+          screen('approvals', async () => ({
+            Component: (await import('../features/expenses/ApprovalsPage')).ApprovalsPage,
+          })),
+          screen('dpr/new', async () => ({
+            Component: (await import('../features/dpr/DprWizardPage')).DprWizardPage,
+          })),
+          // The same screen, opened on a report already started. The wizard stands itself on
+          // that report's day and asks whether to carry on with it or write it again.
+          screen('dpr/:id', async () => ({
+            Component: (await import('../features/dpr/DprWizardPage')).DprWizardPage,
+          })),
+          screen('dprs', async () => ({
+            Component: (await import('../features/dpr/DprListPage')).DprListPage,
+          })),
+          screen('dashboard', async () => ({
+            Component: (await import('../features/dashboard/CompanyDashboardPage'))
+              .CompanyDashboardPage,
+          })),
+          // Without a site id the screen resolves the first one the caller can see.
+          screen('dashboard/site/:siteId?', async () => ({
+            Component: (await import('../features/dashboard/SiteDashboardPage')).SiteDashboardPage,
+          })),
+          screen('dashboard/quality', async () => ({
+            Component: (await import('../features/dashboard/DataQualityPage')).DataQualityPage,
+          })),
+          screen('workers', async () => ({
+            Component: (await import('../features/labour/WorkersPage')).WorkersPage,
+          })),
+          // Also where RequireAuth parks anyone still on an admin-issued password.
+          screen('profile', async () => ({
+            Component: (await import('../features/profile/ProfilePage')).ProfilePage,
+          })),
+          screen('users', async () => ({
+            Component: (await import('../features/admin/UsersPage')).UsersPage,
+          })),
+          screen('projects', async () => ({
+            Component: (await import('../features/admin/ProjectsPage')).ProjectsPage,
+          })),
+          screen('projects/:projectId', async () => ({
+            Component: (await import('../features/admin/ProjectDetailPage')).ProjectDetailPage,
+          })),
+          screen('sites', async () => ({
+            Component: (await import('../features/admin/SitesPage')).SitesPage,
+          })),
         ],
       },
     ],

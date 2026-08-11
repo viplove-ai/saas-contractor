@@ -2,7 +2,6 @@ import {
   Alert,
   Box,
   CircularProgress,
-  Grid,
   LinearProgress,
   Paper,
   Stack,
@@ -49,12 +48,21 @@ export function CompanyDashboardPage() {
 
       {dashboard.data && (
         <>
-          <Grid container spacing={2}>
+          {/* Same as the site dashboard: MUI's Grid gutters are a negative margin, and the
+              Stack around this screen zeroes its children's margins, so the tiles sat 16px
+              right of every card under them. */}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(4, minmax(0, 1fr))' },
+              gap: 2,
+            }}
+          >
             <Tile label="Active projects" value={String(dashboard.data.activeProjects)} />
             <Tile label="Sites" value={String(dashboard.data.activeSites)} />
             <Tile label="Contract value" value={formatAmount(dashboard.data.contractValue)} />
             <Tile label="Budget" value={formatAmount(dashboard.data.budgetAmount)} />
-          </Grid>
+          </Box>
 
           <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
             <Typography fontWeight={600} gutterBottom>
@@ -154,14 +162,12 @@ export function CompanyDashboardPage() {
 
 function Tile({ label, value }: { label: string; value: string }) {
   return (
-    <Grid item xs={6} sm={3}>
-      <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
-        <Typography variant="body2" color="text.secondary">
-          {label}
-        </Typography>
-        <Typography variant="h3">{value}</Typography>
-      </Paper>
-    </Grid>
+    <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider', height: '100%' }}>
+      <Typography variant="body2" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography variant="h3">{value}</Typography>
+    </Paper>
   );
 }
 

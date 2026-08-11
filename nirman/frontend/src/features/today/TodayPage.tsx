@@ -47,8 +47,19 @@ export function TodayPage() {
 
   return (
     <Stack spacing={2.5} sx={{ pb: 3 }}>
-      <Stack direction="row" alignItems="flex-end" justifyContent="space-between" spacing={2}>
-        <Box>
+      {/*
+        Beside the date on a desk browser, under it on a phone. Sharing one row with the date
+        on a 360px screen left the picker about ninety pixels wide — "KSN..." and an arrow,
+        which names no site — and wrapped the date onto two lines to get there. A phone has
+        the width for one of them at a time, so it gets one of them at a time.
+      */}
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        alignItems={{ xs: 'stretch', sm: 'flex-end' }}
+        justifyContent="space-between"
+        spacing={{ xs: 1.5, sm: 2 }}
+      >
+        <Box sx={{ minWidth: 0 }}>
           <Typography variant="h1">{longDate(t.today)}</Typography>
           <Typography variant="overline" sx={{ color: tokens.annotation, display: 'block', mt: 0.5 }}>
             {t.site ? `${t.site.code} · ${t.site.name.toUpperCase()}` : 'SELECT A SITE'}
@@ -61,7 +72,7 @@ export function TodayPage() {
             label="Site"
             value={siteId}
             onChange={(event) => setSiteId(event.target.value)}
-            sx={{ maxWidth: 240 }}
+            sx={{ width: '100%', maxWidth: { sm: 240 } }}
           >
             {(t.sites.data ?? []).map((site) => (
               <MenuItem key={site.id} value={site.id}>
@@ -77,10 +88,18 @@ export function TodayPage() {
       {t.isLoading && <CircularProgress />}
       {t.dashboard.isError && <Alert severity="error">{apiErrorDetail(t.dashboard.error)}</Alert>}
 
+      {/*
+        minmax(0, …) rather than a bare fr. A grid track sized `1fr` still refuses to go below
+        the widest thing inside it, so one long BOQ description in the progress card set the
+        width of the track, of this grid, and of every card on the screen — the page ran off a
+        360px phone to the right and the supervisor had to scroll sideways to read a card he
+        had not asked to be wide. With a floor of 0 the track takes the width of the screen and
+        the long line ellipsises inside it, which is what noWrap was put there to do.
+      */}
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: '1.45fr 1fr' },
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1.45fr) minmax(0, 1fr)' },
           gap: 2.5,
           alignItems: 'start',
         }}
@@ -94,6 +113,13 @@ export function TodayPage() {
             standardShiftHours={t.muster.standardShiftHours}
           />
 
+          {/*
+            A supervisor signs nothing off — no attendance to verify, no bill to approve, no
+            report to counter-sign — so the band would be a permanent "nothing is waiting on
+            you". His unfinished draft still is waiting on him, and it moves to the report
+            card below where the rest of his day already is.
+          */}
+          {(t.can.signsOff || t.can.seesDashboard) && (
           <Section label={`WAITING ON YOU · ${t.signoffCount}`}>
             {t.signoffCount === 0 && t.waiting.draftReports === 0 ? (
               <Typography sx={marginNote}>Nothing is waiting on your signature.</Typography>
@@ -143,20 +169,37 @@ export function TodayPage() {
                     detail="Started and not submitted"
                     status="DRAFT"
                     action="Resume"
-                    to="/dprs"
+                    // Straight to the drafts, where each one carries the button that reopens
+                    // it. Landing on every report ever filed and hunting for his own is not
+                    // what a man who pressed "Resume" asked for.
+                    to="/dprs?status=DRAFT"
                   />
                 )}
               </Stack>
             )}
           </Section>
+          )}
+
+          {/*
+            The end of the supervisor's day, and the reason the four buttons below it are
+            optional rather than required: whatever he did not enter as it happened, he can
+            enter here, and the report is what reaches the office either way.
+          */}
+          <DailyReportCard
+            draftCount={t.waiting.draftReports}
+            emphasise={!t.can.signsOff}
+            siteName={t.site?.name}
+          />
 
           <Section label="ENTER SOMETHING">
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 1.25 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(3, 1fr)' }, gap: 1.25 }}>
               <EntryButton seed={0} to="/inventory/receive" label="Receive material" />
               <EntryButton seed={1} to="/inventory/issue" label="Issue material" />
               <EntryButton seed={2} to="/expenses/new" label="Add expense" />
-              <EntryButton seed={3} to="/dpr/new" label="Daily report" />
             </Box>
+            <Typography sx={{ ...marginNote, mt: 1 }}>
+              Or leave them and enter the lot on tonight&rsquo;s report.
+            </Typography>
           </Section>
 
           {t.unsent.waiting > 0 && (
@@ -217,7 +260,15 @@ export function TodayPage() {
                 <Stack spacing={1.25} sx={{ mt: 1.75 }}>
                   {dash.topWorkItems.slice(0, 3).map((item) => (
                     <Stack key={item.boqItemId} direction="row" justifyContent="space-between" spacing={1.5}>
-                      <Typography sx={{ fontSize: '0.8125rem', fontWeight: 500 }} noWrap>
+                      {/*
+                        The other half of the same rule: noWrap only clips if the box is
+                        allowed to shrink, and a flex child does not shrink past its own text
+                        unless told to. The capped track above stops a long description setting
+                        the width of the screen; this is what makes it ellipsise inside the card
+                        instead of running out of it. `title` because a clipped line still has
+                        to be readable, and hovering it is cheaper than opening the BOQ.
+                      */}
+                      <Typography sx={{ fontSize: '0.8125rem', fontWeight: 500, minWidth: 0 }} noWrap title={item.description}>
                         {item.description}
                       </Typography>
                       <Typography sx={{ ...figure, fontSize: '0.8125rem', color: 'text.secondary', flexShrink: 0 }}>
@@ -336,6 +387,49 @@ function MusterCard({
           )}
         </Stack>
       )}
+    </Paper>
+  );
+}
+
+/**
+ * The day's report, as a card rather than a button.
+ *
+ * <p>For a supervisor this is the end of the day and the only thing that reaches the office,
+ * so it is the second emphasised card on the screen — after the muster, which is the start of
+ * the day. For an engineer, who has a sign-off band above it, it stays quiet: he writes
+ * reports too, but somebody else's report waiting on his signature ranks higher.</p>
+ */
+function DailyReportCard({
+  draftCount,
+  emphasise,
+  siteName,
+}: {
+  draftCount: number;
+  emphasise: boolean;
+  siteName: string | undefined;
+}) {
+  const resuming = draftCount > 0;
+  return (
+    <Paper variant="outlined" sx={{ ...inkEdge(2, { emphasis: emphasise && !resuming }), p: 2.5 }}>
+      <Typography variant="overline" sx={{ color: resuming ? 'secondary.main' : tokens.annotation }}>
+        {resuming ? `${draftCount} REPORT(S) STILL A DRAFT` : 'END OF THE DAY'}
+      </Typography>
+      <Typography variant="h2" sx={{ mt: 1 }}>
+        Today&rsquo;s report
+      </Typography>
+      <Typography color="text.secondary" sx={{ mt: 0.5, maxWidth: '52ch' }}>
+        {resuming
+          ? 'Started and not sent. A draft is not a report — the office sees nothing until it goes.'
+          : `Labour, material and spending${siteName ? ` at ${siteName}` : ''} for the day, in one place. Anything already entered is filled in for you.`}
+      </Typography>
+      <Stack direction="row" spacing={1.5} sx={{ mt: 2 }} flexWrap="wrap" useFlexGap>
+        <Button component={Link} to="/dpr/new" variant="contained" color="secondary">
+          {resuming ? 'Finish the report' : "Write today's report"}
+        </Button>
+        <Button component={Link} to="/dprs" variant="outlined">
+          Past reports
+        </Button>
+      </Stack>
     </Paper>
   );
 }

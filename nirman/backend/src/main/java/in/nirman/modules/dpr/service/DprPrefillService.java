@@ -6,6 +6,8 @@ import in.nirman.modules.dpr.api.dto.DprDtos.LabourLine;
 import in.nirman.modules.dpr.api.dto.DprDtos.LabourPrefill;
 import in.nirman.modules.dpr.api.dto.DprDtos.MaterialLine;
 import in.nirman.modules.dpr.api.dto.DprDtos.MaterialPrefill;
+import in.nirman.modules.dpr.api.dto.DprDtos.OutsourcedLine;
+import in.nirman.modules.dpr.api.dto.DprDtos.OutsourcedPrefill;
 import in.nirman.modules.dpr.api.dto.DprDtos.SuggestedWorkItem;
 import in.nirman.modules.dpr.domain.DailyProgressReport;
 import in.nirman.modules.dpr.repository.DailyProgressReportRepository;
@@ -99,12 +101,13 @@ public class DprPrefillService {
         SiteLookup.SiteInfo site = sites.require(siteId);
 
         Rollup rollup = rollup(siteId, date);
-        var existing = reports.findBySiteIdAndReportDate(siteId, date);
+        var existing = reports.findBySiteIdAndReportDateAndDeletedAtIsNull(siteId, date);
 
         return new DprPrefill(siteId, site.name(), date,
                 existing.isPresent(),
                 existing.map(DailyProgressReport::getId).orElse(null),
                 toLabourPrefill(rollup.labour()),
+                toOutsourcedPrefill(rollup.outsourced()),
                 toMaterialPrefill(rollup.material()),
                 toExpensePrefill(rollup.expense()),
                 rollup.labour().unverifiedCount() > 0,
@@ -120,13 +123,18 @@ public class DprPrefillService {
      * report matches the records would be true of one code path and not the other.</p>
      */
     Rollup rollup(UUID siteId, LocalDate date) {
-        return new Rollup(labour.day(siteId, date), inventory.day(siteId, date),
-                expenses.day(siteId, date));
+        return new Rollup(labour.day(siteId, date), labour.outsourced(siteId, date),
+                inventory.day(siteId, date), expenses.day(siteId, date));
     }
 
-    /** The day as the three modules see it. */
-    record Rollup(LabourLookup.LabourDay labour, InventoryLookup.MaterialDay material,
-                  ExpenseLookup.DailySpend expense) {
+    /**
+     * The day as the three modules see it. Labour arrives twice because a site can have
+     * both kinds at once — our own men on the muster roll and a contractor's gang counted at
+     * the gate — and the two must never be added into one head count: one has hours and
+     * wages behind it and the other has neither.
+     */
+    record Rollup(LabourLookup.LabourDay labour, LabourLookup.OutsourcedDay outsourced,
+                  InventoryLookup.MaterialDay material, ExpenseLookup.DailySpend expense) {
     }
 
     // ------------------------------------------------------------------ mapping
@@ -138,10 +146,18 @@ public class DprPrefillService {
                         .map(DprPrefillService::toLabourLine).toList());
     }
 
+    static OutsourcedPrefill toOutsourcedPrefill(LabourLookup.OutsourcedDay day) {
+        return new OutsourcedPrefill(day.enabled(), day.headCount(), day.groups().stream()
+                .map(group -> new OutsourcedLine(group.skillCategoryId(),
+                        group.skillCategoryName(), group.labourContractorId(),
+                        group.labourContractorName(), group.headCount()))
+                .toList());
+    }
+
     static LabourLine toLabourLine(LabourLookup.LabourGroup group) {
         return new LabourLine(group.skillCategoryId(), group.skillCategoryName(),
                 group.labourContractorId(), group.labourContractorName(), group.headCount(),
-                group.regularHours(), group.overtimeHours());
+                group.regularHours(), group.overtimeHours(), false);
     }
 
     private static MaterialPrefill toMaterialPrefill(InventoryLookup.MaterialDay day) {

@@ -2,6 +2,7 @@ package in.nirman.modules.project.service;
 
 import in.nirman.common.BusinessException;
 import in.nirman.common.PageResponse;
+import in.nirman.common.SiteDeletionGuard;
 import in.nirman.modules.audit.AuditService;
 import in.nirman.modules.project.api.dto.ProjectDtos.CreateProjectRequest;
 import in.nirman.modules.project.api.dto.ProjectDtos.ProjectResponse;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -42,17 +44,22 @@ public class ProjectService implements ProjectProvisioning {
     private final SiteRepository sites;
     private final StoreRepository stores;
     private final BoqItemRepository boqItems;
+    private final SiteService siteService;
+    private final SiteDeletionGuard deletionGuard;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
     private final ProjectMapper mapper;
 
     public ProjectService(ProjectRepository projects, SiteRepository sites, StoreRepository stores,
-                          BoqItemRepository boqItems, CurrentUserProvider currentUser,
+                          BoqItemRepository boqItems, SiteService siteService,
+                          SiteDeletionGuard deletionGuard, CurrentUserProvider currentUser,
                           AuditService audit, ProjectMapper mapper) {
         this.projects = projects;
         this.sites = sites;
         this.stores = stores;
         this.boqItems = boqItems;
+        this.siteService = siteService;
+        this.deletionGuard = deletionGuard;
         this.currentUser = currentUser;
         this.audit = audit;
         this.mapper = mapper;
@@ -61,10 +68,28 @@ public class ProjectService implements ProjectProvisioning {
     @Transactional(readOnly = true)
     @PreAuthorize("hasAuthority('project:read')")
     public PageResponse<ProjectResponse> list(Project.Status status, String q, Pageable pageable) {
+        return search(status, q, false, pageable);
+    }
+
+    /**
+     * The deleted list — a separate view, never rows mixed into the live one.
+     *
+     * <p>Behind {@code project:delete} rather than {@code project:read}, because someone who
+     * cannot undo a deletion has no use for the list of them, and the whole point of the
+     * feature is that a deleted project is out of everyone else's way.</p>
+     */
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAuthority('project:delete')")
+    public PageResponse<ProjectResponse> listDeleted(String q, Pageable pageable) {
+        return search(null, q, true, pageable);
+    }
+
+    private PageResponse<ProjectResponse> search(Project.Status status, String q, boolean deleted,
+                                                 Pageable pageable) {
         boolean restricted = !seesAllSites();
         List<UUID> visibleProjectIds = restricted ? visibleProjectIds() : List.of();
         return PageResponse.from(
-                projects.search(currentUser.currentOrgId(), status, blankToEmpty(q),
+                projects.search(currentUser.currentOrgId(), status, blankToEmpty(q), deleted,
                         restricted, visibleProjectIds, pageable),
                 mapper::toResponse);
     }
@@ -141,10 +166,17 @@ public class ProjectService implements ProjectProvisioning {
 
     private Project createProject(CreateProjectRequest request) {
         UUID orgId = currentUser.currentOrgId();
-        if (projects.existsByOrgIdAndCode(orgId, request.code())) {
+        projects.findByOrgIdAndCode(orgId, request.code()).ifPresent(existing -> {
+            // A deleted project keeps its code, so that restoring it can never collide. Say
+            // so rather than reporting a clash with something the user cannot see.
+            if (existing.isDeleted()) {
+                throw BusinessException.conflict("project.code-deleted",
+                        "Code '" + request.code() + "' belongs to a deleted project. Restore "
+                                + "that one from the deleted list, or use another code.");
+            }
             throw BusinessException.conflict("project.code-taken",
                     "A project with code '" + request.code() + "' already exists.");
-        }
+        });
         Project project = new Project(orgId, request.code(), request.name());
         project.setClientDepartment(request.clientDepartment());
         project.setAgreementNo(request.agreementNo());
@@ -189,6 +221,73 @@ public class ProjectService implements ProjectProvisioning {
         validateDates(project);
         audit.record("PROJECT", project.getId(), "UPDATE", before,
                 Map.of("name", project.getName(), "status", project.getStatus().name()), null);
+        return mapper.toResponse(project);
+    }
+
+    /**
+     * Takes a project and every site under it off the books, in one transaction.
+     *
+     * <p>The cascade is not a convenience. A site exists only inside a project, so leaving
+     * the sites behind would leave rows on the sites screen pointing at a project nobody can
+     * open — and making an administrator delete four sites by hand before the project will
+     * go is busywork that invites them to leave the job half done.</p>
+     *
+     * <p>Every site is checked before any of them is touched, so a project held up by two of
+     * its four sites says so once instead of failing twice.</p>
+     */
+    @PreAuthorize("hasAuthority('project:delete') and hasAuthority('site:delete')")
+    public ProjectResponse delete(UUID id, String reason) {
+        Project project = projects.findByIdAndOrgId(id, currentUser.currentOrgId())
+                .orElseThrow(() -> BusinessException.notFound("Project", id));
+        if (project.isDeleted()) {
+            throw BusinessException.conflict("project.already-deleted",
+                    "This project has already been deleted.");
+        }
+        List<Site> live = sites.findByOrgIdAndProjectIdAndDeletedAtIsNullOrderByCode(
+                project.getOrgId(), project.getId());
+        deletionGuard.assertProjectDeletable(live.stream().map(Site::getId).toList());
+
+        // One instant for the project and its sites: that shared timestamp is what a restore
+        // later reads to tell these sites apart from one deleted on its own months ago.
+        Instant at = Instant.now();
+        project.delete(at, currentUser.currentUserIdOrNull(), reason);
+        live.forEach(site -> siteService.deleteWithProject(site, at, reason));
+
+        audit.record("PROJECT", project.getId(), "DELETE",
+                Map.of("code", project.getCode(), "name", project.getName()),
+                Map.of("deletedAt", at.toString(), "reason", reason, "sites", live.size()),
+                reason);
+        return mapper.toResponse(project);
+    }
+
+    /**
+     * Puts a project back, and with it exactly the sites that went down with it.
+     *
+     * <p>"Exactly" is the timestamp: a site deleted in the same act carries the project's
+     * {@code deleted_at} to the microsecond, and one deleted on its own beforehand does not.
+     * Restoring the project must not quietly resurrect a site somebody removed last month
+     * for their own reasons.</p>
+     */
+    @PreAuthorize("hasAuthority('project:delete') and hasAuthority('site:delete')")
+    public ProjectResponse restore(UUID id) {
+        Project project = projects.findByIdAndOrgId(id, currentUser.currentOrgId())
+                .orElseThrow(() -> BusinessException.notFound("Project", id));
+        if (!project.isDeleted()) {
+            throw BusinessException.conflict("project.not-deleted",
+                    "This project is not deleted, so there is nothing to restore.");
+        }
+        Instant deletedAt = project.getDeletedAt();
+        List<Site> cascaded = sites.findByOrgIdAndProjectIdOrderByCode(
+                        project.getOrgId(), project.getId()).stream()
+                .filter(site -> deletedAt.equals(site.getDeletedAt()))
+                .toList();
+
+        project.restore();
+        cascaded.forEach(siteService::restoreWithProject);
+
+        audit.record("PROJECT", project.getId(), "RESTORE", null,
+                Map.of("code", project.getCode(), "name", project.getName(),
+                        "sites", cascaded.size()), null);
         return mapper.toResponse(project);
     }
 

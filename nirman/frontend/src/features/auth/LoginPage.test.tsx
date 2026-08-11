@@ -36,7 +36,7 @@ function renderLogin() {
 describe('LoginPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    restoreSession.mockResolvedValue(null);
+    restoreSession.mockResolvedValue({ state: 'SIGNED_OUT', reason: 'NONE' });
   });
 
   it('rejects an empty form in the browser without calling the API', async () => {

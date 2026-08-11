@@ -43,11 +43,25 @@ public class DprLabour {
     @Column(name = "overtime_hours", nullable = false, precision = 10, scale = 2)
     private BigDecimal overtimeHours = BigDecimal.ZERO;
 
+    /**
+     * The row came from a head count at a contractor-run site, not from the muster roll. It
+     * prints in the same table and is never added into the same total: there are no hours
+     * and no wage behind it.
+     */
+    @Column(name = "outsourced", nullable = false)
+    private boolean outsourced;
+
     protected DprLabour() {
     }
 
     public DprLabour(UUID dprId, UUID skillCategoryId, UUID labourContractorId, int headCount,
                      BigDecimal regularHours, BigDecimal overtimeHours) {
+        this(dprId, skillCategoryId, labourContractorId, headCount, regularHours, overtimeHours,
+                false);
+    }
+
+    public DprLabour(UUID dprId, UUID skillCategoryId, UUID labourContractorId, int headCount,
+                     BigDecimal regularHours, BigDecimal overtimeHours, boolean outsourced) {
         this.id = UUID.randomUUID();
         this.dprId = dprId;
         this.skillCategoryId = skillCategoryId;
@@ -55,6 +69,7 @@ public class DprLabour {
         this.headCount = headCount;
         this.regularHours = regularHours == null ? BigDecimal.ZERO : regularHours;
         this.overtimeHours = overtimeHours == null ? BigDecimal.ZERO : overtimeHours;
+        this.outsourced = outsourced;
     }
 
     public UUID getId() {
@@ -83,5 +98,9 @@ public class DprLabour {
 
     public BigDecimal getOvertimeHours() {
         return overtimeHours;
+    }
+
+    public boolean isOutsourced() {
+        return outsourced;
     }
 }

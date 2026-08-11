@@ -1,14 +1,29 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Alert, Box, Button, IconButton, InputAdornment, Paper, Stack, TextField, Typography } from '@mui/material';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { Wordmark } from '../../app/AppNav';
 import { figure, graphPaper, inkEdge, marginNote } from '../../app/sketch';
 import { tokens } from '../../app/theme';
 import { useAuth } from './AuthContext';
+import type { SignedOutReason } from './api';
 import { loginSchema, type LoginForm } from './schema';
+
+/**
+ * Why the last session ended, said out loud.
+ *
+ * <p>An unexplained sign-in screen is how a supervisor concludes the app has eaten their
+ * morning. Each of these is a different thing to do next — wait for signal, or go and find
+ * the admin — and the screen is the only place left to say which.</p>
+ */
+const SIGNED_OUT_MESSAGE: Partial<Record<SignedOutReason, string>> = {
+  REJECTED:
+    'You were signed out. Your password may have been changed, or an admin ended the session. Sign in again to continue — nothing waiting on this phone has been lost.',
+  OFFLINE_TOO_LONG:
+    'This phone has been without a connection for too long to stay signed in. Sign in once with signal and it will keep working offline again — anything not sent yet is still here.',
+};
 
 /**
  * Sign-in. Still two fields, one button, 48px targets and errors in full sentences — this is
@@ -25,8 +40,35 @@ export function LoginPage() {
   const { signIn } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [serverError, setServerError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [online, setOnline] = useState(() => navigator.onLine);
+
+  /*
+    Watched rather than read once. This screen is where somebody sits waiting for a bar of
+    signal, and the notice below has to clear itself when it arrives — being told to find a
+    connection while holding a connection is how a working app looks broken.
+  */
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    return () => {
+      window.removeEventListener('online', update);
+      window.removeEventListener('offline', update);
+    };
+  }, []);
+
+  /*
+    Two ways in, because there are two ways out. A guard redirect carries the reason in
+    router state; the api client's forced sign-out is a whole-page assign that has no state
+    to carry, so it puts the reason in the query string instead.
+  */
+  const reason =
+    (location.state as { reason?: SignedOutReason } | null)?.reason ??
+    (searchParams.get('reason') === 'rejected' ? 'REJECTED' : undefined);
+  const signedOutMessage = reason ? SIGNED_OUT_MESSAGE[reason] : undefined;
 
   const {
     register,
@@ -59,6 +101,24 @@ export function LoginPage() {
                 </Typography>
               </Box>
             </Stack>
+
+            {signedOutMessage && !serverError && (
+              <Alert severity="warning">{signedOutMessage}</Alert>
+            )}
+
+            {/*
+              Said before the attempt rather than after it. Signing in is the one thing in
+              this app that genuinely cannot be done without a connection — a password can
+              only be checked by the server that holds it — so a supervisor staring at this
+              screen in a valley deserves to know that up front instead of typing carefully
+              twice and concluding the password is wrong.
+            */}
+            {!online && !serverError && (
+              <Alert severity="warning">
+                No connection. Signing in needs one — only this first step does. Once you are
+                in, the app keeps working without signal.
+              </Alert>
+            )}
 
             {serverError && <Alert severity="error">{serverError}</Alert>}
 

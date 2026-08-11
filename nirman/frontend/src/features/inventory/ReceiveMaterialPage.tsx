@@ -14,11 +14,19 @@ import {
 import { useMemo, useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatQuantity } from '../../shared/formatters';
+import { ReferenceNotice } from '../../shared/ReferenceNotice';
 import { StatusChip } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
-import { useCreateReceipt, useMaterials, useReceipts, useUnits, useVerifyReceipt } from './api';
+import {
+  useAddFieldMaterial,
+  useCreateReceipt,
+  useMaterials,
+  useReceipts,
+  useUnits,
+  useVerifyReceipt,
+} from './api';
 import { StorePicker } from './StorePicker';
-import type { LineDraft } from './types';
+import { MATERIAL_NOT_LISTED, type LineDraft } from './types';
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -50,14 +58,17 @@ export function ReceiveMaterialPage() {
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
+  const [namingError, setNamingError] = useState<string | null>(null);
 
   const materials = useMaterials();
   const units = useUnits();
   const create = useCreateReceipt();
+  const nameMaterial = useAddFieldMaterial();
   const pending = useReceipts(storeId || undefined, 'SUBMITTED');
   const verify = useVerifyReceipt();
 
   const canVerify = hasPermission('inventory:verify');
+  const canNameMaterial = hasPermission('masterdata:provisional');
 
   const total = useMemo(
     () =>
@@ -69,8 +80,14 @@ export function ReceiveMaterialPage() {
     [lines],
   );
 
+  /** A line names a material either by picking one or by typing one. Both count. */
+  const named = (line: LineDraft): boolean =>
+    line.materialId === MATERIAL_NOT_LISTED
+      ? (line.newName ?? '').trim().length > 0
+      : Boolean(line.materialId);
+
   const complete = lines.filter(
-    (line) => line.materialId && line.unitId && Number(line.quantity) > 0 && line.rate !== '',
+    (line) => named(line) && line.unitId && Number(line.quantity) > 0 && line.rate !== '',
   );
 
   const updateLine = (key: string, patch: Partial<LineDraft>) => {
@@ -85,11 +102,50 @@ export function ReceiveMaterialPage() {
    * delivery that arrives in tonnes.
    */
   const chooseMaterial = (key: string, materialId: string) => {
+    if (materialId === MATERIAL_NOT_LISTED) {
+      // No base unit to fall back on, so the unit is his to say — and the picker beside it
+      // is already open.
+      updateLine(key, { materialId, unitId: '' });
+      return;
+    }
     const material = materials.data?.find((m) => m.id === materialId);
-    updateLine(key, { materialId, unitId: material?.baseUnitId ?? '' });
+    updateLine(key, { materialId, unitId: material?.baseUnitId ?? '', newName: undefined });
   };
 
-  const submit = () => {
+  /**
+   * Books the delivery, opening a material for anything he had to name himself.
+   *
+   * <p>The naming happens first and one line at a time, because a receipt line needs a
+   * material id and there is no way to send a name instead. A name that fails to register
+   * stops the receipt rather than dropping the line: a delivery booked with three of the four
+   * things that arrived is worse than one not booked yet, because nobody re-counts a lorry
+   * that has already been signed for.</p>
+   */
+  const submit = async () => {
+    setNamingError(null);
+    let resolved: { materialId: string; unitId: string; quantity: number; rate: number }[];
+    try {
+      resolved = await Promise.all(
+        complete.map(async (line) => ({
+          materialId:
+            line.materialId === MATERIAL_NOT_LISTED
+              ? (
+                  await nameMaterial.mutateAsync({
+                    name: (line.newName ?? '').trim(),
+                    baseUnitId: line.unitId,
+                  })
+                ).id
+              : line.materialId,
+          unitId: line.unitId,
+          quantity: Number(line.quantity),
+          rate: Number(line.rate),
+        })),
+      );
+    } catch (error) {
+      setNamingError(apiErrorDetail(error));
+      return;
+    }
+
     create.mutate(
       {
         id: crypto.randomUUID(),
@@ -98,12 +154,7 @@ export function ReceiveMaterialPage() {
         challanNumber: challanNumber || undefined,
         invoiceNumber: invoiceNumber || undefined,
         vehicleNumber: vehicleNumber || undefined,
-        lines: complete.map((line) => ({
-          materialId: line.materialId,
-          unitId: line.unitId,
-          quantity: Number(line.quantity),
-          rate: Number(line.rate),
-        })),
+        lines: resolved,
       },
       {
         onSuccess: () => {
@@ -149,6 +200,9 @@ export function ReceiveMaterialPage() {
         />
       </Stack>
 
+      <ReferenceNotice query={materials} what="materials" />
+      <ReferenceNotice query={units} what="units" />
+
       <Stack spacing={1}>
         {lines.map((line) => (
           <Paper key={line.key} elevation={0} sx={{ p: 1.5, border: 1, borderColor: 'divider' }}>
@@ -157,19 +211,36 @@ export function ReceiveMaterialPage() {
               spacing={1.5}
               alignItems={{ md: 'center' }}
             >
-              <TextField
-                select
-                label="Material"
-                value={line.materialId}
-                onChange={(e) => chooseMaterial(line.key, e.target.value)}
-                sx={{ flexGrow: 1, minWidth: 200 }}
-              >
-                {(materials.data ?? []).map((material) => (
-                  <MenuItem key={material.id} value={material.id}>
-                    {material.name}
-                  </MenuItem>
-                ))}
-              </TextField>
+              <Stack spacing={1} sx={{ flexGrow: 1, minWidth: 200 }}>
+                <TextField
+                  select
+                  label="Material"
+                  value={line.materialId}
+                  onChange={(e) => chooseMaterial(line.key, e.target.value)}
+                >
+                  {(materials.data ?? []).map((material) => (
+                    <MenuItem key={material.id} value={material.id}>
+                      {material.name}
+                    </MenuItem>
+                  ))}
+                  {/*
+                    Last, and only for somebody allowed to name one. The lorry does not wait
+                    for the office to add a material, and a delivery that cannot be booked is
+                    a delivery nobody ever counts.
+                  */}
+                  {canNameMaterial && (
+                    <MenuItem value={MATERIAL_NOT_LISTED}>Not in the list…</MenuItem>
+                  )}
+                </TextField>
+                {line.materialId === MATERIAL_NOT_LISTED && (
+                  <TextField
+                    label="What is it called"
+                    value={line.newName ?? ''}
+                    onChange={(e) => updateLine(line.key, { newName: e.target.value })}
+                    helperText="As it reads on the challan. The office prices it later; pick the unit beside it."
+                  />
+                )}
+              </Stack>
               <TextField
                 select
                 label="Unit"
@@ -229,6 +300,7 @@ export function ReceiveMaterialPage() {
         <Typography color="text.secondary">Value before tax: {formatAmount(total)}</Typography>
       </Stack>
 
+      {namingError && <Alert severity="error">{namingError}</Alert>}
       {create.isError && <Alert severity="error">{apiErrorDetail(create.error)}</Alert>}
       {create.isSuccess && (
         <Alert severity="success">
@@ -241,11 +313,15 @@ export function ReceiveMaterialPage() {
         <Button
           variant="contained"
           color="secondary"
-          disabled={!storeId || complete.length === 0 || create.isPending}
-          onClick={submit}
+          disabled={
+            !storeId || complete.length === 0 || create.isPending || nameMaterial.isPending
+          }
+          onClick={() => void submit()}
           sx={{ minHeight: 48 }}
         >
-          {create.isPending ? 'Saving…' : `Book ${complete.length} material(s)`}
+          {create.isPending || nameMaterial.isPending
+            ? 'Saving…'
+            : `Book ${complete.length} material(s)`}
         </Button>
       </Stack>
 

@@ -1,6 +1,8 @@
-import { Box, Button, Stack, Typography } from '@mui/material';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Box, Stack, Typography } from '@mui/material';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../features/auth/AuthContext';
+import { SignOutButton } from '../features/auth/SignOutButton';
+import { useSync } from '../offline/SyncProvider';
 import { OfflineBanner } from '../shared/OfflineBanner';
 import { BottomNav, Initials, SideRail, Wordmark } from './AppNav';
 import { graphPaper } from './sketch';
@@ -22,21 +24,25 @@ import { tokens } from './theme';
  *   down rather than fetched here so the shell owes nothing to the network on first paint.
  */
 export function RootLayout({ signoffCount = 0 }: { signoffCount?: number }) {
-  const { user, signOut } = useAuth();
-  const navigate = useNavigate();
+  const { user, unverified } = useAuth();
+  const { online } = useSync();
   const { pathname } = useLocation();
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/login', { replace: true });
-  };
+  /*
+    Two witnesses, because neither is sufficient alone. `navigator.onLine` catches the signal
+    dropping while the app is open, and misses the case it is most needed for: a phone that
+    starts up with no route to the server still reports itself online, since it has a network
+    interface and no idea what is at the other end. `unverified` is the direct evidence —
+    the app is running on a cached profile precisely because the server could not be reached.
+  */
+  const offline = !online || unverified;
 
   return (
     <Box sx={{ minHeight: '100dvh', display: 'flex', ...graphPaper }}>
       <SideRail signoffCount={signoffCount} />
 
       <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
-        <OfflineBanner />
+        <OfflineBanner offline={offline} />
 
         {/*
           Phone only, and deliberately not an AppBar: no elevation, no fixed position, nothing
@@ -84,9 +90,7 @@ export function RootLayout({ signoffCount = 0 }: { signoffCount?: number }) {
               Signed in as {user.fullName} · {user.roles.join(', ')}
               {!user.allSites && ` · ${user.siteIds.length} site(s) assigned`}
             </Typography>
-            <Button variant="text" onClick={handleSignOut} sx={{ color: tokens.muted }}>
-              Sign out
-            </Button>
+            <SignOutButton variant="text" sx={{ color: tokens.muted }} />
           </Stack>
         )}
 

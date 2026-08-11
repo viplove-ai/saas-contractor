@@ -14,6 +14,7 @@ import {
 import { useMemo, useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatQuantity } from '../../shared/formatters';
+import { ReferenceNotice } from '../../shared/ReferenceNotice';
 import { StatusChip } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -183,6 +184,12 @@ export function IssueMaterialPage() {
           declared.
         </Alert>
       )}
+      {/*
+        The material picker here is the store's stock, not the master list — so an empty one
+        is answered above. Units are still the master's, and without them a line cannot name
+        what it counts in and nothing is submittable.
+      */}
+      <ReferenceNotice query={units} what="units" />
 
       <Stack spacing={1}>
         {lines.map((line) => {

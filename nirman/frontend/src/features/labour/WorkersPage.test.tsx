@@ -106,6 +106,21 @@ describe('WorkersPage', () => {
     post.mockResolvedValue({ data: {} });
   });
 
+  // The button was disabled with nothing said, and a supervisor with no posting read that
+  // as the app being broken. He is told what is missing and who fixes it.
+  it('says why a man cannot be taken on when the supervisor is posted nowhere', async () => {
+    get.mockImplementation((url: string) => {
+      if (url === '/workers') return Promise.resolve({ data: { ...WORKERS, content: [] } });
+      if (url === '/sites') return Promise.resolve({ data: [] });
+      if (url === '/sites/directory') return Promise.resolve({ data: DIRECTORY });
+      return Promise.reject(new Error(`unexpected GET ${url}`));
+    });
+    renderPage();
+
+    expect(await screen.findByText(/You are not posted to a site yet/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Take on a worker' })).toBeDisabled();
+  });
+
   it('says plainly when the office has not set a rate yet', async () => {
     renderPage();
     const unpaid = (await screen.findByText('Naya Mazdoor')).closest('tr') as HTMLElement;

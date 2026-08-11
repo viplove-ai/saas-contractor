@@ -70,6 +70,26 @@ export function useUnits() {
 }
 
 /**
+ * A material named at the gate, for the delivery of something the catalogue has never heard
+ * of.
+ *
+ * <p>The row it creates is marked provisional — a name off a challan, with no rate and no tax
+ * behind it — so the office can find it later and say what it really is. The server answers a
+ * name it already holds with the material it already holds, so typing "cement" here does not
+ * quietly open a second cement whose stock is separate from the first.</p>
+ */
+export function useAddFieldMaterial() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { name: string; baseUnitId: string }) =>
+      (await apiClient.post<Material>('/materials/field', input)).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inventoryKeys.materials });
+    },
+  });
+}
+
+/**
  * The work items an issue can be charged to. Placeholder rows the tender parser emitted are
  * dropped here as well as refused by the server — offering one and then rejecting it is a
  * worse answer than never offering it.

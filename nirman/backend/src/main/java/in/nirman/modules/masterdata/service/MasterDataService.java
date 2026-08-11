@@ -1,8 +1,11 @@
 package in.nirman.modules.masterdata.service;
 
 import in.nirman.common.BusinessException;
+import in.nirman.common.DocumentNumberService;
+import in.nirman.common.DocumentNumberService.DocType;
 import in.nirman.common.PageResponse;
 import in.nirman.modules.audit.AuditService;
+import in.nirman.modules.masterdata.api.dto.MasterDataDtos.AddFieldMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.ConversionResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateLabourContractorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateMaterialRequest;
@@ -46,6 +49,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -71,6 +75,7 @@ public class MasterDataService {
     private final ExpenseCategoryRepository expenseCategories;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
+    private final DocumentNumberService documentNumbers;
     private final MasterDataMapper mapper;
 
     public MasterDataService(UnitRepository units,
@@ -83,6 +88,7 @@ public class MasterDataService {
                              ExpenseCategoryRepository expenseCategories,
                              CurrentUserProvider currentUser,
                              AuditService audit,
+                             DocumentNumberService documentNumbers,
                              MasterDataMapper mapper) {
         this.units = units;
         this.skillCategories = skillCategories;
@@ -94,6 +100,7 @@ public class MasterDataService {
         this.expenseCategories = expenseCategories;
         this.currentUser = currentUser;
         this.audit = audit;
+        this.documentNumbers = documentNumbers;
         this.mapper = mapper;
     }
 
@@ -290,11 +297,53 @@ public class MasterDataService {
         return mapper.toResponse(material);
     }
 
+    /**
+     * A material named at the gate, because the lorry does not wait for the office.
+     *
+     * <p>The storekeeper cannot book a delivery of something the catalogue has never heard
+     * of — a stock transaction keys on a material id — so this is the alternative to sending
+     * him away. What he gets is a real material with a generated code and nothing else
+     * filled in, marked {@code provisional} so the office can see it was named rather than
+     * decided.</p>
+     *
+     * <p>An existing material with the same name is <b>returned rather than duplicated</b>.
+     * Two rows for one cement would split its stock into two balances, and neither would be
+     * the amount in the shed. That check is the whole reason this is not simply
+     * {@code createMaterial} with fewer fields.</p>
+     */
+    @PreAuthorize("hasAuthority('masterdata:provisional')")
+    public MaterialResponse addFieldMaterial(AddFieldMaterialRequest request) {
+        String name = request.name().trim().replaceAll("\\s+", " ");
+        if (name.isEmpty()) {
+            throw new BusinessException("material.name-required",
+                    "A material needs a name to be booked against.");
+        }
+        List<Material> existing = materials.findByName(orgId(), name);
+        if (!existing.isEmpty()) {
+            return mapper.toResponse(existing.get(0));
+        }
+        units.findById(request.baseUnitId())
+                .filter(u -> u.getOrgId().equals(orgId()))
+                .orElseThrow(() -> BusinessException.notFound("Unit", request.baseUnitId()));
+
+        Material material = new Material(orgId(),
+                documentNumbers.next(orgId(), DocType.MATERIAL, LocalDate.now()),
+                name, request.baseUnitId());
+        material.setProvisional(true);
+        materials.save(material);
+        recordCreate("MATERIAL", material.getId(), material.getCode());
+        return mapper.toResponse(material);
+    }
+
     @PreAuthorize("hasAuthority('masterdata:write')")
     public MaterialResponse updateMaterial(UUID id, UpdateMaterialRequest request) {
         Material material = requireMaterial(id);
         requireVersion(material.getVersion(), request.version(), "Material", id);
         material.setName(request.name());
+        // Editing the row is the act of vetting it: the office has now looked at the name the
+        // field typed and said what it is. Leaving the flag on would keep it forever on a list
+        // of things to tidy up that somebody has already tidied.
+        material.setProvisional(false);
         applyMaterialFields(material, request.categoryId(), request.hsnCode(), request.gstPercent(),
                 request.minStockLevel(), request.standardRate(), request.preferredVendorId(),
                 request.consumable());

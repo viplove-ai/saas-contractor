@@ -59,7 +59,9 @@ interface Recorder {
  * it to fail for an unrelated reason.
  */
 async function signIn(page: Page, recorder: Recorder): Promise<void> {
-  await page.route('**/api/v1/**', async (route: Route) => {
+  // On the context rather than the page, because once the service worker takes control it is
+  // the worker that issues the API requests, and a page-level route never sees those.
+  await page.context().route('**/api/v1/**', async (route: Route) => {
     const request = route.request();
     const url = new URL(request.url()).pathname;
 
@@ -111,9 +113,15 @@ async function signIn(page: Page, recorder: Recorder): Promise<void> {
   });
 
   await page.goto('/login');
-  await page.evaluate(() => {
+  await page.evaluate((user) => {
     window.localStorage.setItem('nirman.refreshToken', 'refresh-token');
-  });
+    // What a real sign-in leaves behind, and what an offline start reads instead of the
+    // network. Seeded alongside the token so the two never disagree.
+    window.localStorage.setItem(
+      'nirman.session',
+      JSON.stringify({ user, verifiedAt: new Date().toISOString() }),
+    );
+  }, USER);
 }
 
 const USER = {
@@ -149,6 +157,32 @@ async function goOffline(page: Page, recorder: Recorder): Promise<void> {
 async function comeOnline(page: Page, recorder: Recorder): Promise<void> {
   recorder.online = true;
   await page.context().setOffline(false);
+}
+
+/**
+ * Gets the app to the state a supervisor's phone is actually in: installed, with the worker
+ * in charge of serving it.
+ *
+ * <p>Two steps, because the app registers with {@code registerType: 'prompt'} and a prompting
+ * worker deliberately does not claim the page that installed it — claiming would swap the
+ * screen out from under somebody mid-entry, which is the whole reason for prompting. So the
+ * first load installs the worker and the second is the one it controls. That second load is
+ * not a contrivance for the test: it is the supervisor closing the app and opening it again,
+ * which is precisely the journey under test here.</p>
+ */
+async function installServiceWorker(page: Page): Promise<void> {
+  await page.waitForFunction(
+    async () => {
+      const registration = await navigator.serviceWorker.ready;
+      return registration.active !== null;
+    },
+    null,
+    { timeout: 30_000 },
+  );
+  await page.reload();
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, {
+    timeout: 30_000,
+  });
 }
 
 test.describe('offline then online', () => {
@@ -240,5 +274,105 @@ test.describe('offline then online', () => {
     // Named, not counted: "1 record" tells a supervisor nothing about which morning it is.
     await expect(page.getByText(/attendance mark\(s\) — KSN-A/)).toBeVisible();
     await expect(page.getByText(/Nothing is lost/)).toBeVisible();
+  });
+});
+
+/**
+ * Reopening the app with no signal at all — the case the whole offline story stands or falls
+ * on, and the one that used to fail hardest. The session is restored by asking the server to
+ * exchange a refresh token, so with no server there was no session, and the app answered by
+ * showing a sign-in screen that could not be satisfied. Worse, it cleared the stored token on
+ * the way, so the phone could not sync afterwards either: a supervisor who lost signal
+ * overnight lost the whole day's ability to use the app, and the queued records with it.
+ */
+test.describe('reopened with no signal', () => {
+  test('the app opens on the last known session instead of an unanswerable sign-in', async ({
+    page,
+  }) => {
+    const recorder: Recorder = { posts: [], online: true };
+    await signIn(page, recorder);
+
+    // One good visit, so the worker precaches the shell — this is "the app is installed".
+    await page.goto('/today');
+    await expect(page).toHaveURL(/\/today$/);
+    await installServiceWorker(page);
+
+    // The app is closed and the phone is out of coverage before it is opened again.
+    await goOffline(page, recorder);
+    await page.reload();
+
+    await expect(page).toHaveURL(/\/today$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Good morning.' })).toBeHidden();
+    // The line that says the app is working rather than broken.
+    await expect(page.getByText(/No connection\. You can carry on/)).toBeVisible();
+
+    // And the credential that lets it sync later is still there. Clearing it was the bug.
+    const token = await page.evaluate(() => window.localStorage.getItem('nirman.refreshToken'));
+    expect(token).toBe('refresh-token');
+  });
+
+  test('work entered on a cold offline start is kept and sent on reconnect', async ({ page }) => {
+    const recorder: Recorder = { posts: [], online: true };
+    await signIn(page, recorder);
+
+    await page.goto('/attendance/mark');
+    await expect(page.getByText('Karam Singh')).toBeVisible();
+    await installServiceWorker(page);
+    // Fetched once with signal so there is something in the worker's cache to fall back to.
+    await expect(page.getByText('Karam Singh')).toBeVisible();
+
+    await goOffline(page, recorder);
+    await page.reload();
+
+    // The roster comes from the worker's cache: without it there are no names to tick, and
+    // marking the muster is the one thing this app exists to do with no signal.
+    await expect(page.getByText('Karam Singh')).toBeVisible({ timeout: 15_000 });
+
+    await page.getByRole('button', { name: 'Mark all present' }).click();
+    await page.getByRole('button', { name: /^Save 2 mark/ }).click();
+    await expect(page.getByText(/saved on this phone/)).toBeVisible();
+
+    await comeOnline(page, recorder);
+    /*
+      Dispatched rather than left to the browser, and for a reason worth stating: a document
+      loaded while the connection was already gone reports itself online the whole time, so
+      there is no transition for the browser to fire an event about. That is not an artefact
+      of the test — it is the exact condition this journey creates, and the app's answer to
+      it is the foreground and timer triggers. This stands in for the foreground one so the
+      assertion does not have to sit through the timer.
+    */
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
+
+    await expect(page.getByText(/records? not sent yet/)).toBeHidden({ timeout: 20_000 });
+    expect(recorder.posts.filter((post) => post.url.endsWith('/attendance/bulk'))).toHaveLength(1);
+  });
+
+  /**
+   * The other end of the grace period. A phone that has not seen the server in a fortnight
+   * stops opening site data — and says why, because "sign in again" with no explanation is
+   * how a supervisor concludes the app has eaten their work.
+   */
+  test('a session too old to honour signs out and explains itself', async ({ page }) => {
+    const recorder: Recorder = { posts: [], online: true };
+    await signIn(page, recorder);
+    await page.goto('/today');
+    await expect(page).toHaveURL(/\/today$/);
+    await installServiceWorker(page);
+
+    await page.evaluate((user) => {
+      window.localStorage.setItem(
+        'nirman.session',
+        JSON.stringify({
+          user,
+          verifiedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
+        }),
+      );
+    }, USER);
+
+    await goOffline(page, recorder);
+    await page.reload();
+
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByText(/without a connection for too long/)).toBeVisible();
   });
 });

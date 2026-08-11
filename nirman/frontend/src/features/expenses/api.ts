@@ -40,11 +40,23 @@ export function useSites() {
   });
 }
 
+/**
+ * The heads an expense can be booked against: the active leaves, not the headings above them.
+ *
+ * <p>Leaf by structure rather than by "has a parent". The screen used to ask for a parent id
+ * and an organisation whose taxonomy is one flat level got a picker with nothing in it —
+ * every head it had was thrown away for not being underneath another one.</p>
+ */
 export function useExpenseCategories() {
   return useQuery({
     queryKey: expenseKeys.categories,
-    queryFn: async () =>
-      (await apiClient.get<ExpenseCategory[]>('/expense-categories')).data.filter((c) => c.active),
+    queryFn: async () => {
+      const active = (await apiClient.get<ExpenseCategory[]>('/expense-categories')).data.filter(
+        (category) => category.active,
+      );
+      const parents = new Set(active.map((category) => category.parentId).filter(Boolean));
+      return active.filter((category) => !parents.has(category.id));
+    },
     staleTime: REFERENCE_STALE_TIME,
   });
 }

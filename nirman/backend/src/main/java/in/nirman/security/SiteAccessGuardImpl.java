@@ -27,6 +27,10 @@ public class SiteAccessGuardImpl implements SiteAccessGuard {
               AND (assigned_to IS NULL OR assigned_to >= CURRENT_DATE)
             """;
 
+    private static final String SITE_IS_LIVE = """
+            SELECT count(*) FROM sites WHERE id = ? AND deleted_at IS NULL
+            """;
+
     private final CurrentUserProviderImpl currentUser;
     private final JdbcTemplate jdbc;
 
@@ -52,6 +56,14 @@ public class SiteAccessGuardImpl implements SiteAccessGuard {
         if (siteId == null) {
             return false;
         }
+        // Ahead of the all-sites shortcut, and deliberately: a deleted site is closed to
+        // everybody, an administrator included. Deleting a site does not delete the rows in
+        // user_site_assignments that point at it, and most write paths in labour, inventory
+        // and expense reach their own repositories through this guard rather than through
+        // SiteService — so without this check a deleted site would go on accepting work.
+        if (!isLive(siteId)) {
+            return false;
+        }
         AuthenticatedUser user = currentUser.required();
         if (user.allSites()) {
             return true;
@@ -61,6 +73,11 @@ public class SiteAccessGuardImpl implements SiteAccessGuard {
         }
         Integer count = jdbc.queryForObject(ASSIGNMENT_EXISTS, Integer.class,
                 user.userId(), siteId);
+        return count != null && count > 0;
+    }
+
+    private boolean isLive(UUID siteId) {
+        Integer count = jdbc.queryForObject(SITE_IS_LIVE, Integer.class, siteId);
         return count != null && count > 0;
     }
 }

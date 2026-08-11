@@ -20,9 +20,12 @@ export const adminKeys = {
   users: (q: string, role: string) => ['admin', 'users', q, role] as const,
   allUsers: ['admin', 'users'] as const,
   roles: ['admin', 'roles'] as const,
-  sites: (projectId: string) => ['admin', 'sites', projectId] as const,
+  sites: (projectId: string, deleted: boolean) =>
+    ['admin', 'sites', projectId, deleted] as const,
   allSites: ['admin', 'sites'] as const,
-  projects: ['admin', 'projects'] as const,
+  projects: (q: string, status: string, deleted: boolean) =>
+    ['admin', 'projects', q, status, deleted] as const,
+  allProjects: ['admin', 'projects'] as const,
   project: (id: string) => ['admin', 'project', id] as const,
   boqItems: (projectId: string) => ['admin', 'boq-items', projectId] as const,
   nitDocument: (projectId: string) => ['admin', 'nit-document', projectId] as const,
@@ -151,21 +154,53 @@ export function useResetPassword() {
   });
 }
 
-export function useAdminSites(projectId: string) {
+/**
+ * @param deleted asks for the deleted register instead of the live one. A swap, not an
+ *   addition — the server will not mix the two, and neither should a screen.
+ */
+export function useAdminSites(projectId: string, deleted = false) {
   return useQuery({
-    queryKey: adminKeys.sites(projectId),
+    queryKey: adminKeys.sites(projectId, deleted),
     queryFn: async () =>
-      (await apiClient.get<AdminSite[]>('/sites', { params: { projectId: projectId || undefined } }))
-        .data,
+      (
+        await apiClient.get<AdminSite[]>('/sites', {
+          params: { projectId: projectId || undefined, deleted: deleted || undefined },
+        })
+      ).data,
   });
 }
 
-export function useProjects() {
+/**
+ * Filtering is the server's, not the browser's: a contractor's project list is small today
+ * but the status filter has to agree with what the server considers visible — a field role
+ * sees only the projects its sites belong to — and a narrowed list that was cut client-side
+ * would silently disagree with the page count on any list that grows past one page.
+ *
+ * <p>Both filters are optional so the pickers elsewhere (a site's project, for one) can go on
+ * asking for the whole list.</p>
+ */
+/**
+ * @param enabled hold the request back. The deleted list is behind {@code project:delete},
+ *   so a screen that offers it to admins must not fire it for everyone else and collect a
+ *   403 on mount.
+ */
+export function useProjects(q = '', status = '', deleted = false, enabled = true) {
   return useQuery({
-    queryKey: adminKeys.projects,
+    enabled,
+    queryKey: adminKeys.projects(q, status, deleted),
     queryFn: async () =>
-      (await apiClient.get<PageResponse<AdminProject>>('/projects', { params: { size: PAGE_SIZE } }))
-        .data.content,
+      (
+        await apiClient.get<PageResponse<AdminProject>>('/projects', {
+          params: {
+            q: q || undefined,
+            // The server ignores a status filter on the deleted list, and sending one
+            // would let the screen show an empty result it cannot explain.
+            status: deleted ? undefined : status || undefined,
+            deleted: deleted || undefined,
+            size: PAGE_SIZE,
+          },
+        })
+      ).data.content,
     staleTime: 15 * 60_000,
   });
 }
@@ -193,7 +228,7 @@ export function useCreateProject() {
     mutationFn: async (input: ProjectInput) =>
       (await apiClient.post<AdminProject>('/projects', input)).data,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: adminKeys.projects });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allProjects });
     },
   });
 }
@@ -206,7 +241,62 @@ export function useUpdateProject() {
       (await apiClient.put<AdminProject>(`/projects/${input.id}`, { ...input, code: undefined }))
         .data,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: adminKeys.projects });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allProjects });
+    },
+  });
+}
+
+/**
+ * Deleting a project takes its sites with it, so both lists are invalidated — and so is the
+ * user list, because the postings to those sites end at the same moment.
+ */
+export function useDeleteProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) =>
+      // A body on a DELETE: the reason is required, and a query string would leave it in
+      // every access log between here and the server.
+      (await apiClient.delete<AdminProject>(`/projects/${id}`, { data: { reason } })).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allProjects });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allSites });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allUsers });
+    },
+  });
+}
+
+export function useRestoreProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await apiClient.post<AdminProject>(`/projects/${id}/restore`)).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allProjects });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allSites });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allUsers });
+    },
+  });
+}
+
+export function useDeleteSite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) =>
+      (await apiClient.delete<AdminSite>(`/sites/${id}`, { data: { reason } })).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allSites });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allUsers });
+    },
+  });
+}
+
+export function useRestoreSite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await apiClient.post<AdminSite>(`/sites/${id}/restore`)).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allSites });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allUsers });
     },
   });
 }
@@ -221,6 +311,7 @@ export interface SiteInput {
   startDate?: string | undefined;
   standardShiftHours: number;
   monthlyWageDays: number;
+  usesOutsourcedLabour: boolean;
   status?: SiteStatus | undefined;
 }
 
@@ -259,6 +350,7 @@ export function useUpdateSite() {
           startDate: input.startDate || undefined,
           standardShiftHours: input.standardShiftHours,
           monthlyWageDays: input.monthlyWageDays,
+          usesOutsourcedLabour: input.usesOutsourcedLabour,
           version: input.version,
         })
       ).data,
@@ -317,7 +409,7 @@ export function useCreateProjectFromNit() {
         }>('/nit-imports', input)
       ).data,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: adminKeys.projects });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allProjects });
     },
   });
 }

@@ -84,9 +84,11 @@ The primary dev machine is macOS 12, which shapes two things you will otherwise 
   a separate `nirman_test` database (schema dropped and recreated first) when Testcontainers
   finds no daemon. Run `./scripts/dev-db.sh` before the suite in that case. The dev database
   is never touched by tests.
-- **Playwright will not install.** The e2e suite runs in CI and on macOS 13+ only. The
-  offline sync journeys are covered there and nowhere else, so a change to
-  `frontend/src/offline/` has no local test that proves it.
+- **Playwright needs its browser fetched once.** This note used to say the suite could not
+  run locally at all, which was true of a macOS 12 machine and is no longer true of this
+  one — `npx playwright install chromium` then `npm run e2e` runs the whole suite here in
+  about half a minute. Do that rather than pushing a change to `frontend/src/offline/` to
+  find out from CI whether it works.
 
 ## Architecture
 
@@ -154,6 +156,11 @@ if the tests pass:
   per call through each module's read API. A cached total is a second version of the truth.
 - **Claiming work is its own act.** A quantity reaches the measurement book only when an
   engineer verifies the report, and only once.
+- **A head count is not attendance.** On a site flagged `uses_outsourced_labour`, the day is
+  recorded as counts per trade in `site_labour_counts` — no worker, no wage rate, no ledger
+  posting, because the contractor bills for the work. The DPR prints them beside the muster
+  roll and never inside its head count; `dpr_labour.outsourced` is what keeps the two apart
+  once the report is frozen.
 
 ### Error contract
 
@@ -174,11 +181,43 @@ twice reads as theft to the server and revokes the whole family.
 `offline/` — Dexie queue, `saveOrQueue.ts` is the entry point for any mutation that must
 survive no signal. A record that has gone out is marked as gone out and is not resent. A
 server refusal, duplicate or locked month is surfaced to the supervisor as a question with two
-answers (keep mine with a reason, or drop mine), not retried silently.
+answers (keep mine with a reason, or drop mine), not retried silently. A send that got **no
+answer** never counts against the give-up budget: that budget is for a server saying something
+unhelpful, and silence is not the server saying anything.
+
+### The app opens without a network, and that shapes the session
+
+Start-up does not depend on reaching the server. `shared/session.ts` keeps the last profile
+the server confirmed in `localStorage`, and `restoreSession` returns `VERIFIED`, `CACHED` or
+`SIGNED_OUT` rather than a nullable user — because the caller has to do three different
+things. The distinction the whole feature turns on is *how* a refresh failed: an answer that
+refuses signs the device out, and no answer at all means a valley and must leave the stored
+refresh token exactly where it is. Clearing it on a network failure was the original bug, and
+it stranded the queue as well as the session.
+
+`OFFLINE_SESSION_GRACE_MS` (14 days) caps how long a cached profile opens the app. The cached
+profile grants nothing — every permission on it was already advisory, and the server
+re-checks each one — so treat it as UX, exactly like `shared/roles.ts`.
+
+Two things follow that are easy to get wrong:
+
+- **`navigator.onLine` is not evidence.** A document loaded while the connection was already
+  gone reports itself online for its whole life, and no `online` event ever fires. Anything
+  that must recover from that needs the foreground (`visibilitychange`) and timer triggers
+  too — `SyncProvider` and `AuthProvider` both carry all three.
+- **Every refresh shares one promise**, inside `refreshSession`. The queue drain and the
+  session re-check fire on the same reconnect, and rotating one refresh token twice reads as
+  theft to the server, which revokes the whole family.
+
+Read caching is an allow-list in `vite.config.ts`: reference data and the attendance roster,
+nothing else. Stock, dashboards, expenses and DPRs are never cached — a stale figure is worse
+than a missing one. The caches are cleared in `forgetSession`, since the worker keys responses
+by URL and a site handset changes hands. React Query queries run in `offlineFirst` so an
+offline read actually reaches that cache instead of being paused before it fires.
 
 ## Database changes
 
-Additive migrations only — an applied migration is **never** edited. Add `V12__…sql` in
+Additive migrations only — an applied migration is **never** edited. Add `V16__…sql` in
 `backend/src/main/resources/db/migration/` and restart the backend.
 
 Before a migration has been applied anywhere, `./scripts/dev.sh reset-db` replays from the
@@ -189,6 +228,21 @@ otherwise collide with renamed ones).
 Flyway locations. The `prod` profile never sees the folder. Tests run migrations **and** the
 seed, so a broken seed fails the build rather than a deployment — and tests authenticate as
 the seeded users (`viplove`, `uttam`, `vivek`; password `Nirman@123`, local only).
+
+That split is why `V14` exists. Units, materials and the expense taxonomy lived only in the
+seed, no screen creates them, and the `prod` profile skips the seed — so a deployed
+organisation had empty material and expense-head pickers on every screen with no way to fill
+them. `V14__starter_master_data.sql` gives **every organisation that lacks them** the CPWD
+starting catalogue, guarded by code so it never overwrites an organisation's own rows and
+inserts nothing in dev and test (where the organisation itself only arrives in `V900`,
+afterwards). Org-specific data — users, projects, BOQs — still never goes in a migration.
+
+`V15` is the other half of the same problem: a catalogue is never complete, and a lorry at the
+gate does not wait for the office. `POST /materials/field` lets somebody holding
+`masterdata:provisional` name a material with nothing but a name and a unit; the row is marked
+`materials.provisional` until an administrator edits it, and a name the org already holds comes
+back as the material it already holds rather than as a second row — two rows for one cement
+would split its stock into two balances, neither of them the amount in the shed.
 
 Hibernate is `ddl-auto: validate`. Flyway owns the schema; an entity that drifts from a
 migration fails at startup.

@@ -115,6 +115,8 @@ export function useVerificationQueue(
   from: string,
   to: string,
   status: WorkflowStatus,
+  /** False for someone who cannot verify: the queue is a signer's screen, not everyone's. */
+  enabled = true,
 ) {
   return useQuery({
     queryKey: attendanceKeys.queue(siteId ?? '', from, to, status),
@@ -124,7 +126,7 @@ export function useVerificationQueue(
           params: { siteId, status, from, to, size: QUEUE_PAGE_SIZE },
         })
       ).data,
-    enabled: Boolean(siteId) && from <= to,
+    enabled: Boolean(siteId) && from <= to && enabled,
   });
 }
 

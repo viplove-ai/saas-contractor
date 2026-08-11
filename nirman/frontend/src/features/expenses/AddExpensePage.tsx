@@ -11,6 +11,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount } from '../../shared/formatters';
+import { ReferenceNotice } from '../../shared/ReferenceNotice';
 import { StatusChip, type RecordStatus } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
 import { BillPhotoField } from './BillPhotoField';
@@ -154,15 +155,15 @@ export function AddExpensePage() {
           onChange={(e) => setCategoryId(e.target.value)}
           sx={{ flexGrow: 1, minWidth: 220 }}
         >
-          {(categories.data ?? [])
-            .filter((category) => category.parentId)
-            .map((category) => (
-              <MenuItem key={category.id} value={category.id}>
-                {category.name}
-              </MenuItem>
-            ))}
+          {(categories.data ?? []).map((category) => (
+            <MenuItem key={category.id} value={category.id}>
+              {category.name}
+            </MenuItem>
+          ))}
         </TextField>
       </Stack>
+
+      <ReferenceNotice query={categories} what="expense heads" />
 
       <TextField
         label="What was it for"
