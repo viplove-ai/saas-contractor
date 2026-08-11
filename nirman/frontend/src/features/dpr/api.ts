@@ -249,14 +249,36 @@ export function useStores(siteId: string | undefined) {
   });
 }
 
+/**
+ * The heads an expense can be booked against.
+ *
+ * <p>Narrowed to the leaves. "Material" and "Labour" are headings that group the real heads
+ * and booking against one loses the distinction the costing rules turn on — a labour payment
+ * settles a wage already counted through attendance, and a material purchase is inventory
+ * rather than cost. A heading answers neither question.</p>
+ *
+ * <p>Leaf by structure rather than by "has a parent", so an organisation with a flat list
+ * keeps every one of its heads instead of a picker with nothing in it.</p>
+ */
 export function useExpenseCategories() {
   return useQuery({
     queryKey: ['expense-categories'],
-    queryFn: async () =>
-      (await apiClient.get<{ id: string; code: string; name: string }[]>('/expense-categories'))
-        .data,
+    queryFn: async () => {
+      const all = (
+        await apiClient.get<ExpenseCategory[]>('/expense-categories')
+      ).data;
+      const parents = new Set(all.map((category) => category.parentId).filter(Boolean));
+      return all.filter((category) => !parents.has(category.id));
+    },
     staleTime: REFERENCE_STALE_TIME,
   });
+}
+
+interface ExpenseCategory {
+  id: string;
+  code: string;
+  name: string;
+  parentId?: string;
 }
 
 /** Material that arrived at the store today. A real goods receipt, not a note on a report. */

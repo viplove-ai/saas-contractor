@@ -23,12 +23,15 @@ import {
   Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import EditIcon from '@mui/icons-material/Edit';
 import { useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatHours, formatQuantity } from '../../shared/formatters';
 import { StatusChip, type RecordStatus } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
 import { downloadDprPdf, useDecideDpr, useDpr, useDprs, useSites } from './api';
+import { isEditable } from './types';
 import type { Dpr, DprWorkflow } from './types';
 
 const STATUS_CHIP: Record<DprWorkflow, RecordStatus> = {
@@ -48,8 +51,13 @@ const STATUS_CHIP: Record<DprWorkflow, RecordStatus> = {
  */
 export function DprListPage() {
   const { hasPermission } = useAuth();
+  // Arrived at from "Resume" on the day's screen, which knows it wants the drafts. The filter
+  // stays the screen's own from then on — the link sets it, it does not own it.
+  const [params] = useSearchParams();
   const [siteId, setSiteId] = useState('');
-  const [status, setStatus] = useState<DprWorkflow | ''>('');
+  const [status, setStatus] = useState<DprWorkflow | ''>(
+    () => (params.get('status') as DprWorkflow | null) ?? '',
+  );
   const [openId, setOpenId] = useState<string | null>(null);
 
   const sites = useSites();
@@ -109,6 +117,7 @@ export function DprListPage() {
                 <TableCell align="right">Men</TableCell>
                 <TableCell align="right">Day cost</TableCell>
                 <TableCell>Status</TableCell>
+                <TableCell />
               </TableRow>
             </TableHead>
             <TableBody>
@@ -126,6 +135,23 @@ export function DprListPage() {
                   <TableCell align="right">{formatAmount(report.dayCost)}</TableCell>
                   <TableCell>
                     <StatusChip status={STATUS_CHIP[report.workflowStatus]} />
+                  </TableCell>
+                  {/*
+                    The way back into an unfinished report. Without it a draft is a row you can
+                    read and never finish, which is what a draft is least useful as.
+                  */}
+                  <TableCell align="right">
+                    {isEditable(report.workflowStatus) && (
+                      <Button
+                        component={Link}
+                        to={`/dpr/${report.id}`}
+                        size="small"
+                        startIcon={<EditIcon />}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        Continue
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -201,6 +227,17 @@ function ReportPanel({
         <Button size="small" startIcon={<DownloadIcon />} onClick={() => void download()}>
           Print
         </Button>
+        {isEditable(data.workflowStatus) && (
+          <Button
+            component={Link}
+            to={`/dpr/${data.id}`}
+            size="small"
+            startIcon={<EditIcon />}
+            onClick={onClose}
+          >
+            Continue this report
+          </Button>
+        )}
       </Stack>
       {downloadError && <Alert severity="error">{downloadError}</Alert>}
 

@@ -14,6 +14,7 @@ import {
 import { useMemo, useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatQuantity } from '../../shared/formatters';
+import { ReferenceNotice } from '../../shared/ReferenceNotice';
 import { StatusChip } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
 import { useCreateReceipt, useMaterials, useReceipts, useUnits, useVerifyReceipt } from './api';
@@ -148,6 +149,9 @@ export function ReceiveMaterialPage() {
           onChange={(e) => setVehicleNumber(e.target.value)}
         />
       </Stack>
+
+      <ReferenceNotice query={materials} what="materials" />
+      <ReferenceNotice query={units} what="units" />
 
       <Stack spacing={1}>
         {lines.map((line) => (

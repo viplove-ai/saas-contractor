@@ -86,6 +86,11 @@ export const router = createBrowserRouter([
           screen('dpr/new', async () => ({
             Component: (await import('../features/dpr/DprWizardPage')).DprWizardPage,
           })),
+          // The same screen, opened on a report already started. The wizard stands itself on
+          // that report's day and asks whether to carry on with it or write it again.
+          screen('dpr/:id', async () => ({
+            Component: (await import('../features/dpr/DprWizardPage')).DprWizardPage,
+          })),
           screen('dprs', async () => ({
             Component: (await import('../features/dpr/DprListPage')).DprListPage,
           })),

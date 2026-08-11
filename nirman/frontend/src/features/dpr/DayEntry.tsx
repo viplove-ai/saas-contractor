@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
+import { ReferenceNotice } from '../../shared/ReferenceNotice';
 import {
   useAddExpense,
   useExpenseCategories,
@@ -342,6 +343,7 @@ export function MaterialCard({
       {stores.data?.length === 0 && (
         <Alert severity="warning">This site has no store, so material cannot be recorded.</Alert>
       )}
+      <ReferenceNotice query={materials} what="materials" />
 
       {(stores.data?.length ?? 0) > 1 && (
         <TextField
@@ -507,6 +509,7 @@ export function ExpenseCard({ siteId, date, locked, onSaved }: DaySectionProps) 
     >
       {error && <Alert severity="error">{error}</Alert>}
       {done && <Alert severity="success">{done}</Alert>}
+      <ReferenceNotice query={categories} what="expense heads" />
 
       {!open && (
         <Button startIcon={<AddIcon />} onClick={() => setOpen(true)} sx={{ alignSelf: 'flex-start' }}>

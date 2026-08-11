@@ -150,7 +150,10 @@ export function TodayPage() {
                     detail="Started and not submitted"
                     status="DRAFT"
                     action="Resume"
-                    to="/dprs"
+                    // Straight to the drafts, where each one carries the button that reopens
+                    // it. Landing on every report ever filed and hunting for his own is not
+                    // what a man who pressed "Resume" asked for.
+                    to="/dprs?status=DRAFT"
                   />
                 )}
               </Stack>

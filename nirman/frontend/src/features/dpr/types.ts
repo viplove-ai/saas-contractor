@@ -2,7 +2,13 @@
 
 export type DprWorkflow = 'DRAFT' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED';
 
-export type Weather = 'CLEAR' | 'CLOUDY' | 'RAIN' | 'HEAVY_RAIN' | 'FOG' | 'SNOW' | 'STORM';
+/** Exactly the server's enum. A value it does not know is refused on save, not stored. */
+export type Weather = 'CLEAR' | 'CLOUDY' | 'RAIN' | 'HEAVY_RAIN' | 'EXTREME_HEAT';
+
+/** Draft and returned reports are still the preparer's to change — the server says the same. */
+export function isEditable(status: DprWorkflow): boolean {
+  return status === 'DRAFT' || status === 'REJECTED';
+}
 
 export interface Site {
   id: string;

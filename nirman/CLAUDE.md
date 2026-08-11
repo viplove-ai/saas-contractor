@@ -217,7 +217,7 @@ offline read actually reaches that cache instead of being paused before it fires
 
 ## Database changes
 
-Additive migrations only — an applied migration is **never** edited. Add `V14__…sql` in
+Additive migrations only — an applied migration is **never** edited. Add `V15__…sql` in
 `backend/src/main/resources/db/migration/` and restart the backend.
 
 Before a migration has been applied anywhere, `./scripts/dev.sh reset-db` replays from the
@@ -228,6 +228,14 @@ otherwise collide with renamed ones).
 Flyway locations. The `prod` profile never sees the folder. Tests run migrations **and** the
 seed, so a broken seed fails the build rather than a deployment — and tests authenticate as
 the seeded users (`viplove`, `uttam`, `vivek`; password `Nirman@123`, local only).
+
+That split is why `V14` exists. Units, materials and the expense taxonomy lived only in the
+seed, no screen creates them, and the `prod` profile skips the seed — so a deployed
+organisation had empty material and expense-head pickers on every screen with no way to fill
+them. `V14__starter_master_data.sql` gives **every organisation that lacks them** the CPWD
+starting catalogue, guarded by code so it never overwrites an organisation's own rows and
+inserts nothing in dev and test (where the organisation itself only arrives in `V900`,
+afterwards). Org-specific data — users, projects, BOQs — still never goes in a migration.
 
 Hibernate is `ddl-auto: validate`. Flyway owns the schema; an entity that drifts from a
 migration fails at startup.

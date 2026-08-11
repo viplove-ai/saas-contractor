@@ -104,10 +104,10 @@ function renderPage() {
   );
 }
 
-function mockGets(detail: Dpr = SUBMITTED) {
+function mockGets(detail: Dpr = SUBMITTED, listed: Dpr[] = [SUBMITTED]) {
   get.mockImplementation((url: string) => {
     if (url === '/sites') return Promise.resolve({ data: SITES });
-    if (url === '/dprs') return Promise.resolve({ data: page([SUBMITTED]) });
+    if (url === '/dprs') return Promise.resolve({ data: page(listed) });
     if (url === '/dprs/d1') return Promise.resolve({ data: detail });
     return Promise.reject(new Error(`unexpected GET ${url}`));
   });
@@ -213,6 +213,21 @@ describe('DprListPage', () => {
 
     expect(screen.queryByRole('button', { name: /^Verify/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Send back' })).not.toBeInTheDocument();
+  });
+
+  /**
+   * The way back into an unfinished report. Without it the list can only be read, and a draft
+   * started at lunchtime is a draft nobody can finish.
+   */
+  it('offers a way back into a draft and not into a signed report', async () => {
+    const draft = dpr({ id: 'd2', dprNumber: 'DPR-2025-9003', workflowStatus: 'DRAFT' });
+    mockGets(SUBMITTED, [SUBMITTED, draft]);
+    renderPage();
+
+    await screen.findByText('DPR-2025-9003');
+    const links = screen.getAllByRole('link', { name: 'Continue' });
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute('href', '/dpr/d2');
   });
 
   /** A verified report reports what it posted, so the claim is visible after the fact. */
