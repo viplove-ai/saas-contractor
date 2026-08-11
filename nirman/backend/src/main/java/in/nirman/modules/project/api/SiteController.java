@@ -2,6 +2,7 @@ package in.nirman.modules.project.api;
 
 import in.nirman.modules.project.api.dto.ProjectDtos.CreateSiteRequest;
 import in.nirman.modules.project.api.dto.ProjectDtos.CreateStoreRequest;
+import in.nirman.modules.project.api.dto.ProjectDtos.DeleteRequest;
 import in.nirman.modules.project.api.dto.ProjectDtos.SiteDirectoryEntry;
 import in.nirman.modules.project.api.dto.ProjectDtos.SiteResponse;
 import in.nirman.modules.project.api.dto.ProjectDtos.StoreResponse;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,9 +38,11 @@ public class SiteController {
     }
 
     @GetMapping
-    @Operation(summary = "List sites visible to the caller, optionally for one project")
-    public List<SiteResponse> list(@RequestParam(required = false) UUID projectId) {
-        return siteService.list(projectId);
+    @Operation(summary = "List sites visible to the caller, optionally for one project; "
+            + "deleted=true swaps in the deleted ones")
+    public List<SiteResponse> list(@RequestParam(required = false) UUID projectId,
+                                   @RequestParam(defaultValue = "false") boolean deleted) {
+        return deleted ? siteService.listDeleted(projectId) : siteService.list(projectId);
     }
 
     @PostMapping
@@ -62,6 +66,18 @@ public class SiteController {
     @PutMapping("/{id}")
     public SiteResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateSiteRequest request) {
         return siteService.update(id, request);
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Delete a site. Refused if anything has been recorded against it.")
+    public SiteResponse delete(@PathVariable UUID id, @Valid @RequestBody DeleteRequest request) {
+        return siteService.delete(id, request.reason());
+    }
+
+    @PostMapping("/{id}/restore")
+    @Operation(summary = "Restore a deleted site, re-posting the staff named on it")
+    public SiteResponse restore(@PathVariable UUID id) {
+        return siteService.restore(id);
     }
 
     @GetMapping("/{id}/stores")

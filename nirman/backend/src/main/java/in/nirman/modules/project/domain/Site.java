@@ -66,6 +66,12 @@ public class Site extends BaseEntity {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    @Column(name = "deleted_by")
+    private UUID deletedBy;
+
+    @Column(name = "deleted_reason", length = 500)
+    private String deletedReason;
+
     protected Site() {
     }
 
@@ -170,5 +176,39 @@ public class Site extends BaseEntity {
 
     public Instant getDeletedAt() {
         return deletedAt;
+    }
+
+    public UUID getDeletedBy() {
+        return deletedBy;
+    }
+
+    public String getDeletedReason() {
+        return deletedReason;
+    }
+
+    /**
+     * Takes the site off the books. Only ever reached for a site with nothing recorded
+     * against it — see {@code SiteDeletionGuard}. A site whose work is finished is
+     * {@link Status#CLOSED} and stays on the list, because its figures still count.
+     *
+     * <p>{@code at} is passed in rather than taken here so a project and the sites it takes
+     * down with it share one timestamp to the microsecond. That shared instant is what
+     * later tells a cascade apart from a site somebody deleted on its own last week, and so
+     * decides what a restore brings back.</p>
+     */
+    public void delete(Instant at, UUID by, String reason) {
+        this.deletedAt = at;
+        this.deletedBy = by;
+        this.deletedReason = reason;
+    }
+
+    public void restore() {
+        this.deletedAt = null;
+        this.deletedBy = null;
+        this.deletedReason = null;
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
     }
 }

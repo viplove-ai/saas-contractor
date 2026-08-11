@@ -15,12 +15,14 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { FormControlLabel, Switch } from '@mui/material';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount } from '../../shared/formatters';
 import { useAuth } from '../auth/AuthContext';
-import { useAdminSites, useProjects } from './api';
+import { useAdminSites, useDeleteProject, useProjects, useRestoreProject } from './api';
+import { DeleteRecordDialog } from './DeleteRecordDialog';
 import { ProjectFormDialog } from './ProjectFormDialog';
 import type { AdminProject, ProjectStatus } from './types';
 
@@ -51,6 +53,8 @@ const NO_PROJECTS_YET =
   'No projects yet. Add the contract you are working under, then add its sites and post an ' +
   'engineer and a supervisor to each.';
 const NOTHING_MATCHED = 'No project matches that. Clear the search or the status to see them all.';
+const NONE_DELETED = 'Nothing has been deleted. Projects only appear here when an administrator ' +
+  'removes one, and they can be put back from here at any time.';
 
 /**
  * The contracts the company is running. First stop in setting the system up: a site belongs
@@ -64,16 +68,25 @@ export function ProjectsPage() {
   const { hasPermission } = useAuth();
   const [editing, setEditing] = useState<AdminProject | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [deleting, setDeleting] = useState<AdminProject | null>(null);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
+  const [showDeleted, setShowDeleted] = useState(false);
 
-  const projects = useProjects(search, status);
-  const sites = useAdminSites('');
   const canWrite = hasPermission('project:write');
+  const canDelete = hasPermission('project:delete');
+
+  const projects = useProjects(search, status, showDeleted);
+  // The site list follows the same side of the line, so a deleted project's site count is
+  // the sites that went down with it rather than a flat zero.
+  const sites = useAdminSites('', showDeleted);
+  const deleteProject = useDeleteProject();
+  const restoreProject = useRestoreProject();
   const filtered = search !== '' || status !== '';
 
-  const siteCount = (projectId: string): number =>
-    sites.data?.filter((site) => site.projectId === projectId).length ?? 0;
+  const sitesOf = (projectId: string) =>
+    sites.data?.filter((site) => site.projectId === projectId) ?? [];
+  const siteCount = (projectId: string): number => sitesOf(projectId).length;
 
   const openNew = () => {
     setEditing(null);
@@ -99,7 +112,7 @@ export function ProjectsPage() {
             The contracts you are running. Add the project first, then its sites.
           </Typography>
         </Stack>
-        {canWrite && (
+        {canWrite && !showDeleted && (
           <Button variant="contained" color="secondary" onClick={openNew}>
             Add a project
           </Button>
@@ -121,20 +134,43 @@ export function ProjectsPage() {
           // flex alone gives a zero basis and collapses the box to its border.
           sx={{ flex: 1, minWidth: 280 }}
         />
-        <TextField
-          select
-          label="Status"
-          value={status}
-          onChange={(event) => setStatus(event.target.value)}
-          sx={{ minWidth: 200 }}
-        >
-          <MenuItem value="">Any status</MenuItem>
-          {STATUS_ORDER.map((code) => (
-            <MenuItem key={code} value={code}>
-              {STATUS_LABEL[code]}
-            </MenuItem>
-          ))}
-        </TextField>
+        {/*
+          Status has nothing to say about a deleted project — a deleted ACTIVE contract is
+          not a thing anybody looks for — so the picker goes away rather than sitting there
+          returning nothing.
+        */}
+        {!showDeleted && (
+          <TextField
+            select
+            label="Status"
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+            sx={{ minWidth: 200 }}
+          >
+            <MenuItem value="">Any status</MenuItem>
+            {STATUS_ORDER.map((code) => (
+              <MenuItem key={code} value={code}>
+                {STATUS_LABEL[code]}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
+        {/*
+          Only for someone who could put one back. A switch rather than another value in the
+          status picker, because deleted is not a status a project moves through: it is the
+          other list, and mixing the two is exactly what this screen exists to avoid.
+        */}
+        {canDelete && (
+          <FormControlLabel
+            control={
+              <Switch
+                checked={showDeleted}
+                onChange={(event) => setShowDeleted(event.target.checked)}
+              />
+            }
+            label="Deleted"
+          />
+        )}
       </Stack>
 
       {projects.isLoading && (
@@ -163,12 +199,15 @@ export function ProjectsPage() {
               project={project}
               siteCount={siteCount(project.id)}
               canWrite={canWrite}
+              canDelete={canDelete}
               onEdit={() => openEdit(project)}
+              onDelete={() => setDeleting(project)}
+              onRestore={() => restoreProject.mutate(project.id)}
             />
           ))}
           {projects.data.length === 0 && (
             <Typography component="li" color="text.secondary">
-              {filtered ? NOTHING_MATCHED : NO_PROJECTS_YET}
+              {showDeleted ? NONE_DELETED : filtered ? NOTHING_MATCHED : NO_PROJECTS_YET}
             </Typography>
           )}
         </Stack>
@@ -186,7 +225,8 @@ export function ProjectsPage() {
                 <TableCell>Client</TableCell>
                 <TableCell align="right">Contract value</TableCell>
                 <TableCell align="right">Sites</TableCell>
-                <TableCell>Status</TableCell>
+                {/* On the deleted list, why it went is the fact worth a column. */}
+                <TableCell>{showDeleted ? 'Reason' : 'Status'}</TableCell>
                 {canWrite && <TableCell align="right">Actions</TableCell>}
               </TableRow>
             </TableHead>
@@ -227,21 +267,60 @@ export function ProjectsPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Chip
-                      size="small"
-                      color={STATUS_COLOR[project.status]}
-                      label={STATUS_LABEL[project.status]}
-                    />
+                    {showDeleted ? (
+                      <Stack spacing={0.25}>
+                        <Typography variant="body2">{project.deletedReason || '—'}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {formatDeletedAt(project.deletedAt)}
+                        </Typography>
+                      </Stack>
+                    ) : (
+                      <Chip
+                        size="small"
+                        color={STATUS_COLOR[project.status]}
+                        label={STATUS_LABEL[project.status]}
+                      />
+                    )}
                   </TableCell>
                   {canWrite && (
                     <TableCell align="right">
                       <Stack direction="row" spacing={1} justifyContent="flex-end">
-                        <Button size="small" onClick={() => openEdit(project)}>
-                          Edit
-                        </Button>
-                        <Button size="small" component={Link} to="/sites">
-                          Sites
-                        </Button>
+                        {showDeleted ? (
+                          <Button
+                            size="small"
+                            onClick={() => restoreProject.mutate(project.id)}
+                            disabled={restoreProject.isPending}
+                          >
+                            Restore
+                          </Button>
+                        ) : (
+                          <>
+                            <Button size="small" onClick={() => openEdit(project)}>
+                              Edit
+                            </Button>
+                            {/*
+                              Carries the project through. Arriving at Sites on "all
+                              projects" after asking for one project's sites makes the
+                              admin repeat the choice they just made.
+                            */}
+                            <Button
+                              size="small"
+                              component={Link}
+                              to={`/sites?projectId=${project.id}`}
+                            >
+                              Sites
+                            </Button>
+                            {canDelete && (
+                              <Button
+                                size="small"
+                                color="error"
+                                onClick={() => setDeleting(project)}
+                              >
+                                Delete
+                              </Button>
+                            )}
+                          </>
+                        )}
                       </Stack>
                     </TableCell>
                   )}
@@ -251,7 +330,7 @@ export function ProjectsPage() {
                 <TableRow>
                   <TableCell colSpan={canWrite ? 6 : 5}>
                     <Typography color="text.secondary" sx={{ py: 2 }}>
-                      {filtered ? NOTHING_MATCHED : NO_PROJECTS_YET}
+                      {showDeleted ? NONE_DELETED : filtered ? NOTHING_MATCHED : NO_PROJECTS_YET}
                     </Typography>
                   </TableCell>
                 </TableRow>
@@ -262,8 +341,33 @@ export function ProjectsPage() {
       )}
 
       <ProjectFormDialog open={formOpen} project={editing} onClose={() => setFormOpen(false)} />
+
+      {deleting && (
+        <DeleteRecordDialog
+          open
+          kind="project"
+          label={`${deleting.code} — ${deleting.name}`}
+          cascade={sitesOf(deleting.id).map((site) => site.code)}
+          onConfirm={(reason) =>
+            deleteProject.mutateAsync({ id: deleting.id, reason })
+          }
+          onClose={() => setDeleting(null)}
+        />
+      )}
     </Stack>
   );
+}
+
+/** "4 March 2026" — the day is what an admin scanning the register is matching on. */
+function formatDeletedAt(value: string | undefined): string {
+  if (!value) {
+    return '';
+  }
+  return new Date(value).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
 /**
@@ -283,13 +387,20 @@ function ProjectCard({
   project,
   siteCount,
   canWrite,
+  canDelete,
   onEdit,
+  onDelete,
+  onRestore,
 }: {
   project: AdminProject;
   siteCount: number;
   canWrite: boolean;
+  canDelete: boolean;
   onEdit: () => void;
+  onDelete: () => void;
+  onRestore: () => void;
 }) {
+  const deleted = project.deletedAt !== undefined;
   return (
     <Paper component="li" elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
       <Stack spacing={1.5}>
@@ -307,8 +418,9 @@ function ProjectCard({
           </Box>
           <Chip
             size="small"
-            color={STATUS_COLOR[project.status]}
-            label={STATUS_LABEL[project.status]}
+            color={deleted ? 'error' : STATUS_COLOR[project.status]}
+            variant={deleted ? 'outlined' : 'filled'}
+            label={deleted ? 'Deleted' : STATUS_LABEL[project.status]}
           />
         </Stack>
 
@@ -333,21 +445,57 @@ function ProjectCard({
           {siteCount === 0 ? 'No sites yet' : `${siteCount} site${siteCount === 1 ? '' : 's'}`}
         </Typography>
 
+        {deleted && (
+          <Typography variant="body2" color="text.secondary">
+            Deleted {formatDeletedAt(project.deletedAt)}
+            {project.deletedReason ? ` — ${project.deletedReason}` : ''}
+          </Typography>
+        )}
+
         {canWrite && (
           <Stack direction="row" spacing={1}>
             {/* 48px: the app's floor for anything meant to be hit with a glove on. */}
-            <Button size="small" variant="outlined" onClick={onEdit} sx={{ minHeight: 48, flex: 1 }}>
-              Edit
-            </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              component={Link}
-              to="/sites"
-              sx={{ minHeight: 48, flex: 1 }}
-            >
-              Sites
-            </Button>
+            {deleted ? (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={onRestore}
+                sx={{ minHeight: 48, flex: 1 }}
+              >
+                Restore
+              </Button>
+            ) : (
+              <>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={onEdit}
+                  sx={{ minHeight: 48, flex: 1 }}
+                >
+                  Edit
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  component={Link}
+                  to={`/sites?projectId=${project.id}`}
+                  sx={{ minHeight: 48, flex: 1 }}
+                >
+                  Sites
+                </Button>
+                {canDelete && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="error"
+                    onClick={onDelete}
+                    sx={{ minHeight: 48, flex: 1 }}
+                  >
+                    Delete
+                  </Button>
+                )}
+              </>
+            )}
           </Stack>
         )}
       </Stack>

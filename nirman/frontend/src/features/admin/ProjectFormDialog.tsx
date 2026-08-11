@@ -79,6 +79,23 @@ function toAmount(value: string | undefined): number | undefined {
 }
 
 /**
+ * Keeps every label floating above its box instead of sitting in it.
+ *
+ * <p>The fields here are uncontrolled — {@code register} hands the input straight to
+ * react-hook-form — and MUI works out whether a label should float by reading the input's
+ * value <em>once, at mount</em>. An NIT import fills the form afterwards, through
+ * {@code reset}, so MUI never finds out the boxes are no longer empty and every label stays
+ * lying across the value read out of the PDF.</p>
+ *
+ * <p>Pinning it open is the fix rather than deriving it from the value: a label that floats
+ * only when filled has to float on focus too, and driving that by hand from an uncontrolled
+ * field puts the label back over the caret the moment somebody clicks an empty box. The two
+ * date fields have always been pinned for the same underlying reason, so this makes the
+ * dialog consistent rather than half one way.</p>
+ */
+const FLOATING_LABEL = { shrink: true } as const;
+
+/**
  * The contract a project runs under: its tender and agreement references, its value, its
  * dates and who manages it.
  *
@@ -340,18 +357,21 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
             label="Project code"
             // Fixed at creation: every site, document number and report already carries it.
             disabled={editing}
+            InputLabelProps={FLOATING_LABEL}
             error={!!errors.code}
             helperText={errors.code?.message ?? 'Short and unique, e.g. KSN01.'}
             {...register('code')}
           />
           <TextField
             label="Project name"
+            InputLabelProps={FLOATING_LABEL}
             error={!!errors.name}
             helperText={errors.name?.message}
             {...register('name')}
           />
           <TextField
             label="Client department (optional)"
+            InputLabelProps={FLOATING_LABEL}
             error={!!errors.clientDepartment}
             helperText={errors.clientDepartment?.message ?? 'Who awarded the work, e.g. CPWD.'}
             {...register('clientDepartment')}
@@ -363,12 +383,14 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
               label="NIT number (optional)"
+              InputLabelProps={FLOATING_LABEL}
               error={!!errors.nitNumber}
               helperText={errors.nitNumber?.message}
               {...register('nitNumber')}
             />
             <TextField
               label="Agreement no. (optional)"
+              InputLabelProps={FLOATING_LABEL}
               error={!!errors.agreementNo}
               helperText={errors.agreementNo?.message}
               {...register('agreementNo')}
@@ -376,6 +398,7 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
           </Stack>
           <TextField
             label="Tender reference (optional)"
+            InputLabelProps={FLOATING_LABEL}
             error={!!errors.tenderReference}
             helperText={errors.tenderReference?.message}
             {...register('tenderReference')}
@@ -384,12 +407,14 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
               label="Contract value (optional)"
+              InputLabelProps={FLOATING_LABEL}
               error={!!errors.contractValue}
               helperText={errors.contractValue?.message ?? 'What the client pays, in rupees.'}
               {...register('contractValue')}
             />
             <TextField
               label="Budget (optional)"
+              InputLabelProps={FLOATING_LABEL}
               error={!!errors.budgetAmount}
               helperText={errors.budgetAmount?.message ?? 'What you plan to spend.'}
               {...register('budgetAmount')}
@@ -400,7 +425,7 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
             <TextField
               label="Start date (optional)"
               type="date"
-              InputLabelProps={{ shrink: true }}
+              InputLabelProps={FLOATING_LABEL}
               error={!!errors.startDate}
               helperText={errors.startDate?.message}
               {...register('startDate')}
@@ -408,7 +433,7 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
             <TextField
               label="Expected completion (optional)"
               type="date"
-              InputLabelProps={{ shrink: true }}
+              InputLabelProps={FLOATING_LABEL}
               error={!!errors.expectedCompletionDate}
               helperText={errors.expectedCompletionDate?.message}
               {...register('expectedCompletionDate')}
@@ -420,7 +445,7 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
               <TextField
                 label="Actual completion (optional)"
                 type="date"
-                InputLabelProps={{ shrink: true }}
+                InputLabelProps={FLOATING_LABEL}
                 error={!!errors.actualCompletionDate}
                 helperText={errors.actualCompletionDate?.message}
                 {...register('actualCompletionDate')}
@@ -467,6 +492,7 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
             label="Description (optional)"
             multiline
             minRows={2}
+            InputLabelProps={FLOATING_LABEL}
             error={!!errors.description}
             helperText={errors.description?.message ?? 'What the work covers, in a line or two.'}
             {...register('description')}
@@ -503,12 +529,14 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
                     label="Site code"
                     value={siteCode}
                     onChange={(event) => setSiteCode(event.target.value)}
+                    InputLabelProps={FLOATING_LABEL}
                     helperText="Unique, e.g. KSN-A."
                   />
                   <TextField
                     label="Site name"
                     value={siteName}
                     onChange={(event) => setSiteName(event.target.value)}
+                    InputLabelProps={FLOATING_LABEL}
                     helperText="Where the work actually happens."
                   />
                 </Stack>

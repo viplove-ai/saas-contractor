@@ -68,6 +68,12 @@ public class Project extends BaseEntity {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    @Column(name = "deleted_by")
+    private UUID deletedBy;
+
+    @Column(name = "deleted_reason", length = 500)
+    private String deletedReason;
+
     protected Project() {
     }
 
@@ -191,5 +197,35 @@ public class Project extends BaseEntity {
 
     public Instant getDeletedAt() {
         return deletedAt;
+    }
+
+    public UUID getDeletedBy() {
+        return deletedBy;
+    }
+
+    public String getDeletedReason() {
+        return deletedReason;
+    }
+
+    /**
+     * Takes the project off the books. Not a lifecycle step — {@link Status#CLOSED} is how a
+     * contract ends, and a closed project stays on every list. This is for the one that
+     * should never have been created.
+     */
+    public void delete(Instant at, UUID by, String reason) {
+        this.deletedAt = at;
+        this.deletedBy = by;
+        this.deletedReason = reason;
+    }
+
+    /** Puts it back, and forgets the reason: it no longer describes anything true. */
+    public void restore() {
+        this.deletedAt = null;
+        this.deletedBy = null;
+        this.deletedReason = null;
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
     }
 }

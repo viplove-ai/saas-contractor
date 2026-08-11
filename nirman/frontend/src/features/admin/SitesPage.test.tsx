@@ -70,11 +70,11 @@ function page(content: AdminUser[]): PageResponse<AdminUser> {
   return { content, page: 0, size: 100, totalElements: content.length, totalPages: 1, first: true, last: true };
 }
 
-function renderPage() {
+function renderPage(route = '/sites') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[route]}>
         <SitesPage />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -160,5 +160,32 @@ describe('SitesPage', () => {
     expect(body.supervisorId).toBeUndefined();
     expect(body.siteEngineerId).toBe('u-eng');
     expect(body.version).toBe(2);
+  });
+
+  /**
+   * Arriving from a project's Sites button. The admin has already said which project they
+   * mean; asking again on arrival is the screen forgetting how they got here.
+   */
+  it('opens on the project it was sent from, and narrows the list to it', async () => {
+    renderPage('/sites?projectId=p1');
+    await screen.findByText('KSN-A');
+
+    expect(screen.getByRole('combobox', { name: 'Project' })).toHaveTextContent('KSN01');
+    await waitFor(() =>
+      expect(get).toHaveBeenCalledWith('/sites', {
+        params: { projectId: 'p1', deleted: undefined },
+      }),
+    );
+  });
+
+  it('opens unnarrowed when it was reached directly', async () => {
+    renderPage();
+    await screen.findByText('KSN-A');
+
+    // MUI leaves the picker blank on the empty option rather than printing its label, so
+    // the fact worth asserting is the request: no project named, every site listed.
+    expect(get).toHaveBeenCalledWith('/sites', {
+      params: { projectId: undefined, deleted: undefined },
+    });
   });
 });

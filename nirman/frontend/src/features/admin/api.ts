@@ -20,9 +20,11 @@ export const adminKeys = {
   users: (q: string, role: string) => ['admin', 'users', q, role] as const,
   allUsers: ['admin', 'users'] as const,
   roles: ['admin', 'roles'] as const,
-  sites: (projectId: string) => ['admin', 'sites', projectId] as const,
+  sites: (projectId: string, deleted: boolean) =>
+    ['admin', 'sites', projectId, deleted] as const,
   allSites: ['admin', 'sites'] as const,
-  projects: (q: string, status: string) => ['admin', 'projects', q, status] as const,
+  projects: (q: string, status: string, deleted: boolean) =>
+    ['admin', 'projects', q, status, deleted] as const,
   allProjects: ['admin', 'projects'] as const,
   project: (id: string) => ['admin', 'project', id] as const,
   boqItems: (projectId: string) => ['admin', 'boq-items', projectId] as const,
@@ -152,12 +154,19 @@ export function useResetPassword() {
   });
 }
 
-export function useAdminSites(projectId: string) {
+/**
+ * @param deleted asks for the deleted register instead of the live one. A swap, not an
+ *   addition — the server will not mix the two, and neither should a screen.
+ */
+export function useAdminSites(projectId: string, deleted = false) {
   return useQuery({
-    queryKey: adminKeys.sites(projectId),
+    queryKey: adminKeys.sites(projectId, deleted),
     queryFn: async () =>
-      (await apiClient.get<AdminSite[]>('/sites', { params: { projectId: projectId || undefined } }))
-        .data,
+      (
+        await apiClient.get<AdminSite[]>('/sites', {
+          params: { projectId: projectId || undefined, deleted: deleted || undefined },
+        })
+      ).data,
   });
 }
 
@@ -170,13 +179,26 @@ export function useAdminSites(projectId: string) {
  * <p>Both filters are optional so the pickers elsewhere (a site's project, for one) can go on
  * asking for the whole list.</p>
  */
-export function useProjects(q = '', status = '') {
+/**
+ * @param enabled hold the request back. The deleted list is behind {@code project:delete},
+ *   so a screen that offers it to admins must not fire it for everyone else and collect a
+ *   403 on mount.
+ */
+export function useProjects(q = '', status = '', deleted = false, enabled = true) {
   return useQuery({
-    queryKey: adminKeys.projects(q, status),
+    enabled,
+    queryKey: adminKeys.projects(q, status, deleted),
     queryFn: async () =>
       (
         await apiClient.get<PageResponse<AdminProject>>('/projects', {
-          params: { q: q || undefined, status: status || undefined, size: PAGE_SIZE },
+          params: {
+            q: q || undefined,
+            // The server ignores a status filter on the deleted list, and sending one
+            // would let the screen show an empty result it cannot explain.
+            status: deleted ? undefined : status || undefined,
+            deleted: deleted || undefined,
+            size: PAGE_SIZE,
+          },
         })
       ).data.content,
     staleTime: 15 * 60_000,
@@ -220,6 +242,61 @@ export function useUpdateProject() {
         .data,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.allProjects });
+    },
+  });
+}
+
+/**
+ * Deleting a project takes its sites with it, so both lists are invalidated — and so is the
+ * user list, because the postings to those sites end at the same moment.
+ */
+export function useDeleteProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) =>
+      // A body on a DELETE: the reason is required, and a query string would leave it in
+      // every access log between here and the server.
+      (await apiClient.delete<AdminProject>(`/projects/${id}`, { data: { reason } })).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allProjects });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allSites });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allUsers });
+    },
+  });
+}
+
+export function useRestoreProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await apiClient.post<AdminProject>(`/projects/${id}/restore`)).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allProjects });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allSites });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allUsers });
+    },
+  });
+}
+
+export function useDeleteSite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) =>
+      (await apiClient.delete<AdminSite>(`/sites/${id}`, { data: { reason } })).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allSites });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allUsers });
+    },
+  });
+}
+
+export function useRestoreSite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await apiClient.post<AdminSite>(`/sites/${id}/restore`)).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allSites });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allUsers });
     },
   });
 }

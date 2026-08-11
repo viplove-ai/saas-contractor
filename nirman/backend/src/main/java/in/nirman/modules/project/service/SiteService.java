@@ -1,6 +1,7 @@
 package in.nirman.modules.project.service;
 
 import in.nirman.common.BusinessException;
+import in.nirman.common.SiteDeletionGuard;
 import in.nirman.modules.audit.AuditService;
 import in.nirman.modules.identity.service.SiteStaffing;
 import in.nirman.modules.project.api.dto.ProjectDtos.CreateSiteRequest;
@@ -22,6 +23,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -46,18 +48,21 @@ public class SiteService implements SiteLookup {
     private final StoreRepository stores;
     private final ProjectRepository projects;
     private final SiteAccessGuard siteAccessGuard;
+    private final SiteDeletionGuard deletionGuard;
     private final SiteStaffing staffing;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
     private final ProjectMapper mapper;
 
     public SiteService(SiteRepository sites, StoreRepository stores, ProjectRepository projects,
-                       SiteAccessGuard siteAccessGuard, SiteStaffing staffing,
-                       CurrentUserProvider currentUser, AuditService audit, ProjectMapper mapper) {
+                       SiteAccessGuard siteAccessGuard, SiteDeletionGuard deletionGuard,
+                       SiteStaffing staffing, CurrentUserProvider currentUser,
+                       AuditService audit, ProjectMapper mapper) {
         this.sites = sites;
         this.stores = stores;
         this.projects = projects;
         this.siteAccessGuard = siteAccessGuard;
+        this.deletionGuard = deletionGuard;
         this.staffing = staffing;
         this.currentUser = currentUser;
         this.audit = audit;
@@ -79,6 +84,23 @@ public class SiteService implements SiteLookup {
                     .filter(s -> projectId == null || s.getProjectId().equals(projectId))
                     .toList();
         }
+        return result.stream().map(mapper::toResponse).toList();
+    }
+
+    /**
+     * The deleted sites, as their own view. Behind {@code site:delete} for the same reason
+     * the projects one is: only someone who can put a site back has a use for the list.
+     *
+     * <p>Not narrowed by assignment, and it does not need to be — deleting a site ends the
+     * postings to it, so a narrowed version of this list would always be empty.</p>
+     */
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAuthority('site:delete')")
+    public List<SiteResponse> listDeleted(UUID projectId) {
+        UUID orgId = currentUser.currentOrgId();
+        List<Site> result = projectId == null
+                ? sites.findByOrgIdAndDeletedAtIsNotNullOrderByCode(orgId)
+                : sites.findByOrgIdAndProjectIdAndDeletedAtIsNotNullOrderByCode(orgId, projectId);
         return result.stream().map(mapper::toResponse).toList();
     }
 
@@ -112,10 +134,16 @@ public class SiteService implements SiteLookup {
         UUID orgId = currentUser.currentOrgId();
         projects.findByIdAndOrgIdAndDeletedAtIsNull(request.projectId(), orgId)
                 .orElseThrow(() -> BusinessException.notFound("Project", request.projectId()));
-        if (sites.existsByOrgIdAndCode(orgId, request.code())) {
+        sites.findByOrgIdAndCode(orgId, request.code()).ifPresent(existing -> {
+            // Deleted sites keep their codes reserved so a restore cannot collide.
+            if (existing.isDeleted()) {
+                throw BusinessException.conflict("site.code-deleted",
+                        "Code '" + request.code() + "' belongs to a deleted site. Restore "
+                                + "that one from the deleted list, or use another code.");
+            }
             throw BusinessException.conflict("site.code-taken",
                     "A site with code '" + request.code() + "' already exists.");
-        }
+        });
         requireStaff(orgId, request.siteEngineerId(), request.supervisorId());
         Site site = new Site(orgId, request.projectId(), request.code(), request.name());
         applyMutableFields(site, request.name(), request.address(), request.latitude(),
@@ -151,6 +179,95 @@ public class SiteService implements SiteLookup {
                 Map.of("name", site.getName(), "status", site.getStatus().name(),
                         "standardShiftHours", site.getStandardShiftHours()), null);
         return mapper.toResponse(site);
+    }
+
+    /**
+     * Takes a site off the books.
+     *
+     * <p>Refused outright if anything has been recorded there — see {@link SiteDeletionGuard}.
+     * What survives the check is a site nobody ever used, so there is nothing to preserve
+     * and nothing to recompute.</p>
+     *
+     * <p>The postings to it end here too. Leaving {@code user_site_assignments} intact would
+     * leave a supervisor holding a live claim to a site that no longer appears anywhere, and
+     * the JWT they are carrying would still name it.</p>
+     */
+    @PreAuthorize("hasAuthority('site:delete')")
+    public SiteResponse delete(UUID id, String reason) {
+        Site site = sites.findByIdAndOrgId(id, currentUser.currentOrgId())
+                .orElseThrow(() -> BusinessException.notFound("Site", id));
+        // The same IDOR fence the live path has: an id is not a key to a site.
+        siteAccessGuard.assertCanAccess(site.getId());
+        if (site.isDeleted()) {
+            throw BusinessException.conflict("site.already-deleted",
+                    "This site has already been deleted.");
+        }
+        deletionGuard.assertDeletable(site.getId());
+        applyDelete(site, Instant.now(), reason);
+        return mapper.toResponse(site);
+    }
+
+    /**
+     * Deletes a site as part of its project going down, sharing the project's timestamp.
+     *
+     * <p>No {@code @PreAuthorize} and no guard call of its own: {@code ProjectService} has
+     * already checked the permission and run {@link SiteDeletionGuard} over every site at
+     * once, so that an administrator learns about all four blocked sites in one refusal
+     * rather than one per attempt.</p>
+     */
+    void deleteWithProject(Site site, Instant at, String reason) {
+        applyDelete(site, at, reason);
+    }
+
+    private void applyDelete(Site site, Instant at, String reason) {
+        site.delete(at, currentUser.currentUserIdOrNull(), reason);
+        Set<UUID> posted = staffIds(site.getSiteEngineerId(), site.getSupervisorId());
+        if (!posted.isEmpty()) {
+            staffing.updateSiteAccess(site.getOrgId(), site.getId(), Set.of(), posted);
+        }
+        audit.record("SITE", site.getId(), "DELETE",
+                Map.of("code", site.getCode(), "name", site.getName()),
+                Map.of("deletedAt", at.toString(), "reason", reason), reason);
+    }
+
+    /** Puts a site back, with the engineer and supervisor named on it posted to it again. */
+    @PreAuthorize("hasAuthority('site:delete')")
+    public SiteResponse restore(UUID id) {
+        Site site = sites.findByIdAndOrgId(id, currentUser.currentOrgId())
+                .orElseThrow(() -> BusinessException.notFound("Site", id));
+        if (!site.isDeleted()) {
+            throw BusinessException.conflict("site.not-deleted",
+                    "This site is not deleted, so there is nothing to restore.");
+        }
+        requireLiveProject(site.getProjectId());
+        applyRestore(site);
+        return mapper.toResponse(site);
+    }
+
+    /** @see #deleteWithProject — the same arrangement in reverse. */
+    void restoreWithProject(Site site) {
+        applyRestore(site);
+    }
+
+    private void applyRestore(Site site) {
+        site.restore();
+        Set<UUID> posted = staffIds(site.getSiteEngineerId(), site.getSupervisorId());
+        if (!posted.isEmpty()) {
+            staffing.updateSiteAccess(site.getOrgId(), site.getId(), posted, Set.of());
+        }
+        audit.record("SITE", site.getId(), "RESTORE", null,
+                Map.of("code", site.getCode(), "name", site.getName()), null);
+    }
+
+    /**
+     * A site cannot come back on its own while its project is off the books — it would be a
+     * site on no list, reachable only by id.
+     */
+    private void requireLiveProject(UUID projectId) {
+        projects.findByIdAndOrgIdAndDeletedAtIsNull(projectId, currentUser.currentOrgId())
+                .orElseThrow(() -> new BusinessException("site.project-deleted",
+                        "This site's project has been deleted. Restore the project and its "
+                                + "sites come back with it."));
     }
 
     @Transactional(readOnly = true)
