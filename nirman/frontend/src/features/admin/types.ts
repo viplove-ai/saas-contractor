@@ -39,6 +39,8 @@ export interface AdminSite {
   startDate?: string;
   standardShiftHours: number;
   monthlyWageDays: number;
+  /** Work here is let to labour contractors, so the day is head counts rather than a muster. */
+  usesOutsourcedLabour: boolean;
   /** Set only on rows from the deleted list; live lists never carry it. */
   deletedAt?: string;
   deletedBy?: string;

@@ -311,6 +311,7 @@ export interface SiteInput {
   startDate?: string | undefined;
   standardShiftHours: number;
   monthlyWageDays: number;
+  usesOutsourcedLabour: boolean;
   status?: SiteStatus | undefined;
 }
 
@@ -349,6 +350,7 @@ export function useUpdateSite() {
           startDate: input.startDate || undefined,
           standardShiftHours: input.standardShiftHours,
           monthlyWageDays: input.monthlyWageDays,
+          usesOutsourcedLabour: input.usesOutsourcedLabour,
           version: input.version,
         })
       ).data,

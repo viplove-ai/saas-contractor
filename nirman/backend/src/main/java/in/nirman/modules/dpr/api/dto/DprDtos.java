@@ -49,6 +49,7 @@ public final class DprDtos {
             boolean reportExists,
             UUID existingDprId,
             LabourPrefill labour,
+            OutsourcedPrefill outsourcedLabour,
             MaterialPrefill material,
             ExpensePrefill expense,
             boolean labourCostProvisional,
@@ -68,6 +69,12 @@ public final class DprDtos {
             List<LabourLine> lines) {
     }
 
+    /**
+     * @param outsourced the row is a head count from a contractor-run site rather than a
+     *                   line of the muster roll, so its hours are zero because nobody
+     *                   clocked them — not because the men stood idle. Never add an
+     *                   outsourced row's head count into the muster's.
+     */
     public record LabourLine(
             UUID skillCategoryId,
             String skillCategoryName,
@@ -75,7 +82,34 @@ public final class DprDtos {
             String labourContractorName,
             int headCount,
             BigDecimal regularHours,
-            BigDecimal overtimeHours) {
+            BigDecimal overtimeHours,
+            boolean outsourced) {
+    }
+
+    /**
+     * The contractor's men, counted at the gate rather than marked on a muster roll.
+     *
+     * <p>Kept apart from {@link LabourPrefill} rather than folded into its head count, and
+     * carrying no hours and no money. These men have no worker record and no wage rate —
+     * the contractor bills for the work — so a total that mixed them with our own labour
+     * would read as forty men earning wages when twenty-six of them are somebody else's
+     * bill.</p>
+     *
+     * @param enabled false for a site that keeps its own muster roll, in which case the
+     *                section is not drawn at all rather than drawn empty
+     */
+    public record OutsourcedPrefill(
+            boolean enabled,
+            int headCount,
+            List<OutsourcedLine> lines) {
+    }
+
+    public record OutsourcedLine(
+            UUID skillCategoryId,
+            String skillCategoryName,
+            UUID labourContractorId,
+            String labourContractorName,
+            int headCount) {
     }
 
     /**
@@ -254,6 +288,8 @@ public final class DprDtos {
             BigDecimal temperatureC,
             BigDecimal workingHoursLost,
             Integer labourPresentCount,
+            /** Contractor's men counted at the gate. Beside the present count, never in it. */
+            int outsourcedHeadCount,
             BigDecimal labourRegularHours,
             BigDecimal labourOvertimeHours,
             BigDecimal labourCost,

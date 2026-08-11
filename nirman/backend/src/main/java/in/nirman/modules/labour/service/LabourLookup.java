@@ -91,6 +91,32 @@ public interface LabourLookup {
     record DailyCost(LocalDate date, BigDecimal cost) {
     }
 
+    /**
+     * Men on site under a labour contractor, counted rather than marked.
+     *
+     * <p>Separate from {@link LabourDay} on purpose, and it carries <b>no cost and no
+     * hours</b>. These men have no worker record and no wage rate — the contractor bills for
+     * the work — so any money attached here would be invented. A DPR prints the counts
+     * beside the muster-roll labour and adds nothing of theirs to the day's cost.</p>
+     */
+    record OutsourcedDay(
+            LocalDate date,
+            boolean enabled,
+            int headCount,
+            List<OutsourcedGroup> groups) {
+    }
+
+    record OutsourcedGroup(
+            UUID skillCategoryId,
+            String skillCategoryName,
+            UUID labourContractorId,
+            String labourContractorName,
+            int headCount) {
+    }
+
+    /** No permission check: the caller has already passed the one that got it here. */
+    OutsourcedDay outsourced(UUID siteId, LocalDate date);
+
     /** No permission check: the caller has already passed the one that got it here. */
     LabourDay day(UUID siteId, LocalDate date);
 

@@ -95,6 +95,14 @@ public class DailyProgressReport extends BaseEntity {
     @Column(name = "labour_overtime_hours", precision = 10, scale = 2)
     private BigDecimal labourOvertimeHours;
 
+    /**
+     * Contractor's men counted at the gate. Frozen beside the present count and never added
+     * into it: these men have no hours and no wage behind them, so a reader who folded the
+     * two together would divide the day's wage bill by the wrong number of people.
+     */
+    @Column(name = "outsourced_head_count", nullable = false)
+    private int outsourcedHeadCount;
+
     /** Provisional until every underlying row is verified; the report says which. */
     @Column(name = "labour_cost", precision = 18, scale = 2)
     private BigDecimal labourCost;
@@ -200,11 +208,13 @@ public class DailyProgressReport extends BaseEntity {
      * <p>Called on every save while the report is a draft, and once more at submission. Never
      * afterwards: a verified report is a document, and a document that changes is not one.</p>
      */
-    public void applySnapshot(Integer presentCount, BigDecimal regularHours,
+    public void applySnapshot(Integer presentCount, int outsourcedHeadCount,
+                             BigDecimal regularHours,
                              BigDecimal overtimeHours, BigDecimal labourCost,
                              BigDecimal materialReceivedValue, BigDecimal materialConsumedValue,
                              BigDecimal costIncurred) {
         this.labourPresentCount = presentCount;
+        this.outsourcedHeadCount = outsourcedHeadCount;
         this.labourRegularHours = regularHours;
         this.labourOvertimeHours = overtimeHours;
         this.labourCost = labourCost;
@@ -268,6 +278,10 @@ public class DailyProgressReport extends BaseEntity {
 
     public Integer getLabourPresentCount() {
         return labourPresentCount;
+    }
+
+    public int getOutsourcedHeadCount() {
+        return outsourcedHeadCount;
     }
 
     public BigDecimal getLabourRegularHours() {

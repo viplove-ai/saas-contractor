@@ -148,7 +148,8 @@ public class SiteService implements SiteLookup {
         Site site = new Site(orgId, request.projectId(), request.code(), request.name());
         applyMutableFields(site, request.name(), request.address(), request.latitude(),
                 request.longitude(), request.siteEngineerId(), request.supervisorId(),
-                request.startDate(), request.standardShiftHours(), request.monthlyWageDays());
+                request.startDate(), request.standardShiftHours(), request.monthlyWageDays(),
+                request.usesOutsourcedLabour());
         sites.save(site);
         staffing.updateSiteAccess(orgId, site.getId(),
                 staffIds(request.siteEngineerId(), request.supervisorId()), Set.of());
@@ -170,7 +171,8 @@ public class SiteService implements SiteLookup {
         Set<UUID> previousStaff = staffIds(site.getSiteEngineerId(), site.getSupervisorId());
         applyMutableFields(site, request.name(), request.address(), request.latitude(),
                 request.longitude(), request.siteEngineerId(), request.supervisorId(),
-                request.startDate(), request.standardShiftHours(), request.monthlyWageDays());
+                request.startDate(), request.standardShiftHours(), request.monthlyWageDays(),
+                request.usesOutsourcedLabour());
         if (request.status() != null) {
             site.setStatus(request.status());
         }
@@ -320,7 +322,8 @@ public class SiteService implements SiteLookup {
     public SiteInfo require(UUID siteId) {
         Site site = requireSite(siteId);
         return new SiteInfo(site.getId(), site.getProjectId(), site.getOrgId(), site.getCode(),
-                site.getName(), site.getStandardShiftHours(), site.getMonthlyWageDays());
+                site.getName(), site.getStandardShiftHours(), site.getMonthlyWageDays(),
+                site.isUsesOutsourcedLabour());
     }
 
     /**
@@ -421,7 +424,8 @@ public class SiteService implements SiteLookup {
                                            java.math.BigDecimal latitude, java.math.BigDecimal longitude,
                                            UUID engineerId, UUID supervisorId,
                                            java.time.LocalDate startDate,
-                                           java.math.BigDecimal shiftHours, int wageDays) {
+                                           java.math.BigDecimal shiftHours, int wageDays,
+                                           boolean usesOutsourcedLabour) {
         site.setName(name);
         site.setAddress(address);
         site.setLatitude(latitude);
@@ -431,5 +435,6 @@ public class SiteService implements SiteLookup {
         site.setStartDate(startDate);
         site.setStandardShiftHours(shiftHours);
         site.setMonthlyWageDays(wageDays);
+        site.setUsesOutsourcedLabour(usesOutsourcedLabour);
     }
 }

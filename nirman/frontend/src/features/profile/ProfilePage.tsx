@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { useAuth } from '../auth/AuthContext';
 import { SignOutButton } from '../auth/SignOutButton';
-import { ROLE_LABEL } from '../../shared/roles';
+import { roleLabels } from '../../shared/roles';
 import { changePasswordSchema, type ChangePasswordForm } from './schema';
 
 /** "2 days ago", for a timestamp whose exact minute nobody needs. */
@@ -70,8 +70,8 @@ export function ProfilePage() {
         <Stack spacing={1.5}>
           <Row label="Username" value={user?.username ?? '—'} />
           <Row
-            label="Role"
-            value={(user?.roles ?? []).map((code) => ROLE_LABEL[code] ?? code).join(', ') || '—'}
+            label={(user?.roles.length ?? 0) > 1 ? 'Roles' : 'Role'}
+            value={roleLabels(user?.roles ?? []).join(', ') || '—'}
           />
           <Row label="Email" value={user?.email || 'Not set'} />
           <Row label="Mobile" value={user?.mobile || 'Not set'} />
@@ -86,7 +86,7 @@ export function ProfilePage() {
             )}
           </Stack>
           <Typography variant="body2" color="text.secondary">
-            Your name, role and site postings are set by an administrator.
+            Your name, roles and site postings are set by an administrator.
           </Typography>
           {/*
             Only when it is true, and phrased as the age of the answer rather than as a

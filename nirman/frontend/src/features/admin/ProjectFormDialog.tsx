@@ -233,6 +233,7 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
           status: 'ACTIVE',
           standardShiftHours: DEFAULT_SHIFT_HOURS,
           monthlyWageDays: DEFAULT_WAGE_DAYS,
+          usesOutsourcedLabour: false,
         });
         onClose();
         return;
@@ -300,6 +301,7 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
         status: 'ACTIVE',
         standardShiftHours: DEFAULT_SHIFT_HOURS,
         monthlyWageDays: DEFAULT_WAGE_DAYS,
+        usesOutsourcedLabour: false,
       });
     } catch (error) {
       throw new SiteFailedError(apiErrorDetail(error));

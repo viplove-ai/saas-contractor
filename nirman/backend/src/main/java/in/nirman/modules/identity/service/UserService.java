@@ -169,11 +169,26 @@ public class UserService {
         return requireUser(id).getRoles().stream().map(Role::getCode).sorted().toList();
     }
 
+    /**
+     * Replaces the whole set a member holds — they may hold several, and their permissions
+     * are the union. The set is sent complete rather than as a delta, so the caller's view
+     * of who someone is wins outright.
+     *
+     * <p>One refusal: you cannot take {@code role:assign} off yourself. Roles are edited as
+     * a set, so dropping the one that carries it is a single untick away, and it would leave
+     * the account unable to put it back — with nobody else necessarily holding it either.</p>
+     */
     @PreAuthorize("hasAuthority('role:assign')")
     public UserResponse putRoles(UUID id, AssignRolesRequest request) {
         User user = requireUser(id);
         List<String> before = user.getRoles().stream().map(Role::getCode).sorted().toList();
-        user.replaceRoles(resolveRoles(request.roleCodes()));
+        Set<Role> wanted = resolveRoles(request.roleCodes());
+        if (user.getId().equals(currentUser.currentUserIdOrNull()) && !grantsRoleAssign(wanted)) {
+            throw new BusinessException("user.self-role-lockout",
+                    "That would leave you unable to assign roles, including your own. "
+                            + "Ask another administrator to make this change.");
+        }
+        user.replaceRoles(wanted);
         audit.record("USER", user.getId(), "ROLES_CHANGED",
                 Map.of("roles", before), Map.of("roles", request.roleCodes()), null);
         return toResponse(user);
@@ -250,6 +265,13 @@ public class UserService {
             throw BusinessException.notFound("User", id);   // other orgs' users do not exist for you
         }
         return user;
+    }
+
+    /** The union of a set's permissions is what the member ends up holding — see AuthService. */
+    private static boolean grantsRoleAssign(Set<Role> roleSet) {
+        return roleSet.stream()
+                .flatMap(role -> role.getPermissions().stream())
+                .anyMatch(permission -> "role:assign".equals(permission.getCode()));
     }
 
     private Set<Role> resolveRoles(List<String> roleCodes) {

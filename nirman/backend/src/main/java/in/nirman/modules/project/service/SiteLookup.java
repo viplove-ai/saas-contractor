@@ -22,6 +22,11 @@ public interface SiteLookup {
      *                           {@code (site_id, project_id)} means they must agree
      * @param standardShiftHours overtime begins after this; 7.00 at Kausani, not the 8.00 default
      * @param monthlyWageDays    the divisor turning a monthly wage into a daily one
+     * @param usesOutsourcedLabour the day here is recorded as head counts per trade rather
+     *                             than as a muster roll, because the work is let to labour
+     *                             contractors. The labour module asks before it offers the
+     *                             counts screen, and the DPR asks before it prints the
+     *                             section.
      */
     record SiteInfo(
             UUID id,
@@ -30,7 +35,8 @@ public interface SiteLookup {
             String code,
             String name,
             BigDecimal standardShiftHours,
-            int monthlyWageDays) {
+            int monthlyWageDays,
+            boolean usesOutsourcedLabour) {
     }
 
     /**

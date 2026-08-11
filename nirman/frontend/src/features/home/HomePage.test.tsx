@@ -30,7 +30,14 @@ const SUPERVISOR = [
   'worker:read',
 ];
 
-const ENGINEER = ['attendance:verify', 'dpr:verify', 'inventory:read', 'dashboard:site'];
+const ENGINEER = [
+  'attendance:verify',
+  'dpr:verify',
+  'inventory:read',
+  'dashboard:site',
+  // He approves bills at the first level, which is what puts Approvals on his index.
+  'expense:approve:l1',
+];
 
 const ADMIN = [
   ...SUPERVISOR,
@@ -40,6 +47,8 @@ const ADMIN = [
   'site:write',
   'dashboard:company',
   'dashboard:dataquality',
+  'expense:approve:l2',
+  'payment:record',
 ];
 
 function renderHome() {
@@ -102,11 +111,29 @@ describe('HomePage', () => {
     expect(screen.queryByText('Projects')).not.toBeInTheDocument();
   });
 
+  /**
+   * He reads expenses — his own, which he entered — and approves none. Gating the tile on
+   * 'expense:read' put a screen of other people's bills in front of him that answered every
+   * one of them with "you cannot act on this".
+   */
+  it('keeps approvals and payments off a supervisor index, though he can read an expense', () => {
+    permissions = SUPERVISOR;
+    renderHome();
+
+    expect(permissions).toContain('expense:read');
+    expect(screen.queryByText('Approvals and payments')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Check and sign off' })).not.toBeInTheDocument();
+  });
+
   it('shows an engineer the sign-off group and not the entry screens he does not use', () => {
     permissions = ENGINEER;
     renderHome();
 
-    expect(tilesUnder('Check and sign off')).toEqual(['Verify attendance', 'Verify reports']);
+    expect(tilesUnder('Check and sign off')).toEqual([
+      'Verify attendance',
+      'Verify reports',
+      'Approvals and payments',
+    ]);
     expect(screen.queryByRole('heading', { name: 'Today at site' })).not.toBeInTheDocument();
     // He can still read the registers, which is a different group and a different act.
     expect(tilesUnder('Look something up')).toEqual(['Stock']);

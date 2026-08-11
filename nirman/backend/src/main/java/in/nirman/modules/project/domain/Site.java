@@ -63,6 +63,14 @@ public class Site extends BaseEntity {
     @Column(name = "monthly_wage_days", nullable = false)
     private int monthlyWageDays = 26;
 
+    /**
+     * The work here is let to labour contractors, so the day is recorded as head counts per
+     * trade instead of a muster roll. Off by default: a site with its own workers keeps the
+     * attendance it has, and its supervisor never sees the counts section.
+     */
+    @Column(name = "uses_outsourced_labour", nullable = false)
+    private boolean usesOutsourcedLabour;
+
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
@@ -172,6 +180,14 @@ public class Site extends BaseEntity {
 
     public void setMonthlyWageDays(int monthlyWageDays) {
         this.monthlyWageDays = monthlyWageDays;
+    }
+
+    public boolean isUsesOutsourcedLabour() {
+        return usesOutsourcedLabour;
+    }
+
+    public void setUsesOutsourcedLabour(boolean usesOutsourcedLabour) {
+        this.usesOutsourcedLabour = usesOutsourcedLabour;
     }
 
     public Instant getDeletedAt() {

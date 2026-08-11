@@ -27,6 +27,7 @@ import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatHours, formatQuantity } from '../../shared/formatters';
 import { StatusChip } from '../../shared/StatusChip';
 import {
+  useAttachDprPhoto,
   useBoqItems,
   useCreateDpr,
   usePrefill,
@@ -34,6 +35,12 @@ import {
   useSubmitDpr,
   useUpdateDpr,
 } from './api';
+import {
+  ExpenseCard,
+  MaterialCard,
+  OutsourcedLabourCard,
+  PhotoCard,
+} from './DayEntry';
 import type { Dpr, DprPrefill, MachineryInput, Weather, WorkItemInput } from './types';
 
 const STEPS = ['The day so far', 'Work done', 'Observations'];
@@ -97,10 +104,15 @@ export function DprWizardPage() {
   const [workLines, setWorkLines] = useState<WorkLine[]>([emptyWorkLine()]);
   const [machinery, setMachinery] = useState<MachineryLine[]>([]);
   const [saved, setSaved] = useState<Dpr | null>(null);
+  // Held here until there is a report to hang them off. Picked while he is looking at the
+  // work; sent with the save.
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   const sites = useSites();
   const prefill = usePrefill(siteId || undefined, reportDate);
   const boqItems = useBoqItems(siteId || undefined);
+  const attachPhoto = useAttachDprPhoto();
   const create = useCreateDpr();
   const update = useUpdateDpr();
   const submit = useSubmitDpr();
@@ -119,6 +131,11 @@ export function DprWizardPage() {
   }, [siteId, reportDate]);
 
   const alreadyExists = Boolean(prefill.data?.reportExists) && !saved;
+
+  /** Re-ask the day after an entry card saves, so the figures above it move as he types. */
+  function refreshDay() {
+    void prefill.refetch();
+  }
 
   const workItemById = useMemo(() => {
     const map = new Map<string, { itemNumber: string; description: string }>();
@@ -214,8 +231,42 @@ export function DprWizardPage() {
     return created;
   }
 
+  async function saveDraftWithPhotos() {
+    const draft = await saveDraft();
+    await uploadPhotos(draft.id);
+  }
+
+  /**
+   * Sends the photographs the supervisor picked, once there is a report to attach them to.
+   *
+   * <p>A failure here does not fail the save. The report is the record; a photograph that
+   * did not go up is worth saying out loud and worth trying again, and it is not worth
+   * throwing away a day's typing over.</p>
+   */
+  async function uploadPhotos(dprId: string) {
+    if (photos.length === 0) {
+      return;
+    }
+    setPhotoError(null);
+    const failed: File[] = [];
+    for (const file of photos) {
+      try {
+        await attachPhoto.mutateAsync({ dprId, siteId, file });
+      } catch {
+        failed.push(file);
+      }
+    }
+    setPhotos(failed);
+    if (failed.length > 0) {
+      setPhotoError(
+        `${failed.length} photograph(s) did not go up. The report is saved — try them again.`,
+      );
+    }
+  }
+
   async function saveAndSubmit() {
     const draft = await saveDraft();
+    await uploadPhotos(draft.id);
     const sent = await submit.mutateAsync(draft.id);
     setSaved(sent);
   }
@@ -283,7 +334,27 @@ export function DprWizardPage() {
       {error && <Alert severity="error">{apiErrorDetail(error)}</Alert>}
 
       {step === 0 && prefill.data && (
-        <PrefillStep data={prefill.data} onUseSuggestion={addSuggestion} />
+        <>
+          <PrefillStep data={prefill.data} onUseSuggestion={addSuggestion} />
+          {/*
+            Below the figures rather than above them, and in the order the day happens. What
+            the records already know comes first — most evenings that is the whole answer and
+            he scrolls past these — and what is still missing can be typed here rather than
+            on four other screens.
+          */}
+          <Typography variant="h2" sx={{ fontSize: '1.15rem', mt: 1 }}>
+            Anything not entered yet
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
+            Each box saves on its own, into the same records the other screens write to.
+          </Typography>
+          <OutsourcedLabourCard siteId={siteId} date={reportDate} onSaved={refreshDay} />
+          <MaterialCard siteId={siteId} date={reportDate} mode="RECEIVED" onSaved={refreshDay} />
+          <MaterialCard siteId={siteId} date={reportDate} mode="USED" onSaved={refreshDay} />
+          <ExpenseCard siteId={siteId} date={reportDate} onSaved={refreshDay} />
+          <PhotoCard files={photos} onChange={setPhotos} uploaded={saved?.photos.length ?? 0} />
+          {photoError && <Alert severity="warning">{photoError}</Alert>}
+        </>
       )}
 
       {step === 1 && (
@@ -404,7 +475,7 @@ export function DprWizardPage() {
             <>
               <Button
                 variant="outlined"
-                onClick={() => void saveDraft()}
+                onClick={() => void saveDraftWithPhotos()}
                 disabled={busy || alreadyExists || !siteId}
               >
                 Save draft

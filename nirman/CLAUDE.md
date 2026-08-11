@@ -156,6 +156,11 @@ if the tests pass:
   per call through each module's read API. A cached total is a second version of the truth.
 - **Claiming work is its own act.** A quantity reaches the measurement book only when an
   engineer verifies the report, and only once.
+- **A head count is not attendance.** On a site flagged `uses_outsourced_labour`, the day is
+  recorded as counts per trade in `site_labour_counts` — no worker, no wage rate, no ledger
+  posting, because the contractor bills for the work. The DPR prints them beside the muster
+  roll and never inside its head count; `dpr_labour.outsourced` is what keeps the two apart
+  once the report is frozen.
 
 ### Error contract
 
@@ -212,7 +217,7 @@ offline read actually reaches that cache instead of being paused before it fires
 
 ## Database changes
 
-Additive migrations only — an applied migration is **never** edited. Add `V12__…sql` in
+Additive migrations only — an applied migration is **never** edited. Add `V14__…sql` in
 `backend/src/main/resources/db/migration/` and restart the backend.
 
 Before a migration has been applied anywhere, `./scripts/dev.sh reset-db` replays from the

@@ -46,7 +46,8 @@ export const userFormSchema = z
     email: optionalEmail,
     mobile: requiredMobile,
     temporaryPassword: z.string(),
-    roleCode: z.string().min(1, 'Choose a role'),
+    // A set, not a choice: one person can be the site engineer and keep the books.
+    roleCodes: z.array(z.string()).min(1, 'Choose at least one role'),
     siteIds: z.array(z.string()),
   })
   .superRefine((form, ctx) => {
@@ -135,6 +136,7 @@ export const siteSchema = z.object({
     .number({ invalid_type_error: 'Enter the shift length in hours' })
     .min(0.5, 'At least 0.5 hours')
     .max(24, 'At most 24 hours'),
+  usesOutsourcedLabour: z.boolean(),
   monthlyWageDays: z.coerce
     .number({ invalid_type_error: 'Enter the days in a wage month' })
     .int('Whole days only')

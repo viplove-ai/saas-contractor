@@ -41,6 +41,12 @@ export interface LabourLine {
   headCount: number;
   regularHours: number;
   overtimeHours: number;
+  /**
+   * A head count from a contractor-run site rather than a line of the muster roll. Its hours
+   * are zero because nobody clocked them, not because the men stood idle — so it is never
+   * added into the muster's head count.
+   */
+  outsourced?: boolean;
 }
 
 export interface LabourPrefill {
@@ -103,11 +109,60 @@ export interface DprPrefill {
   reportExists: boolean;
   existingDprId?: string;
   labour: LabourPrefill;
+  outsourcedLabour: OutsourcedPrefill;
   material: MaterialPrefill;
   expense: ExpensePrefill;
   labourCostProvisional: boolean;
   suggestedWorkItems: SuggestedWorkItem[];
   caveat: string;
+}
+
+/**
+ * The contractor's men, counted rather than marked. Never added into the muster's head
+ * count: these men have no hours and no wage behind them.
+ */
+export interface OutsourcedPrefill {
+  /** False for a site that keeps its own muster roll — the section is not drawn at all. */
+  enabled: boolean;
+  headCount: number;
+  lines: OutsourcedLine[];
+}
+
+export interface OutsourcedLine {
+  skillCategoryId: string;
+  skillCategoryName?: string;
+  labourContractorId?: string;
+  labourContractorName?: string;
+  headCount: number;
+}
+
+/** A material as the report's quick-entry rows need it: what to call it and what it counts in. */
+export interface DprMaterial {
+  id: string;
+  code: string;
+  name: string;
+  baseUnitId: string;
+  baseUnitCode?: string;
+}
+
+export interface LabourCountLine {
+  skillCategoryId: string;
+  labourContractorId?: string | undefined;
+  headCount: number;
+  remarks?: string | undefined;
+}
+
+export interface DayCounts {
+  siteId: string;
+  date: string;
+  enabled: boolean;
+  periodLocked: boolean;
+  totalHeadCount: number;
+  lines: (LabourCountLine & {
+    id: string;
+    skillCategoryName?: string;
+    labourContractorName?: string;
+  })[];
 }
 
 // ---------------------------------------------------------------- the report
@@ -157,6 +212,8 @@ export interface Dpr {
   temperatureC?: number;
   workingHoursLost?: number;
   labourPresentCount?: number;
+  /** Contractor's men counted at the gate. Frozen beside the present count, never inside it. */
+  outsourcedHeadCount?: number;
   labourRegularHours?: number;
   labourOvertimeHours?: number;
   labourCost?: number;

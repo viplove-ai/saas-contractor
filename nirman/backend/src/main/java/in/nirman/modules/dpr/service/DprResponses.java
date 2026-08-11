@@ -90,7 +90,8 @@ public class DprResponses {
         return new DprResponse(report.getId(), report.getDprNumber(), report.getSiteId(),
                 siteName(report.getSiteId()), report.getProjectId(), report.getReportDate(),
                 report.getWeather(), report.getTemperatureC(), report.getWorkingHoursLost(),
-                report.getLabourPresentCount(), report.getLabourRegularHours(),
+                report.getLabourPresentCount(), report.getOutsourcedHeadCount(),
+                report.getLabourRegularHours(),
                 report.getLabourOvertimeHours(), report.getLabourCost(),
                 report.getMaterialReceivedValue(), report.getMaterialConsumedValue(),
                 report.getExpenseAmount(), dayCost(report), frozen,
@@ -153,9 +154,13 @@ public class DprResponses {
                         line.getLabourContractorId(),
                         line.getLabourContractorId() == null
                                 ? null : contractorNames.get(line.getLabourContractorId()),
-                        line.getHeadCount(), line.getRegularHours(), line.getOvertimeHours()))
-                .sorted(java.util.Comparator.comparing(line ->
-                        line.skillCategoryName() == null ? "￿" : line.skillCategoryName()))
+                        line.getHeadCount(), line.getRegularHours(), line.getOvertimeHours(),
+                        line.isOutsourced()))
+                // Ours first, then the contractor's, each alphabetical by trade: the report
+                // reads as two blocks because they are two different kinds of fact.
+                .sorted(java.util.Comparator.comparing(LabourLine::outsourced)
+                        .thenComparing(line ->
+                                line.skillCategoryName() == null ? "￿" : line.skillCategoryName()))
                 .toList();
     }
 

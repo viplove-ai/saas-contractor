@@ -35,6 +35,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -343,8 +344,10 @@ public class DprService {
     private void refreshSnapshot(DailyProgressReport report) {
         Rollup rollup = prefill.rollup(report.getSiteId(), report.getReportDate());
         LabourLookup.LabourDay labour = rollup.labour();
+        LabourLookup.OutsourcedDay outsourced = rollup.outsourced();
 
-        report.applySnapshot(labour.presentCount(), labour.regularHours(), labour.overtimeHours(),
+        report.applySnapshot(labour.presentCount(), outsourced.headCount(), labour.regularHours(),
+                labour.overtimeHours(),
                 labour.cost(), rollup.material().receivedValue(), rollup.material().consumedValue(),
                 rollup.expense().costIncurred());
 
@@ -355,6 +358,12 @@ public class DprService {
         labour.groups().forEach(group -> labourLines.save(new DprLabour(report.getId(),
                 group.skillCategoryId(), group.labourContractorId(), group.headCount(),
                 group.regularHours(), group.overtimeHours())));
+        // The contractor's gang, on the same table and flagged apart. Hours are zero because
+        // nobody clocked them, not because they stood idle — which is exactly why the flag
+        // has to travel with the row rather than being inferred from the zero.
+        outsourced.groups().forEach(group -> labourLines.save(new DprLabour(report.getId(),
+                group.skillCategoryId(), group.labourContractorId(), group.headCount(),
+                BigDecimal.ZERO, BigDecimal.ZERO, true)));
     }
 
     private void replaceWorkItems(DailyProgressReport report, List<WorkItemInput> lines) {

@@ -46,6 +46,7 @@ const SITES: AdminSite[] = [
     status: 'ACTIVE',
     standardShiftHours: 7,
     monthlyWageDays: 26,
+    usesOutsourcedLabour: false,
     version: 2,
   },
 ];

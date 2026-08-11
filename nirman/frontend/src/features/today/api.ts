@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useAuth } from '../auth/AuthContext';
 import { useRoster, useSites, useVerificationQueue } from '../attendance/api';
 import { iso, monthToDate, useSiteDashboard } from '../dashboard/api';
 import { offlineDb, UNSENT_STATUSES } from '../../offline/db';
@@ -18,11 +19,23 @@ export function useToday(siteId: string | undefined) {
   const today = iso(new Date());
   const period = useMemo(monthToDate, []);
 
+  const { hasPermission } = useAuth();
+  // A supervisor holds neither. The screen is still his — the muster and the day's entry are
+  // his whole job — so the two reads are not fired rather than fired and refused.
+  const seesDashboard = hasPermission('dashboard:site');
+  const signsOff = hasPermission('attendance:verify');
+
   const sites = useSites();
   const roster = useRoster(siteId, today);
-  const dashboard = useSiteDashboard(siteId, period.from, period.to);
+  const dashboard = useSiteDashboard(siteId, period.from, period.to, seesDashboard);
   // A week back: anything older is a month-end problem, not a this-morning one.
-  const toVerify = useVerificationQueue(siteId, iso(addDays(new Date(), -7)), today, 'SUBMITTED');
+  const toVerify = useVerificationQueue(
+    siteId,
+    iso(addDays(new Date(), -7)),
+    today,
+    'SUBMITTED',
+    signsOff,
+  );
 
   const unsent = useLiveQuery(
     async () => ({
@@ -60,7 +73,9 @@ export function useToday(siteId: string | undefined) {
     signoffCount: attendanceRowsToVerify + billsToApprove + reportsToVerify,
     waiting: { attendanceRowsToVerify, billsToApprove, draftReports, reportsToVerify },
     unsent,
-    isLoading: roster.isLoading || dashboard.isLoading,
+    /** What this account may be shown, so the screen does not render empty panels. */
+    can: { seesDashboard, signsOff },
+    isLoading: roster.isLoading || (seesDashboard && dashboard.isLoading),
   };
 }
 

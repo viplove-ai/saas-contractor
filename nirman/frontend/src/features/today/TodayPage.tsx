@@ -94,6 +94,13 @@ export function TodayPage() {
             standardShiftHours={t.muster.standardShiftHours}
           />
 
+          {/*
+            A supervisor signs nothing off — no attendance to verify, no bill to approve, no
+            report to counter-sign — so the band would be a permanent "nothing is waiting on
+            you". His unfinished draft still is waiting on him, and it moves to the report
+            card below where the rest of his day already is.
+          */}
+          {(t.can.signsOff || t.can.seesDashboard) && (
           <Section label={`WAITING ON YOU · ${t.signoffCount}`}>
             {t.signoffCount === 0 && t.waiting.draftReports === 0 ? (
               <Typography sx={marginNote}>Nothing is waiting on your signature.</Typography>
@@ -149,14 +156,28 @@ export function TodayPage() {
               </Stack>
             )}
           </Section>
+          )}
+
+          {/*
+            The end of the supervisor's day, and the reason the four buttons below it are
+            optional rather than required: whatever he did not enter as it happened, he can
+            enter here, and the report is what reaches the office either way.
+          */}
+          <DailyReportCard
+            draftCount={t.waiting.draftReports}
+            emphasise={!t.can.signsOff}
+            siteName={t.site?.name}
+          />
 
           <Section label="ENTER SOMETHING">
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 1.25 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(3, 1fr)' }, gap: 1.25 }}>
               <EntryButton seed={0} to="/inventory/receive" label="Receive material" />
               <EntryButton seed={1} to="/inventory/issue" label="Issue material" />
               <EntryButton seed={2} to="/expenses/new" label="Add expense" />
-              <EntryButton seed={3} to="/dpr/new" label="Daily report" />
             </Box>
+            <Typography sx={{ ...marginNote, mt: 1 }}>
+              Or leave them and enter the lot on tonight&rsquo;s report.
+            </Typography>
           </Section>
 
           {t.unsent.waiting > 0 && (
@@ -336,6 +357,49 @@ function MusterCard({
           )}
         </Stack>
       )}
+    </Paper>
+  );
+}
+
+/**
+ * The day's report, as a card rather than a button.
+ *
+ * <p>For a supervisor this is the end of the day and the only thing that reaches the office,
+ * so it is the second emphasised card on the screen — after the muster, which is the start of
+ * the day. For an engineer, who has a sign-off band above it, it stays quiet: he writes
+ * reports too, but somebody else's report waiting on his signature ranks higher.</p>
+ */
+function DailyReportCard({
+  draftCount,
+  emphasise,
+  siteName,
+}: {
+  draftCount: number;
+  emphasise: boolean;
+  siteName: string | undefined;
+}) {
+  const resuming = draftCount > 0;
+  return (
+    <Paper variant="outlined" sx={{ ...inkEdge(2, { emphasis: emphasise && !resuming }), p: 2.5 }}>
+      <Typography variant="overline" sx={{ color: resuming ? 'secondary.main' : tokens.annotation }}>
+        {resuming ? `${draftCount} REPORT(S) STILL A DRAFT` : 'END OF THE DAY'}
+      </Typography>
+      <Typography variant="h2" sx={{ mt: 1 }}>
+        Today&rsquo;s report
+      </Typography>
+      <Typography color="text.secondary" sx={{ mt: 0.5, maxWidth: '52ch' }}>
+        {resuming
+          ? 'Started and not sent. A draft is not a report — the office sees nothing until it goes.'
+          : `Labour, material and spending${siteName ? ` at ${siteName}` : ''} for the day, in one place. Anything already entered is filled in for you.`}
+      </Typography>
+      <Stack direction="row" spacing={1.5} sx={{ mt: 2 }} flexWrap="wrap" useFlexGap>
+        <Button component={Link} to="/dpr/new" variant="contained" color="secondary">
+          {resuming ? 'Finish the report' : "Write today's report"}
+        </Button>
+        <Button component={Link} to="/dprs" variant="outlined">
+          Past reports
+        </Button>
+      </Stack>
     </Paper>
   );
 }

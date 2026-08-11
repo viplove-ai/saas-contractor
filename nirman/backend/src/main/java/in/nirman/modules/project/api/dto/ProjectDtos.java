@@ -119,6 +119,8 @@ public final class ProjectDtos {
             LocalDate startDate,
             BigDecimal standardShiftHours,
             int monthlyWageDays,
+            /** Work here is let to labour contractors, so the day is head counts per trade. */
+            boolean usesOutsourcedLabour,
             Instant deletedAt,
             UUID deletedBy,
             String deletedReason,
@@ -151,7 +153,8 @@ public final class ProjectDtos {
             @NotNull @Digits(integer = 2, fraction = 2)
             @jakarta.validation.constraints.DecimalMin(value = "0.5")
             @jakarta.validation.constraints.DecimalMax(value = "24.0") BigDecimal standardShiftHours,
-            @Min(1) @Max(31) int monthlyWageDays) {
+            @Min(1) @Max(31) int monthlyWageDays,
+            boolean usesOutsourcedLabour) {
     }
 
     public record UpdateSiteRequest(
@@ -167,6 +170,7 @@ public final class ProjectDtos {
             @jakarta.validation.constraints.DecimalMin(value = "0.5")
             @jakarta.validation.constraints.DecimalMax(value = "24.0") BigDecimal standardShiftHours,
             @Min(1) @Max(31) int monthlyWageDays,
+            boolean usesOutsourcedLabour,
             @NotNull Long version) {
     }
 

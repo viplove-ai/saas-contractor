@@ -49,6 +49,7 @@ const SITES: AdminSite[] = [
     status: 'ACTIVE',
     standardShiftHours: 7,
     monthlyWageDays: 26,
+    usesOutsourcedLabour: false,
     version: 0,
   },
 ];
@@ -77,10 +78,23 @@ const USERS: PageResponse<AdminUser> = {
       siteIds: ['site-a'],
       version: 3,
     },
+    // Several hats, which is the normal case on a small contractor's staff rather than an
+    // exotic one: the engineer who also keeps the books and is posted to a site.
+    {
+      id: 'u-both',
+      username: 'uttam',
+      fullName: 'Uttam Rana',
+      mobile: '+91-9800000002',
+      active: true,
+      mustChangePassword: false,
+      roles: ['ACCOUNTANT', 'ENGINEER'],
+      siteIds: ['site-a'],
+      version: 5,
+    },
   ],
   page: 0,
   size: 100,
-  totalElements: 2,
+  totalElements: 3,
   totalPages: 1,
   first: true,
   last: true,
@@ -124,6 +138,17 @@ describe('UsersPage', () => {
     expect(within(supervisorRow).getByText('Password not set')).toBeInTheDocument();
   });
 
+  // Visibility follows the widest role held, exactly as the server's site claim does, so a
+  // company-wide role held alongside a site-scoped one must not read as "this site only".
+  it('lists every role held, and says the widest one decides what they see', async () => {
+    renderPage();
+    const bothRow = (await screen.findByText('Uttam Rana')).closest('tr') as HTMLElement;
+
+    expect(within(bothRow).getByText('Accountant')).toBeInTheDocument();
+    expect(within(bothRow).getByText('Site engineer')).toBeInTheDocument();
+    expect(within(bothRow).getByText('All sites · posted at KSN-A')).toBeInTheDocument();
+  });
+
   it('onboards a member with a first-time password and one role', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
@@ -164,19 +189,59 @@ describe('UsersPage', () => {
     await waitFor(() => expect(screen.queryByText(/Not posted anywhere yet/)).toBeNull());
   });
 
-  it('drops site postings when a member is moved to a company-wide role', async () => {
+  it('drops site postings when the last site-scoped role is taken away', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
     await screen.findByText('Vivek Aggarwal');
 
     const supervisorRow = screen.getByText('Vivek Aggarwal').closest('tr') as HTMLElement;
     await user.click(within(supervisorRow).getByRole('button', { name: 'Edit' }));
-    await user.click(await screen.findByRole('combobox', { name: 'Role' }));
-    await user.click(await screen.findByRole('option', { name: 'Accountant' }));
+    await user.click(await screen.findByRole('checkbox', { name: 'Site supervisor' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Accountant' }));
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(put).toHaveBeenCalledWith('/users/u-super/sites', { siteIds: [] }));
     expect(put).toHaveBeenCalledWith('/users/u-super/roles', { roleCodes: ['ACCOUNTANT'] });
+  });
+
+  // The dialog used to open on roles[0] and send that one back, so saving an unrelated field
+  // on a member with several hats silently took the others away.
+  it('opens on every role a member holds and sends the whole set back', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findByText('Uttam Rana');
+
+    const bothRow = screen.getByText('Uttam Rana').closest('tr') as HTMLElement;
+    await user.click(within(bothRow).getByRole('button', { name: 'Edit' }));
+
+    expect(await screen.findByRole('checkbox', { name: 'Accountant' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Site engineer' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Administrator' })).not.toBeChecked();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Site supervisor' }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() =>
+      expect(put).toHaveBeenCalledWith('/users/u-both/roles', {
+        roleCodes: ['ACCOUNTANT', 'ENGINEER', 'SUPERVISOR'],
+      }),
+    );
+    // Still site-scoped, so the postings survive the edit rather than being cleared.
+    expect(put).toHaveBeenCalledWith('/users/u-both/sites', { siteIds: ['site-a'] });
+  });
+
+  it('refuses to save a member with no role at all', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findByText('Vivek Aggarwal');
+
+    const supervisorRow = screen.getByText('Vivek Aggarwal').closest('tr') as HTMLElement;
+    await user.click(within(supervisorRow).getByRole('button', { name: 'Edit' }));
+    await user.click(await screen.findByRole('checkbox', { name: 'Site supervisor' }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByText('Choose at least one role')).toBeInTheDocument();
+    expect(put).not.toHaveBeenCalled();
   });
 
   it('shows the reset password once, after the reset has gone through', async () => {
