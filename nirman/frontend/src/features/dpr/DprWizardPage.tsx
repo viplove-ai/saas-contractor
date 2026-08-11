@@ -14,17 +14,13 @@ import {
   Step,
   StepLabel,
   Stepper,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatHours, formatQuantity } from '../../shared/formatters';
+import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
 import { StatusChip } from '../../shared/StatusChip';
 import {
   useBoqItems,
@@ -34,9 +30,62 @@ import {
   useSubmitDpr,
   useUpdateDpr,
 } from './api';
-import type { Dpr, DprPrefill, MachineryInput, Weather, WorkItemInput } from './types';
+import type {
+  Dpr,
+  DprPrefill,
+  LabourLine,
+  MachineryInput,
+  MaterialLine,
+  Weather,
+  WorkItemInput,
+} from './types';
 
 const STEPS = ['The day so far', 'Work done', 'Observations'];
+
+/** The day's men, grouped the way the muster groups them. */
+const LABOUR_COLUMNS: RecordColumn<LabourLine>[] = [
+  {
+    key: 'trade',
+    header: 'Trade',
+    card: 'title',
+    cell: (line) => line.skillCategoryName ?? 'Unspecified',
+  },
+  {
+    key: 'contractor',
+    header: 'Contractor',
+    cell: (line) => line.labourContractorName ?? 'Direct',
+  },
+  { key: 'men', header: 'Men', align: 'right', cell: (line) => line.headCount },
+  {
+    key: 'regular',
+    header: 'Regular',
+    align: 'right',
+    cell: (line) => formatHours(line.regularHours),
+  },
+  {
+    key: 'overtime',
+    header: 'Overtime',
+    align: 'right',
+    cell: (line) => formatHours(line.overtimeHours),
+  },
+];
+
+/** Received and consumed side by side, per material. Never added — see the note below. */
+const MATERIAL_COLUMNS: RecordColumn<MaterialLine>[] = [
+  { key: 'material', header: 'Material', card: 'title', cell: (line) => line.materialName },
+  {
+    key: 'received',
+    header: 'Received',
+    align: 'right',
+    cell: (line) => formatQuantity(line.receivedQty, line.baseUnitCode),
+  },
+  {
+    key: 'consumed',
+    header: 'Consumed',
+    align: 'right',
+    cell: (line) => formatQuantity(line.consumedQty, line.baseUnitCode),
+  },
+];
 
 const WEATHER: { value: Weather; label: string }[] = [
   { value: 'CLEAR', label: 'Clear' },
@@ -466,28 +515,15 @@ function PrefillStep({
           </Alert>
         )}
         {data.labour.lines.length > 0 && (
-          <Table size="small" sx={{ mt: 1.5 }}>
-            <TableHead>
-              <TableRow>
-                <TableCell>Trade</TableCell>
-                <TableCell>Contractor</TableCell>
-                <TableCell align="right">Men</TableCell>
-                <TableCell align="right">Regular</TableCell>
-                <TableCell align="right">Overtime</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {data.labour.lines.map((line, index) => (
-                <TableRow key={`${line.skillCategoryId ?? 'none'}-${index}`}>
-                  <TableCell>{line.skillCategoryName ?? 'Unspecified'}</TableCell>
-                  <TableCell>{line.labourContractorName ?? 'Direct'}</TableCell>
-                  <TableCell align="right">{line.headCount}</TableCell>
-                  <TableCell align="right">{formatHours(line.regularHours)}</TableCell>
-                  <TableCell align="right">{formatHours(line.overtimeHours)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <RecordTable
+            nested
+            columns={LABOUR_COLUMNS}
+            rows={data.labour.lines}
+            rowKey={(line) =>
+              `${line.skillCategoryId ?? 'none'}-${line.labourContractorId ?? 'direct'}`
+            }
+            ariaLabel="Labour on site"
+          />
         )}
       </Paper>
 
@@ -507,28 +543,13 @@ function PrefillStep({
           <Figure label="Issues" value={String(data.material.issueCount)} />
         </Stack>
         {data.material.lines.length > 0 && (
-          <Table size="small" sx={{ mt: 1.5 }}>
-            <TableHead>
-              <TableRow>
-                <TableCell>Material</TableCell>
-                <TableCell align="right">Received</TableCell>
-                <TableCell align="right">Consumed</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {data.material.lines.map((line) => (
-                <TableRow key={line.materialId}>
-                  <TableCell>{line.materialName}</TableCell>
-                  <TableCell align="right">
-                    {formatQuantity(line.receivedQty, line.baseUnitCode)}
-                  </TableCell>
-                  <TableCell align="right">
-                    {formatQuantity(line.consumedQty, line.baseUnitCode)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <RecordTable
+            nested
+            columns={MATERIAL_COLUMNS}
+            rows={data.material.lines}
+            rowKey={(line) => line.materialId}
+            ariaLabel="Material moved today"
+          />
         )}
       </Paper>
 

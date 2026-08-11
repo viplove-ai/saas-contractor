@@ -600,10 +600,20 @@ public class AttendanceService {
         }
     }
 
+    /**
+     * The org's labour policy, or the default one if nobody has written a row yet.
+     *
+     * <p>This used to throw, and the effect was that an organisation whose settings row had
+     * never been inserted got a 422 on the muster itself — a supervisor with no workers on a
+     * new site was told that "labour settings have not been configured", which is neither
+     * something he can act on nor the thing actually stopping him. Nothing here reads more
+     * than the overtime threshold, and that threshold has a default declared twice already
+     * (the column default in V1 and the field initialiser on the entity). Returning it is the
+     * same answer an inserted row would have given, so the screen loads and says what is
+     * really missing, which is men.</p>
+     */
     private LabourSettings settings() {
-        return labourSettings.findByOrgId(orgId())
-                .orElseThrow(() -> new BusinessException("labour.settings-missing",
-                        "Labour settings have not been configured for this organisation."));
+        return labourSettings.findByOrgId(orgId()).orElseGet(() -> new LabourSettings(orgId()));
     }
 
     private AttendanceRecord requireRecord(UUID id) {

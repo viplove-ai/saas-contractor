@@ -5,18 +5,13 @@ import {
   Chip,
   CircularProgress,
   MenuItem,
-  Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
 } from '@mui/material';
 import { useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
+import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
 import { isSiteScopedRole, ROLE_LABEL } from '../../shared/roles';
 import { useAuth } from '../auth/AuthContext';
 import { useAdminSites, useUpdateUserStatus, useUsers } from './api';
@@ -81,6 +76,91 @@ export function UsersPage() {
     setFormOpen(true);
   };
 
+  const columns: RecordColumn<AdminUser>[] = [
+    {
+      key: 'member',
+      header: 'Member',
+      card: 'title',
+      cell: (member) => (
+        <>
+          <Typography fontWeight={600}>{member.fullName}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {member.username}
+            {member.mobile ? ` · ${member.mobile}` : ''}
+          </Typography>
+        </>
+      ),
+    },
+    {
+      key: 'role',
+      header: 'Role',
+      cell: (member) =>
+        member.roles.map((code) => (
+          <Chip key={code} size="small" label={ROLE_LABEL[code] ?? code} sx={{ mr: 0.5 }} />
+        )),
+    },
+    {
+      key: 'sites',
+      header: 'Sites',
+      cell: (member) =>
+        /*
+          A blank cell would read as "no access" for an admin, who in fact reaches
+          everything — so the company-wide roles say so in words.
+        */
+        isSiteScoped(member)
+          ? member.siteIds.map(siteLabel).join(', ') || 'None yet'
+          : 'All sites',
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      card: 'status',
+      cell: (member) => (
+        <Stack direction="row" spacing={0.5}>
+          <Chip
+            size="small"
+            color={member.active ? 'success' : 'default'}
+            variant={member.active ? 'filled' : 'outlined'}
+            label={member.active ? 'Active' : 'Disabled'}
+          />
+          {member.mustChangePassword && (
+            <Chip size="small" variant="outlined" label="Password not set" />
+          )}
+        </Stack>
+      ),
+    },
+    ...(canWrite
+      ? [
+          {
+            key: 'actions',
+            header: 'Actions',
+            align: 'right' as const,
+            card: 'actions' as const,
+            cell: (member: AdminUser) => (
+              <>
+                <Button size="small" onClick={() => openEdit(member)}>
+                  Edit
+                </Button>
+                <Button size="small" onClick={() => setResetting(member)}>
+                  Reset password
+                </Button>
+                <Button
+                  size="small"
+                  color={member.active ? 'error' : 'primary'}
+                  onClick={() => toggleActive(member)}
+                  // An admin who disabled their own account would be locked out of the
+                  // screen that could re-enable it; the server refuses this too.
+                  disabled={member.id === signedInUser?.id}
+                >
+                  {member.active ? 'Disable' : 'Enable'}
+                </Button>
+              </>
+            ),
+          },
+        ]
+      : []),
+  ];
+
   return (
     <Stack spacing={3}>
       <Stack
@@ -133,90 +213,13 @@ export function UsersPage() {
       {users.isError && <Alert severity="error">{apiErrorDetail(users.error)}</Alert>}
 
       {users.data && (
-        <Paper elevation={0} sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Member</TableCell>
-                <TableCell>Role</TableCell>
-                <TableCell>Sites</TableCell>
-                <TableCell>Status</TableCell>
-                {canWrite && <TableCell align="right">Actions</TableCell>}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {users.data.content.map((member) => (
-                <TableRow key={member.id} hover>
-                  <TableCell>
-                    <Typography fontWeight={600}>{member.fullName}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {member.username}
-                      {member.mobile ? ` · ${member.mobile}` : ''}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    {member.roles.map((code) => (
-                      <Chip key={code} size="small" label={ROLE_LABEL[code] ?? code} sx={{ mr: 0.5 }} />
-                    ))}
-                  </TableCell>
-                  <TableCell>
-                    {/*
-                      A blank cell would read as "no access" for an admin, who in fact
-                      reaches everything — so the company-wide roles say so in words.
-                    */}
-                    {isSiteScoped(member)
-                      ? member.siteIds.map(siteLabel).join(', ') || 'None yet'
-                      : 'All sites'}
-                  </TableCell>
-                  <TableCell>
-                    <Stack direction="row" spacing={0.5}>
-                      <Chip
-                        size="small"
-                        color={member.active ? 'success' : 'default'}
-                        variant={member.active ? 'filled' : 'outlined'}
-                        label={member.active ? 'Active' : 'Disabled'}
-                      />
-                      {member.mustChangePassword && (
-                        <Chip size="small" variant="outlined" label="Password not set" />
-                      )}
-                    </Stack>
-                  </TableCell>
-                  {canWrite && (
-                    <TableCell align="right">
-                      <Stack direction="row" spacing={1} justifyContent="flex-end">
-                        <Button size="small" onClick={() => openEdit(member)}>
-                          Edit
-                        </Button>
-                        <Button size="small" onClick={() => setResetting(member)}>
-                          Reset password
-                        </Button>
-                        <Button
-                          size="small"
-                          color={member.active ? 'error' : 'primary'}
-                          onClick={() => toggleActive(member)}
-                          // An admin who disabled their own account would be locked out of
-                          // the screen that could re-enable it; the server refuses this too.
-                          disabled={member.id === signedInUser?.id}
-                        >
-                          {member.active ? 'Disable' : 'Enable'}
-                        </Button>
-                      </Stack>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-              {users.data.content.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={canWrite ? 5 : 4}>
-                    <Typography color="text.secondary" sx={{ py: 2 }}>
-                      No members match that search.
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </Paper>
+        <RecordTable
+          columns={columns}
+          rows={users.data.content}
+          rowKey={(member) => member.id}
+          ariaLabel="Members"
+          empty={<Typography color="text.secondary">No members match that search.</Typography>}
+        />
       )}
 
       <UserFormDialog open={formOpen} user={editing} onClose={() => setFormOpen(false)} />

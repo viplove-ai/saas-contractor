@@ -8,8 +8,10 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
+import { useMediaQuery } from '@mui/material';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { memo, useCallback, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { inkEdge } from '../../app/sketch';
 import type { PreviewBoqLine } from './types';
 
 interface Props {
@@ -26,6 +28,13 @@ const INR = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
  * lines of description at the default body font, plus padding.
  */
 const ROW_HEIGHT = 68;
+
+/**
+ * The same row as a card: the item and its description, then quantity and rate as full-width
+ * fields, then the amount. Taller than the desk row and still fixed, so the virtualiser keeps
+ * working on the phone rather than being switched off exactly where the machine is slowest.
+ */
+const PHONE_ROW_HEIGHT = 232;
 
 /** Beyond this the list is windowed; below it the DOM cost is not worth the machinery. */
 const VIRTUALISE_ABOVE = 40;
@@ -46,19 +55,24 @@ const COLUMNS = '110px minmax(220px, 1fr) 110px 90px 120px 130px';
  */
 export function NitBoqReviewTable({ lines, onChange, disabled = false }: Props) {
   const theme = useTheme();
+  const phone = useMediaQuery(theme.breakpoints.down('sm'), { noSsr: true });
   const scrollRef = useRef<HTMLDivElement>(null);
+  const rowHeight = phone ? PHONE_ROW_HEIGHT : ROW_HEIGHT;
 
   const virtualiser = useVirtualizer({
     count: lines.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: () => rowHeight,
     overscan: 8,
   });
+
+  // A rotated phone changes the row height under a list the virtualiser has already sized.
+  useEffect(() => virtualiser.measure(), [rowHeight, virtualiser]);
 
   const windowed = lines.length > VIRTUALISE_ABOVE;
   const rows = windowed
     ? virtualiser.getVirtualItems()
-    : lines.map((_, index) => ({ index, key: index, start: index * ROW_HEIGHT }));
+    : lines.map((_, index) => ({ index, key: index, start: index * rowHeight }));
 
   const total = useMemo(
     () => lines.reduce((sum, line) => sum + (line.quantity ?? 0) * (line.rate ?? 0), 0),
@@ -67,27 +81,30 @@ export function NitBoqReviewTable({ lines, onChange, disabled = false }: Props) 
 
   return (
     <Stack spacing={1}>
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: COLUMNS,
-          gap: 1,
-          px: 1,
-          py: 0.5,
-          borderBottom: 1,
-          borderColor: 'divider',
-          typography: 'caption',
-          color: 'text.secondary',
-          fontWeight: 600,
-        }}
-      >
-        <span>Item</span>
-        <span>Description</span>
-        <span>Quantity</span>
-        <span>Unit</span>
-        <span>Rate</span>
-        <span style={{ textAlign: 'right' }}>Amount</span>
-      </Box>
+      {/* A column heading with no column under it is noise; the card labels its own fields. */}
+      {!phone && (
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: COLUMNS,
+            gap: 1,
+            px: 1,
+            py: 0.5,
+            borderBottom: 1,
+            borderColor: 'divider',
+            typography: 'caption',
+            color: 'text.secondary',
+            fontWeight: 600,
+          }}
+        >
+          <span>Item</span>
+          <span>Description</span>
+          <span>Quantity</span>
+          <span>Unit</span>
+          <span>Rate</span>
+          <span style={{ textAlign: 'right' }}>Amount</span>
+        </Box>
+      )}
 
       <Box
         ref={scrollRef}
@@ -102,7 +119,7 @@ export function NitBoqReviewTable({ lines, onChange, disabled = false }: Props) 
           sx={{
             position: 'relative',
             height: windowed ? virtualiser.getTotalSize() : 'auto',
-            minWidth: 780,
+            minWidth: phone ? 0 : 780,
           }}
         >
           {rows.map((row) => {
@@ -130,6 +147,7 @@ export function NitBoqReviewTable({ lines, onChange, disabled = false }: Props) 
                   onChange={onChange}
                   disabled={disabled}
                   mutedBackground={theme.palette.action.hover}
+                  phone={phone}
                 />
               </Box>
             );
@@ -158,13 +176,20 @@ interface RowProps {
   onChange: (index: number, patch: Partial<PreviewBoqLine>) => void;
   disabled: boolean;
   mutedBackground: string;
+  phone: boolean;
 }
 
 /**
  * One row. Memoised on the fields it renders, so editing a quantity on row 3 does not
  * re-render the other 299.
  */
-const BoqRow = memo(function BoqRow({ line, onChange, disabled, mutedBackground }: RowProps) {
+const BoqRow = memo(function BoqRow({
+  line,
+  onChange,
+  disabled,
+  mutedBackground,
+  phone,
+}: RowProps) {
   const setQuantity = useCallback(
     (value: string) => onChange(line.index, { quantity: value === '' ? null : Number(value) }),
     [line.index, onChange],
@@ -178,6 +203,90 @@ const BoqRow = memo(function BoqRow({ line, onChange, disabled, mutedBackground 
   // The tender rounds per line, so a rupee or two is normal; more means the row was misread.
   const printedDisagrees =
     line.amount != null && Math.abs(line.amount - derived) > 1 && !line.synthetic;
+
+  const unit = (
+    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
+      <Typography variant="body2" noWrap>
+        {line.unitCode}
+      </Typography>
+      {!line.unitRecognised && (
+        <Tooltip
+          title={`"${line.unit ?? ''}" is not in your master data and will be added on import.`}
+        >
+          <WarningAmberIcon fontSize="small" color="warning" />
+        </Tooltip>
+      )}
+    </Stack>
+  );
+
+  if (phone) {
+    return (
+      <Box sx={{ px: 0.5, py: 0.75 }}>
+        <Box
+          sx={{
+            ...(inkEdge(line.index) as object),
+            p: 1.5,
+            ...(line.synthetic ? { backgroundColor: mutedBackground } : {}),
+          }}
+        >
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+            <Typography variant="body2" fontFamily="monospace" noWrap sx={{ flexGrow: 1 }}>
+              {line.itemNumber}
+            </Typography>
+            {line.synthetic && <Chip size="small" label="reconciliation" sx={{ height: 18 }} />}
+          </Stack>
+
+          <Typography
+            variant="body2"
+            sx={{
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              mb: 1,
+            }}
+          >
+            {line.description}
+          </Typography>
+
+          <Stack direction="row" spacing={1}>
+            <TextField
+              size="small"
+              type="number"
+              label="Quantity"
+              value={line.quantity ?? ''}
+              onChange={(event) => setQuantity(event.target.value)}
+              disabled={disabled || line.synthetic}
+              inputProps={{ 'aria-label': `Quantity for item ${line.itemNumber}`, min: 0 }}
+            />
+            <TextField
+              size="small"
+              type="number"
+              label="Rate"
+              value={line.rate ?? ''}
+              onChange={(event) => setRate(event.target.value)}
+              disabled={disabled || line.synthetic}
+              inputProps={{ 'aria-label': `Rate for item ${line.itemNumber}`, min: 0 }}
+            />
+          </Stack>
+
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 1 }}>
+            {unit}
+            <Stack alignItems="flex-end" sx={{ minWidth: 0 }}>
+              <Typography variant="body2" fontWeight={600} noWrap>
+                ₹{INR.format(derived)}
+              </Typography>
+              {printedDisagrees && (
+                <Typography variant="caption" color="warning.main" noWrap>
+                  printed ₹{INR.format(line.amount ?? 0)}
+                </Typography>
+              )}
+            </Stack>
+          </Stack>
+        </Box>
+      </Box>
+    );
+  }
 
   return (
     <Box
@@ -224,18 +333,7 @@ const BoqRow = memo(function BoqRow({ line, onChange, disabled, mutedBackground 
         inputProps={{ 'aria-label': `Quantity for item ${line.itemNumber}`, min: 0 }}
       />
 
-      <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
-        <Typography variant="body2" noWrap>
-          {line.unitCode}
-        </Typography>
-        {!line.unitRecognised && (
-          <Tooltip
-            title={`"${line.unit ?? ''}" is not in your master data and will be added on import.`}
-          >
-            <WarningAmberIcon fontSize="small" color="warning" />
-          </Tooltip>
-        )}
-      </Stack>
+      {unit}
 
       <TextField
         size="small"

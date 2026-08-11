@@ -6,21 +6,77 @@ import {
   LinearProgress,
   Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   Typography,
 } from '@mui/material';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount } from '../../shared/formatters';
+import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
 import { monthToDate, useCompanyDashboard } from './api';
 import { CostTrendChart } from './CostTrendChart';
 import { MaterialPositionCard } from './MaterialPositionCard';
 import { PeriodPicker } from './PeriodPicker';
+import type { ProjectRow } from './types';
+
+/** Every project on the books over the period, as a table on a desk and as cards in a hand. */
+const PROJECT_COLUMNS: RecordColumn<ProjectRow>[] = [
+  {
+    key: 'project',
+    header: 'Project',
+    card: 'title',
+    cell: (project) => (
+      <>
+        <Typography fontWeight={600}>{project.projectName}</Typography>
+        <Typography variant="body2" color="text.secondary">
+          {project.projectCode} · {project.siteCount} site(s)
+        </Typography>
+      </>
+    ),
+  },
+  {
+    key: 'contract',
+    header: 'Contract',
+    align: 'right',
+    cell: (project) => formatAmount(project.contractValue),
+  },
+  {
+    key: 'cost',
+    header: 'Cost this period',
+    align: 'right',
+    cell: (project) => formatAmount(project.costIncurred),
+  },
+  {
+    key: 'budget',
+    header: 'Budget used',
+    align: 'right',
+    cell: (project) =>
+      /*
+        No budget is not nought per cent used — it is a question nobody can answer, and a
+        bar drawn at zero would answer it wrongly.
+      */
+      project.percentBudgetUsed == null
+        ? 'No budget set'
+        : `${project.percentBudgetUsed.toFixed(1)}%`,
+  },
+  {
+    key: 'work',
+    header: 'Work done',
+    align: 'right',
+    cell: (project) => (
+      <>
+        {project.percentWorkDone == null ? '—' : `${project.percentWorkDone.toFixed(1)}%`}
+        {project.percentWorkDone != null && (
+          <LinearProgress
+            variant="determinate"
+            value={Math.min(project.percentWorkDone, 100)}
+            sx={{ mt: 0.5, height: 6, borderRadius: 3 }}
+          />
+        )}
+      </>
+    ),
+  },
+];
 
 /**
  * The firm over a period.
@@ -94,54 +150,12 @@ export function CompanyDashboardPage() {
 
           <CostTrendChart trend={dashboard.data.trend} />
 
-          <Paper elevation={0} sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Project</TableCell>
-                  <TableCell align="right">Contract</TableCell>
-                  <TableCell align="right">Cost this period</TableCell>
-                  <TableCell align="right">Budget used</TableCell>
-                  <TableCell align="right">Work done</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {dashboard.data.projects.map((project) => (
-                  <TableRow key={project.projectId}>
-                    <TableCell>
-                      <Typography fontWeight={600}>{project.projectName}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {project.projectCode} · {project.siteCount} site(s)
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right">{formatAmount(project.contractValue)}</TableCell>
-                    <TableCell align="right">{formatAmount(project.costIncurred)}</TableCell>
-                    <TableCell align="right">
-                      {/*
-                        No budget is not nought per cent used — it is a question nobody can
-                        answer, and a bar drawn at zero would answer it wrongly.
-                      */}
-                      {project.percentBudgetUsed == null
-                        ? 'No budget set'
-                        : `${project.percentBudgetUsed.toFixed(1)}%`}
-                    </TableCell>
-                    <TableCell align="right">
-                      {project.percentWorkDone == null
-                        ? '—'
-                        : `${project.percentWorkDone.toFixed(1)}%`}
-                      {project.percentWorkDone != null && (
-                        <LinearProgress
-                          variant="determinate"
-                          value={Math.min(project.percentWorkDone, 100)}
-                          sx={{ mt: 0.5, height: 6, borderRadius: 3 }}
-                        />
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Paper>
+          <RecordTable
+            columns={PROJECT_COLUMNS}
+            rows={dashboard.data.projects}
+            rowKey={(project) => project.projectId}
+            ariaLabel="Projects over the period"
+          />
 
           <Typography variant="body2">
             <Link to="/dashboard/quality">What is missing from the records</Link>

@@ -4,19 +4,14 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   Typography,
 } from '@mui/material';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount } from '../../shared/formatters';
+import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
 import { useAuth } from '../auth/AuthContext';
 import { useAdminSites, useProjects } from './api';
 import { ProjectFormDialog } from './ProjectFormDialog';
@@ -68,6 +63,89 @@ export function ProjectsPage() {
     setFormOpen(true);
   };
 
+  const columns: RecordColumn<AdminProject>[] = [
+    {
+      key: 'project',
+      header: 'Project',
+      card: 'title',
+      cell: (project) => (
+        /*
+          The link is on the name rather than the whole row: the row carries its own
+          buttons, and a clickable row wrapped around them makes it a guess which one a
+          click lands on.
+        */
+        <Link to={`/projects/${project.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+          <Typography fontWeight={600} sx={{ '&:hover': { textDecoration: 'underline' } }}>
+            {project.code}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {project.name}
+          </Typography>
+        </Link>
+      ),
+    },
+    {
+      key: 'client',
+      header: 'Client',
+      cell: (project) => project.clientDepartment || '—',
+    },
+    {
+      key: 'value',
+      header: 'Contract value',
+      align: 'right',
+      cell: (project) => (
+        <Typography variant="caption">
+          {project.contractValue == null ? '—' : formatAmount(project.contractValue)}
+        </Typography>
+      ),
+    },
+    {
+      key: 'sites',
+      header: 'Sites',
+      align: 'right',
+      cell: (project) =>
+        siteCount(project.id) === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            None yet
+          </Typography>
+        ) : (
+          <Typography variant="caption">{siteCount(project.id)}</Typography>
+        ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      card: 'status',
+      cell: (project) => (
+        <Chip
+          size="small"
+          color={STATUS_COLOR[project.status]}
+          label={STATUS_LABEL[project.status]}
+        />
+      ),
+    },
+    ...(canWrite
+      ? [
+          {
+            key: 'actions',
+            header: 'Actions',
+            align: 'right' as const,
+            card: 'actions' as const,
+            cell: (project: AdminProject) => (
+              <>
+                <Button size="small" onClick={() => openEdit(project)}>
+                  Edit
+                </Button>
+                <Button size="small" component={Link} to="/sites">
+                  Sites
+                </Button>
+              </>
+            ),
+          },
+        ]
+      : []),
+  ];
+
   return (
     <Stack spacing={3}>
       <Stack
@@ -97,88 +175,18 @@ export function ProjectsPage() {
       {projects.isError && <Alert severity="error">{apiErrorDetail(projects.error)}</Alert>}
 
       {projects.data && (
-        <Paper elevation={0} sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Project</TableCell>
-                <TableCell>Client</TableCell>
-                <TableCell align="right">Contract value</TableCell>
-                <TableCell align="right">Sites</TableCell>
-                <TableCell>Status</TableCell>
-                {canWrite && <TableCell align="right">Actions</TableCell>}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {projects.data.map((project) => (
-                <TableRow key={project.id} hover>
-                  <TableCell>
-                    {/*
-                      The link is on the name rather than the whole row: the row carries its
-                      own buttons, and a clickable row wrapped around them makes it a guess
-                      which one a click lands on.
-                    */}
-                    <Link
-                      to={`/projects/${project.id}`}
-                      style={{ textDecoration: 'none', color: 'inherit' }}
-                    >
-                      <Typography fontWeight={600} sx={{ '&:hover': { textDecoration: 'underline' } }}>
-                        {project.code}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {project.name}
-                      </Typography>
-                    </Link>
-                  </TableCell>
-                  <TableCell>{project.clientDepartment || '—'}</TableCell>
-                  <TableCell align="right">
-                    <Typography variant="caption">
-                      {project.contractValue == null ? '—' : formatAmount(project.contractValue)}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    {siteCount(project.id) === 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        None yet
-                      </Typography>
-                    ) : (
-                      <Typography variant="caption">{siteCount(project.id)}</Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      color={STATUS_COLOR[project.status]}
-                      label={STATUS_LABEL[project.status]}
-                    />
-                  </TableCell>
-                  {canWrite && (
-                    <TableCell align="right">
-                      <Stack direction="row" spacing={1} justifyContent="flex-end">
-                        <Button size="small" onClick={() => openEdit(project)}>
-                          Edit
-                        </Button>
-                        <Button size="small" component={Link} to="/sites">
-                          Sites
-                        </Button>
-                      </Stack>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-              {projects.data.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={canWrite ? 6 : 5}>
-                    <Typography color="text.secondary" sx={{ py: 2 }}>
-                      No projects yet. Add the contract you are working under, then add its
-                      sites and post an engineer and a supervisor to each.
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </Paper>
+        <RecordTable
+          columns={columns}
+          rows={projects.data}
+          rowKey={(project) => project.id}
+          ariaLabel="Projects"
+          empty={
+            <Typography color="text.secondary">
+              No projects yet. Add the contract you are working under, then add its sites and
+              post an engineer and a supervisor to each.
+            </Typography>
+          }
+        />
       )}
 
       <ProjectFormDialog open={formOpen} project={editing} onClose={() => setFormOpen(false)} />

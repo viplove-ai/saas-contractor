@@ -5,19 +5,14 @@ import {
   Chip,
   CircularProgress,
   MenuItem,
-  Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount } from '../../shared/formatters';
+import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
 import { useAuth } from '../auth/AuthContext';
 import { useMySites, useSiteDirectory, useWorkers } from './api';
 import { OnboardWorkerDialog } from './OnboardWorkerDialog';
@@ -61,6 +56,78 @@ export function WorkersPage() {
     }
     return directory.data?.find((site) => site.id === id)?.code ?? '—';
   };
+
+  const columns: RecordColumn<Worker>[] = [
+    {
+      key: 'worker',
+      header: 'Worker',
+      card: 'title',
+      cell: (worker) => (
+        <>
+          <Typography fontWeight={600}>{worker.fullName}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {worker.workerCode}
+            {worker.mobile ? ` · ${worker.mobile}` : ''}
+          </Typography>
+        </>
+      ),
+    },
+    { key: 'site', header: 'Site', cell: (worker) => siteLabel(worker.currentSiteId) },
+    {
+      key: 'rate',
+      header: 'Rate',
+      align: 'right',
+      cell: (worker) =>
+        worker.currentWageRate ? (
+          <Stack spacing={0}>
+            <Typography variant="caption">
+              {formatAmount(worker.currentWageRate.normalRate)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {WAGE_TYPE_LABEL[worker.wageType]}
+            </Typography>
+          </Stack>
+        ) : (
+          // Not an error, but it does mean his days will carry no money until the office
+          // sets one — worth saying rather than showing a dash.
+          <Typography variant="body2" color="text.secondary">
+            Not set by office
+          </Typography>
+        ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      card: 'status',
+      cell: (worker) => (
+        <Chip
+          size="small"
+          color={worker.active ? 'success' : 'default'}
+          variant={worker.active ? 'filled' : 'outlined'}
+          label={worker.active ? 'Working' : 'Left'}
+        />
+      ),
+    },
+    ...(canWrite
+      ? [
+          {
+            key: 'actions',
+            header: 'Actions',
+            align: 'right' as const,
+            card: 'actions' as const,
+            cell: (worker: Worker) => (
+              <Button
+                size="small"
+                onClick={() => setTransferring(worker)}
+                disabled={!worker.currentSiteId}
+              >
+                Transfer
+              </Button>
+            ),
+          },
+        ]
+      : []),
+  ];
 
   return (
     <Stack spacing={3}>
@@ -118,81 +185,19 @@ export function WorkersPage() {
       {workers.isError && <Alert severity="error">{apiErrorDetail(workers.error)}</Alert>}
 
       {workers.data && (
-        <Paper elevation={0} sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Worker</TableCell>
-                <TableCell>Site</TableCell>
-                <TableCell align="right">Rate</TableCell>
-                <TableCell>Status</TableCell>
-                {canWrite && <TableCell align="right">Actions</TableCell>}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {workers.data.content.map((worker) => (
-                <TableRow key={worker.id} hover>
-                  <TableCell>
-                    <Typography fontWeight={600}>{worker.fullName}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {worker.workerCode}
-                      {worker.mobile ? ` · ${worker.mobile}` : ''}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{siteLabel(worker.currentSiteId)}</TableCell>
-                  <TableCell align="right">
-                    {worker.currentWageRate ? (
-                      <Stack spacing={0}>
-                        <Typography variant="caption">
-                          {formatAmount(worker.currentWageRate.normalRate)}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {WAGE_TYPE_LABEL[worker.wageType]}
-                        </Typography>
-                      </Stack>
-                    ) : (
-                      // Not an error, but it does mean his days will carry no money until
-                      // the office sets one — worth saying rather than showing a dash.
-                      <Typography variant="body2" color="text.secondary">
-                        Not set by office
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      color={worker.active ? 'success' : 'default'}
-                      variant={worker.active ? 'filled' : 'outlined'}
-                      label={worker.active ? 'Working' : 'Left'}
-                    />
-                  </TableCell>
-                  {canWrite && (
-                    <TableCell align="right">
-                      <Button
-                        size="small"
-                        onClick={() => setTransferring(worker)}
-                        disabled={!worker.currentSiteId}
-                      >
-                        Transfer
-                      </Button>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-              {workers.data.content.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={canWrite ? 5 : 4}>
-                    <Typography color="text.secondary" sx={{ py: 2 }}>
-                      {mySites.data?.length === 0
-                        ? 'You are not posted to a site yet. An administrator assigns you one.'
-                        : 'Nobody on your sites yet. Take on a worker to start marking attendance.'}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </Paper>
+        <RecordTable
+          columns={columns}
+          rows={workers.data.content}
+          rowKey={(worker) => worker.id}
+          ariaLabel="Workers"
+          empty={
+            <Typography color="text.secondary">
+              {mySites.data?.length === 0
+                ? 'You are not posted to a site yet. An administrator assigns you one.'
+                : 'Nobody on your sites yet. Take on a worker to start marking attendance.'}
+            </Typography>
+          }
+        />
       )}
 
       <OnboardWorkerDialog

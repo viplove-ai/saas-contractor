@@ -5,19 +5,14 @@ import {
   Chip,
   CircularProgress,
   MenuItem,
-  Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
 } from '@mui/material';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
+import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
 import { useAuth } from '../auth/AuthContext';
 import { useAdminSites, useProjects, useUsers } from './api';
 import { SiteFormDialog } from './SiteFormDialog';
@@ -74,6 +69,59 @@ export function SitesPage() {
     setFormOpen(true);
   };
 
+  const columns: RecordColumn<AdminSite>[] = [
+    {
+      key: 'site',
+      header: 'Site',
+      card: 'title',
+      cell: (site) => (
+        <>
+          <Typography fontWeight={600}>{site.code}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {site.name}
+          </Typography>
+        </>
+      ),
+    },
+    { key: 'project', header: 'Project', cell: (site) => projectName(site.projectId) },
+    {
+      key: 'engineer',
+      header: 'Site engineer',
+      cell: (site) => staffName(site.siteEngineerId, 'engineer'),
+    },
+    {
+      key: 'supervisor',
+      header: 'Supervisor',
+      cell: (site) => staffName(site.supervisorId, 'supervisor'),
+    },
+    {
+      key: 'shift',
+      header: 'Shift',
+      cell: (site) => <Typography variant="caption">{site.standardShiftHours} h</Typography>,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      card: 'status',
+      cell: (site) => <Chip size="small" color={STATUS_COLOR[site.status]} label={site.status} />,
+    },
+    ...(canWrite
+      ? [
+          {
+            key: 'actions',
+            header: 'Actions',
+            align: 'right' as const,
+            card: 'actions' as const,
+            cell: (site: AdminSite) => (
+              <Button size="small" onClick={() => openEdit(site)}>
+                Edit
+              </Button>
+            ),
+          },
+        ]
+      : []),
+  ];
+
   return (
     <Stack spacing={3}>
       <Stack
@@ -126,64 +174,23 @@ export function SitesPage() {
       {sites.isError && <Alert severity="error">{apiErrorDetail(sites.error)}</Alert>}
 
       {sites.data && (
-        <Paper elevation={0} sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Site</TableCell>
-                <TableCell>Project</TableCell>
-                <TableCell>Site engineer</TableCell>
-                <TableCell>Supervisor</TableCell>
-                <TableCell>Shift</TableCell>
-                <TableCell>Status</TableCell>
-                {canWrite && <TableCell align="right">Actions</TableCell>}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {sites.data.map((site) => (
-                <TableRow key={site.id} hover>
-                  <TableCell>
-                    <Typography fontWeight={600}>{site.code}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {site.name}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{projectName(site.projectId)}</TableCell>
-                  <TableCell>{staffName(site.siteEngineerId, 'engineer')}</TableCell>
-                  <TableCell>{staffName(site.supervisorId, 'supervisor')}</TableCell>
-                  <TableCell>
-                    <Typography variant="caption">{site.standardShiftHours} h</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip size="small" color={STATUS_COLOR[site.status]} label={site.status} />
-                  </TableCell>
-                  {canWrite && (
-                    <TableCell align="right">
-                      <Button size="small" onClick={() => openEdit(site)}>
-                        Edit
-                      </Button>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-              {sites.data.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={canWrite ? 7 : 6}>
-                    <Typography color="text.secondary" sx={{ py: 2 }}>
-                      No sites yet.{' '}
-                      {projects.data?.length === 0 && (
-                        <>
-                          A site belongs to a project, and there are none yet —{' '}
-                          <Link to="/projects">add a project first</Link>.
-                        </>
-                      )}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
+        <RecordTable
+          columns={columns}
+          rows={sites.data}
+          rowKey={(site) => site.id}
+          ariaLabel="Sites"
+          empty={
+            <Typography color="text.secondary">
+              No sites yet.{' '}
+              {projects.data?.length === 0 && (
+                <>
+                  A site belongs to a project, and there are none yet —{' '}
+                  <Link to="/projects">add a project first</Link>.
+                </>
               )}
-            </TableBody>
-          </Table>
-        </Paper>
+            </Typography>
+          }
+        />
       )}
 
       <SiteFormDialog open={formOpen} site={editing} onClose={() => setFormOpen(false)} />

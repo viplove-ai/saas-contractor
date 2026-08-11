@@ -13,6 +13,8 @@ import {
   Typography,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { inkEdge } from '../../app/sketch';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { StatusChip, type RecordStatus } from '../../shared/StatusChip';
 import { useRoster, useSaveAttendance, useSites, useSubmitAttendance } from './api';
@@ -185,10 +187,32 @@ export function MarkAttendancePage() {
         </Alert>
       )}
 
+      {/*
+        An empty muster is not an error and not a dead end — it is a supervisor one screen
+        away from the thing he has to do first. So it says who is missing, where they are
+        taken on, and carries the way there, rather than leaving him to find the Workers page
+        himself.
+      */}
       {roster.data && entries.length === 0 && (
-        <Alert severity="info">
-          Nobody is posted to this site on {date}. Post workers from the worker list first.
-        </Alert>
+        <Paper elevation={0} sx={{ ...inkEdge(0), p: 2.5 }}>
+          <Stack spacing={1.5} alignItems="flex-start">
+            <Typography variant="h3">Nobody to mark yet</Typography>
+            <Typography color="text.secondary">
+              No worker is posted to {site ? `${site.code} — ${site.name}` : 'this site'} on{' '}
+              {date}. Take your men on under Workers and they appear on this muster the same
+              day.
+            </Typography>
+            <Button
+              variant="contained"
+              color="secondary"
+              component={Link}
+              to="/workers"
+              sx={{ minHeight: 48 }}
+            >
+              Add workers
+            </Button>
+          </Stack>
+        </Paper>
       )}
 
       {entries.length > 0 && (
