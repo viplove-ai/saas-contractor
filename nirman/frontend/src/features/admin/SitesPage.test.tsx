@@ -82,6 +82,11 @@ function renderPage(route = '/sites') {
   );
 }
 
+/** Card and table are both in the DOM in jsdom — media queries do not hide either — so
+ *  anything matched by text is scoped to the table, the way the projects tests do it. */
+const table = () => within(screen.getByRole('table'));
+const cards = () => within(screen.getByRole('list', { name: 'Sites' }));
+
 describe('SitesPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -102,15 +107,31 @@ describe('SitesPage', () => {
 
   it('names each site’s engineer and supervisor', async () => {
     renderPage();
-    const row = (await screen.findByText('KSN-A')).closest('tr') as HTMLElement;
+    await screen.findAllByText('KSN-A');
+    const row = table().getByText('KSN-A').closest('tr') as HTMLElement;
     expect(within(row).getByText('Uttam Rana')).toBeInTheDocument();
     expect(within(row).getByText('Vivek Aggarwal')).toBeInTheDocument();
+  });
+
+  /** The phone list is the same register, not a summary of it: every fact and both buttons. */
+  it('carries the posting and the buttons onto the card', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('KSN-A');
+
+    const card = cards().getByText('KSN-A').closest('li') as HTMLElement;
+    expect(within(card).getByText('Uttam Rana')).toBeInTheDocument();
+    expect(within(card).getByText('Vivek Aggarwal')).toBeInTheDocument();
+    expect(within(card).getByText('KSN01 · 7 h shift')).toBeInTheDocument();
+
+    await user.click(within(card).getByRole('button', { name: 'Edit' }));
+    expect(await screen.findByLabelText('Site code')).toBeDisabled();
   });
 
   it('posts a new site with the engineer who is being given it', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
-    await screen.findByText('KSN-A');
+    await screen.findAllByText('KSN-A');
 
     await user.click(screen.getByRole('button', { name: 'Add a site' }));
     await user.click(await screen.findByRole('combobox', { name: 'Project' }));
@@ -132,7 +153,7 @@ describe('SitesPage', () => {
   it('offers only members who hold the role the slot is for', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
-    await screen.findByText('KSN-A');
+    await screen.findAllByText('KSN-A');
     await user.click(screen.getByRole('button', { name: 'Add a site' }));
 
     await user.click(await screen.findByRole('combobox', { name: 'Site engineer' }));
@@ -145,7 +166,8 @@ describe('SitesPage', () => {
   it('sends a cleared supervisor as nobody, which withdraws their access', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
-    const row = (await screen.findByText('KSN-A')).closest('tr') as HTMLElement;
+    await screen.findAllByText('KSN-A');
+    const row = table().getByText('KSN-A').closest('tr') as HTMLElement;
     await user.click(within(row).getByRole('button', { name: 'Edit' }));
 
     await user.click(await screen.findByRole('combobox', { name: 'Site supervisor' }));
@@ -169,7 +191,7 @@ describe('SitesPage', () => {
    */
   it('opens on the project it was sent from, and narrows the list to it', async () => {
     renderPage('/sites?projectId=p1');
-    await screen.findByText('KSN-A');
+    await screen.findAllByText('KSN-A');
 
     expect(screen.getByRole('combobox', { name: 'Project' })).toHaveTextContent('KSN01');
     await waitFor(() =>
@@ -181,7 +203,7 @@ describe('SitesPage', () => {
 
   it('opens unnarrowed when it was reached directly', async () => {
     renderPage();
-    await screen.findByText('KSN-A');
+    await screen.findAllByText('KSN-A');
 
     // MUI leaves the picker blank on the empty option rather than printing its label, so
     // the fact worth asserting is the request: no project named, every site listed.

@@ -21,7 +21,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { useAuth } from '../auth/AuthContext';
 import { useAdminSites, useDeleteSite, useProjects, useRestoreSite, useUsers } from './api';
-import { DeleteRecordDialog } from './DeleteRecordDialog';
+import { DeleteRecordDialog } from '../../shared/DeleteRecordDialog';
 import { SiteFormDialog } from './SiteFormDialog';
 import type { AdminSite, SiteStatus } from './types';
 
@@ -165,8 +165,54 @@ export function SitesPage() {
       )}
       {sites.isError && <Alert severity="error">{apiErrorDetail(sites.error)}</Alert>}
 
+      {/*
+        Phone: a card each, the same answer the projects register already gives. This table
+        has seven columns and the last of them is Actions, so on a 375px screen Edit and
+        Delete sat off the right edge — reachable only by scrolling a table sideways, which
+        nobody thinks to try. The card keeps every fact the row carries.
+      */}
       {sites.data && (
-        <Paper elevation={0} sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
+        <Stack
+          component="ul"
+          aria-label="Sites"
+          spacing={2}
+          sx={{ display: { xs: 'flex', md: 'none' }, listStyle: 'none', m: 0, p: 0 }}
+        >
+          {sites.data.map((site) => (
+            <SiteCard
+              key={site.id}
+              site={site}
+              projectCode={projectName(site.projectId)}
+              engineer={staffName(site.siteEngineerId, 'engineer')}
+              supervisor={staffName(site.supervisorId, 'supervisor')}
+              canWrite={canWrite}
+              canDelete={canDelete}
+              deletedView={showDeleted}
+              onEdit={() => openEdit(site)}
+              onDelete={() => setDeleting(site)}
+              onRestore={() => restoreSite.mutate(site.id)}
+            />
+          ))}
+          {sites.data.length === 0 && (
+            <Typography component="li" color="text.secondary">
+              {showDeleted
+                ? 'No sites have been deleted. One removed here can always be put back.'
+                : 'No sites yet.'}
+            </Typography>
+          )}
+        </Stack>
+      )}
+
+      {sites.data && (
+        <Paper
+          elevation={0}
+          sx={{
+            display: { xs: 'none', md: 'block' },
+            border: 1,
+            borderColor: 'divider',
+            overflowX: 'auto',
+          }}
+        >
           <Table size="small">
             <TableHead>
               <TableRow>
@@ -270,6 +316,121 @@ export function SitesPage() {
         />
       )}
     </Stack>
+  );
+}
+
+/**
+ * One site on a phone, built to the projects register's card.
+ *
+ * <p>The code and the status share the top line because those are what somebody scanning
+ * the list matches on, and the name is cut with an ellipsis rather than wrapped, for the
+ * reason the project card gives: four lines of name per card makes the list unscannable.</p>
+ *
+ * <p>The two staff slots are the reason this screen exists at all — posting somebody to a
+ * site is what lets them work on it — so they get a labelled row of their own rather than
+ * being folded in with the shift. "Not posted" is a finding, not a blank.</p>
+ */
+function SiteCard({
+  site,
+  projectCode,
+  engineer,
+  supervisor,
+  canWrite,
+  canDelete,
+  deletedView,
+  onEdit,
+  onDelete,
+  onRestore,
+}: {
+  site: AdminSite;
+  projectCode: string;
+  engineer: string;
+  supervisor: string;
+  canWrite: boolean;
+  canDelete: boolean;
+  deletedView: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onRestore: () => void;
+}) {
+  return (
+    <Paper component="li" elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
+      <Stack spacing={1.5}>
+        <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography fontWeight={700}>{site.code}</Typography>
+            {/* noWrap needs the parent to be allowed to shrink, hence minWidth: 0 above. */}
+            <Typography variant="body2" color="text.secondary" noWrap>
+              {site.name}
+            </Typography>
+          </Box>
+          <Chip
+            size="small"
+            color={deletedView ? 'error' : STATUS_COLOR[site.status]}
+            variant={deletedView ? 'outlined' : 'filled'}
+            label={deletedView ? 'Deleted' : site.status}
+          />
+        </Stack>
+
+        <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="baseline">
+          <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+            <Typography variant="caption" color="text.secondary">
+              Site engineer
+            </Typography>
+            <Typography variant="body2" noWrap>
+              {engineer}
+            </Typography>
+          </Stack>
+          <Stack spacing={0.25} alignItems="flex-end" sx={{ minWidth: 0 }}>
+            <Typography variant="caption" color="text.secondary">
+              Supervisor
+            </Typography>
+            <Typography variant="body2" noWrap>
+              {supervisor}
+            </Typography>
+          </Stack>
+        </Stack>
+
+        <Typography variant="body2" color="text.secondary">
+          {projectCode} · {site.standardShiftHours} h shift
+        </Typography>
+
+        {deletedView && (
+          <Typography variant="body2" color="text.secondary">
+            Deleted {formatDeletedAt(site.deletedAt)}
+            {site.deletedReason ? ` — ${site.deletedReason}` : ''}
+          </Typography>
+        )}
+
+        {canWrite && (
+          <Stack direction="row" spacing={1}>
+            {/* 48px: the app's floor for anything meant to be hit with a glove on. */}
+            {deletedView ? (
+              <Button size="small" variant="outlined" onClick={onRestore} sx={{ minHeight: 48, flex: 1 }}>
+                Restore
+              </Button>
+            ) : (
+              <>
+                <Button size="small" variant="outlined" onClick={onEdit} sx={{ minHeight: 48, flex: 1 }}>
+                  Edit
+                </Button>
+                {canDelete && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="error"
+                    onClick={onDelete}
+                    sx={{ minHeight: 48, flex: 1 }}
+                  >
+                    Delete
+                  </Button>
+                )}
+              </>
+            )}
+          </Stack>
+        )}
+      </Stack>
+    </Paper>
   );
 }
 
