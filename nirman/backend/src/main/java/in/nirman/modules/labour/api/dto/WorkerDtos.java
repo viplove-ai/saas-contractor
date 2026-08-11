@@ -43,14 +43,27 @@ public final class WorkerDtos {
             Long version) {
     }
 
+    /**
+     * What taking a man on at the gate actually needs: his name, a number to reach him on,
+     * the site, and — if the office is doing the taking on — what he is paid a day.
+     *
+     * <p>Everything else is optional and defaulted, because it was being asked for at the
+     * gate and answered wrongly. {@code workerCode} is assigned by the server when it is
+     * left out; {@code employmentType} and {@code wageType} fall back to contract labour on
+     * a daily wage, which is what nearly every man on a CPWD site is; {@code joiningDate}
+     * is the day he was entered. The office edits any of them afterwards.</p>
+     */
     public record CreateWorkerRequest(
-            @NotBlank @Size(max = 40) @Pattern(regexp = "[A-Za-z0-9._-]+") String workerCode,
+            /** Left out, the server assigns the next number in the org's series. */
+            @Size(max = 40) @Pattern(regexp = "[A-Za-z0-9._-]*") String workerCode,
             @NotBlank @Size(max = 150) String fullName,
-            @Size(max = 20) String mobile,
+            @NotBlank @Size(max = 20) String mobile,
             UUID skillCategoryId,
-            @NotNull Worker.EmploymentType employmentType,
+            /** Defaults to {@code CONTRACT}. */
+            Worker.EmploymentType employmentType,
             UUID labourContractorId,
-            @NotNull WageType wageType,
+            /** Defaults to {@code DAILY}. */
+            WageType wageType,
             LocalDate joiningDate,
             @Pattern(regexp = "\\d{4}", message = "exactly four digits, never the full number")
             String aadhaarLast4,
@@ -61,6 +74,11 @@ public final class WorkerDtos {
             UUID siteId,
             /** Optional: opens his first wage rate in the same call. */
             @DecimalMin("0") @Digits(integer = 14, fraction = 4) BigDecimal normalRate,
+            /**
+             * Optional even when {@code normalRate} is given: left out, it is the plain
+             * hourly rate derived from the day's wage and the site's shift length, which is
+             * what the field data says overtime actually pays (assumption 7).
+             */
             @DecimalMin("0") @Digits(integer = 14, fraction = 4) BigDecimal overtimeRate) {
     }
 

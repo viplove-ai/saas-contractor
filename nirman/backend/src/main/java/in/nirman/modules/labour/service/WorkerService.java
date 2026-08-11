@@ -1,6 +1,7 @@
 package in.nirman.modules.labour.service;
 
 import in.nirman.common.BusinessException;
+import in.nirman.common.DocumentNumberService;
 import in.nirman.common.PageResponse;
 import in.nirman.modules.audit.AuditService;
 import in.nirman.modules.labour.api.dto.WorkerDtos.AllocateRequest;
@@ -11,6 +12,7 @@ import in.nirman.modules.labour.api.dto.WorkerDtos.UpdateWorkerRequest;
 import in.nirman.modules.labour.api.dto.WorkerDtos.WageRateResponse;
 import in.nirman.modules.labour.api.dto.WorkerDtos.WorkerResponse;
 import in.nirman.modules.labour.domain.WageRate;
+import in.nirman.modules.labour.domain.WageType;
 import in.nirman.modules.labour.domain.Worker;
 import in.nirman.modules.labour.domain.WorkerSiteAllocation;
 import in.nirman.modules.labour.repository.WageRateRepository;
@@ -25,6 +27,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
@@ -56,11 +60,12 @@ public class WorkerService {
     private final SiteAccessGuard siteAccessGuard;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
+    private final DocumentNumberService documentNumbers;
 
     public WorkerService(WorkerRepository workers, WageRateRepository wageRates,
                          WorkerSiteAllocationRepository allocations, SiteLookup sites,
                          SiteAccessGuard siteAccessGuard, CurrentUserProvider currentUser,
-                         AuditService audit) {
+                         AuditService audit, DocumentNumberService documentNumbers) {
         this.workers = workers;
         this.wageRates = wageRates;
         this.allocations = allocations;
@@ -68,6 +73,7 @@ public class WorkerService {
         this.siteAccessGuard = siteAccessGuard;
         this.currentUser = currentUser;
         this.audit = audit;
+        this.documentNumbers = documentNumbers;
     }
 
     /**
@@ -100,19 +106,36 @@ public class WorkerService {
         return toResponse(requireWorker(id));
     }
 
+    /**
+     * Takes a man on, and asks for as little as the roll actually needs.
+     *
+     * <p>Three of the fields defend themselves rather than the caller. His number is the
+     * server's to assign unless one was given, because a supervisor inventing one at the
+     * gate is how two men end up sharing a number. His employment and wage basis default to
+     * contract labour on a daily wage. And his overtime rate, if nobody stated one, is the
+     * plain hourly rate implied by the day's wage and the site's own shift — the site
+     * already knows where its working hours end, so nobody has to type where overtime
+     * begins.</p>
+     */
     @PreAuthorize("hasAuthority('worker:write')")
     public WorkerResponse create(CreateWorkerRequest request) {
         UUID org = orgId();
-        if (workers.existsByOrgIdAndWorkerCode(org, request.workerCode())) {
+        LocalDate from = request.joiningDate() == null ? LocalDate.now() : request.joiningDate();
+        String code = blankToNull(request.workerCode());
+        if (code == null) {
+            code = documentNumbers.next(org, DocumentNumberService.DocType.WORKER, from);
+        } else if (workers.existsByOrgIdAndWorkerCode(org, code)) {
             throw BusinessException.conflict("worker.code-taken",
-                    "A worker with code '" + request.workerCode() + "' already exists.");
+                    "A worker with code '" + code + "' already exists.");
         }
-        Worker worker = new Worker(org, request.workerCode(), request.fullName(), request.wageType());
+        WageType wageType = request.wageType() == null ? WageType.DAILY : request.wageType();
+        Worker worker = new Worker(org, code, request.fullName(), wageType);
         worker.setMobile(request.mobile());
         worker.setSkillCategoryId(request.skillCategoryId());
-        worker.setEmploymentType(request.employmentType());
+        worker.setEmploymentType(request.employmentType() == null
+                ? Worker.EmploymentType.CONTRACT : request.employmentType());
         worker.setLabourContractorId(request.labourContractorId());
-        worker.setJoiningDate(request.joiningDate());
+        worker.setJoiningDate(from);
         worker.setAadhaarLast4(request.aadhaarLast4());
         worker.setBankAccountNo(request.bankAccountNo());
         worker.setBankIfsc(request.bankIfsc());
@@ -121,7 +144,6 @@ public class WorkerService {
 
         // A worker with no rate cannot be paid and a worker with no posting appears on no
         // roster, so both are accepted here rather than forcing three calls to be useful.
-        LocalDate from = request.joiningDate() == null ? LocalDate.now() : request.joiningDate();
         if (request.normalRate() != null) {
             // Setting pay is wage:write wherever it happens. Without this, the rate field on
             // the creation call would be a way round the permission that guards revisions —
@@ -131,8 +153,7 @@ public class WorkerService {
                         "You can add the worker, but his rate has to be set by the office.");
             }
             wageRates.save(new WageRate(org, worker.getId(), request.normalRate(),
-                    request.overtimeRate() == null ? java.math.BigDecimal.ZERO : request.overtimeRate(),
-                    from));
+                    overtimeRate(request, wageType), from));
         }
         if (request.siteId() != null) {
             siteAccessGuard.assertCanAccess(request.siteId());
@@ -344,6 +365,34 @@ public class WorkerService {
                 allocation.getSiteId(), allocation.getEffectiveFrom(), allocation.getEffectiveTo());
     }
 
+    /**
+     * What an hour past the site's working day is worth.
+     *
+     * <p>Nobody is asked for this. The site already carries where its regular hours end, and
+     * the field data settled what the hour beyond them pays: the plain hourly rate, with no
+     * premium — OT income ÷ OT hours came back equal to wage ÷ shift (assumption 7). So a
+     * daily wage of 625 on a seven-hour site is 89.2857 an hour, and that is the overtime
+     * rate. A caller that states its own rate keeps it.</p>
+     *
+     * <p>Only a daily wage can be divided this way. An hourly worker is already paid by the
+     * hour, and a monthly one needs the site's {@code monthlyWageDays} before the division
+     * means anything — neither is a guess worth making here, so both wait for the office to
+     * state a rate.</p>
+     */
+    private BigDecimal overtimeRate(CreateWorkerRequest request, WageType wageType) {
+        if (request.overtimeRate() != null) {
+            return request.overtimeRate();
+        }
+        if (wageType == WageType.HOURLY) {
+            return request.normalRate();
+        }
+        if (wageType != WageType.DAILY || request.siteId() == null) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal shiftHours = sites.require(request.siteId()).standardShiftHours();
+        return request.normalRate().divide(shiftHours, 4, RoundingMode.HALF_UP);
+    }
+
     private UUID orgId() {
         return currentUser.currentOrgId();
     }
@@ -351,5 +400,9 @@ public class WorkerService {
     /** No search term travels as an empty string, never null: see {@link WorkerRepository#search}. */
     private static String blankToEmpty(String value) {
         return value == null || value.isBlank() ? "" : value.trim();
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

@@ -34,6 +34,11 @@ class LabourTransferIntegrationTest extends AbstractIntegrationTest {
     private static final String SITE_A = "31000000-0000-0000-0000-000000000001";
     private static final String SITE_B = "31000000-0000-0000-0000-000000000002";
     private static final String TEST_CODE_PREFIX = "TW-";
+    /**
+     * A worker the server numbered carries no code this class chose, so the sweep below has
+     * to be able to find him by name instead. Every worker created here is named "TW …".
+     */
+    private static final String TEST_NAME_PREFIX = "TW ";
 
     @Autowired
     private MockMvc mockMvc;
@@ -47,16 +52,18 @@ class LabourTransferIntegrationTest extends AbstractIntegrationTest {
     /** The suite shares a database and these workers would show up in other classes' counts. */
     @AfterEach
     void removeCreatedWorkers() {
+        String mine = "worker_code LIKE ? OR full_name LIKE ?";
+        Object[] args = {TEST_CODE_PREFIX + "%", TEST_NAME_PREFIX + "%"};
         jdbc.update("""
                 DELETE FROM worker_site_allocations WHERE worker_id IN
-                    (SELECT id FROM workers WHERE worker_code LIKE ?)""", TEST_CODE_PREFIX + "%");
+                    (SELECT id FROM workers WHERE %s)""".formatted(mine), args);
         jdbc.update("""
                 DELETE FROM attendance_records WHERE worker_id IN
-                    (SELECT id FROM workers WHERE worker_code LIKE ?)""", TEST_CODE_PREFIX + "%");
+                    (SELECT id FROM workers WHERE %s)""".formatted(mine), args);
         jdbc.update("""
                 DELETE FROM wage_rates WHERE worker_id IN
-                    (SELECT id FROM workers WHERE worker_code LIKE ?)""", TEST_CODE_PREFIX + "%");
-        jdbc.update("DELETE FROM workers WHERE worker_code LIKE ?", TEST_CODE_PREFIX + "%");
+                    (SELECT id FROM workers WHERE %s)""".formatted(mine), args);
+        jdbc.update("DELETE FROM workers WHERE " + mine, args);
     }
 
     @Test
@@ -110,6 +117,88 @@ class LabourTransferIntegrationTest extends AbstractIntegrationTest {
                                 {"normalRate":650,"overtimeRate":92.85,"effectiveFrom":"%s"}"""
                                 .formatted(LocalDate.now())))
                 .andExpect(status().isCreated());
+    }
+
+    /**
+     * The gate asks for a name, a mobile and a site. Everything else the roll needs has an
+     * answer that does not have to be typed while a man waits — and a number typed at a gate
+     * is the one that goes wrong, because the other gate has already used it.
+     */
+    @Test
+    @DisplayName("a worker given no number is assigned the next one in the org's series")
+    void serverNumbersTheWorker() throws Exception {
+        String vivek = loginToken("vivek");
+        MvcResult result = mockMvc.perform(post("/api/v1/workers")
+                        .header("Authorization", "Bearer " + vivek)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName":"TW Bina Number","mobile":"+91-9800000111",
+                                 "siteId":"%s"}""".formatted(SITE_A)))
+                .andExpect(status().isCreated())
+                // Contract labour on a daily wage, joined today: what nearly every man is.
+                .andExpect(jsonPath("$.employmentType").value("CONTRACT"))
+                .andExpect(jsonPath("$.wageType").value("DAILY"))
+                .andExpect(jsonPath("$.joiningDate").value(LocalDate.now().toString()))
+                .andExpect(jsonPath("$.currentSiteId").value(SITE_A))
+                .andReturn();
+
+        String first = objectMapper.readTree(result.getResponse().getContentAsString())
+                .get("workerCode").asText();
+        assertThat(first).matches("W-\\d{4}-\\d{4}");
+
+        // And the next man is the next number, not the same one again.
+        MvcResult next = mockMvc.perform(post("/api/v1/workers")
+                        .header("Authorization", "Bearer " + vivek)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName":"TW Agla Number","mobile":"+91-9800000112",
+                                 "siteId":"%s"}""".formatted(SITE_A)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        assertThat(objectMapper.readTree(next.getResponse().getContentAsString())
+                .get("workerCode").asText()).isNotEqualTo(first);
+    }
+
+    /** A man nobody can telephone is a man nobody can call back to the site. */
+    @Test
+    @DisplayName("a worker without a mobile number is refused")
+    void mobileIsRequired() throws Exception {
+        mockMvc.perform(post("/api/v1/workers")
+                        .header("Authorization", "Bearer " + loginToken("vivek"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName":"TW Bina Mobile","siteId":"%s"}""".formatted(SITE_A)))
+                .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * Nobody types where overtime begins or what it pays. KSN-A runs a seven-hour day, so a
+     * wage of 700 is 100 an hour, and the eighth hour is worth exactly that — the field data
+     * said overtime carries no premium (assumption 7), and the site already carries the
+     * shift length the office would otherwise be dividing by in its head.
+     */
+    @Test
+    @DisplayName("the day's wage and the site's shift price the overtime hour between them")
+    void overtimeRateComesFromTheSiteShift() throws Exception {
+        String viplove = loginToken("viplove");
+        MvcResult created = mockMvc.perform(post("/api/v1/workers")
+                        .header("Authorization", "Bearer " + viplove)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName":"TW Overtime Wala","mobile":"+91-9800000113",
+                                 "siteId":"%s","normalRate":700}""".formatted(SITE_A)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String workerId = objectMapper.readTree(created.getResponse().getContentAsString())
+                .get("id").asText();
+
+        MvcResult rates = mockMvc.perform(get("/api/v1/workers/" + workerId + "/wage-rates")
+                        .header("Authorization", "Bearer " + viplove))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode open = objectMapper.readTree(rates.getResponse().getContentAsString()).get(0);
+        assertThat(open.get("normalRate").decimalValue()).isEqualByComparingTo("700");
+        assertThat(open.get("overtimeRate").decimalValue()).isEqualByComparingTo("100");
     }
 
     @Test

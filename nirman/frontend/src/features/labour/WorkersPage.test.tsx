@@ -150,30 +150,52 @@ describe('WorkersPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Take on a worker' }));
     await user.type(await screen.findByLabelText('Full name'), 'Bhola Ram');
-    await user.type(screen.getByLabelText('Worker number'), 'W-109');
-    // No rate fields at all for someone who cannot set pay.
-    expect(screen.queryByLabelText('Rate (optional)')).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText('Mobile'), '9800000123');
+    // Nobody is asked to invent a worker number any more; the server assigns it.
+    expect(screen.queryByLabelText('Worker number')).not.toBeInTheDocument();
+    // Nor for anything the office fills in later.
+    expect(screen.queryByLabelText('Engaged as')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Joining date')).not.toBeInTheDocument();
+    // No pay field at all for someone who cannot set pay.
+    expect(screen.queryByLabelText('Wage a day (optional)')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Add worker' }));
 
     await waitFor(() => expect(post).toHaveBeenCalledOnce());
     const [url, body] = post.mock.calls[0] as [
       string,
-      { fullName: string; siteId: string; normalRate?: number },
+      { fullName: string; mobile: string; siteId: string; normalRate?: number },
     ];
     expect(url).toBe('/workers');
     expect(body.fullName).toBe('Bhola Ram');
+    expect(body.mobile).toBe('9800000123');
     expect(body.siteId).toBe('site-a');
     expect(body.normalRate).toBeUndefined();
   });
 
-  it('offers the pay fields to someone who may set pay', async () => {
+  // Mandatory because a man nobody can telephone is a man nobody can call back to the site.
+  it('will not take a man on without a mobile number', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('Karam Singh');
+
+    await user.click(screen.getByRole('button', { name: 'Take on a worker' }));
+    await user.type(await screen.findByLabelText('Full name'), 'Bhola Ram');
+    await user.click(screen.getByRole('button', { name: 'Add worker' }));
+
+    expect(await screen.findByText('Enter his mobile number')).toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('offers the day’s wage to someone who may set pay, and asks no overtime rate', async () => {
     permissions = ['worker:read', 'worker:write', 'wage:write'];
     const user = userEvent.setup({ delay: null });
     renderPage();
     await screen.findAllByText('Karam Singh');
 
     await user.click(screen.getByRole('button', { name: 'Take on a worker' }));
-    expect(await screen.findByLabelText('Rate (optional)')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Wage a day (optional)')).toBeInTheDocument();
+    // The site already knows where its working hours end; the hour past them is derived.
+    expect(screen.queryByLabelText('Overtime rate an hour (optional)')).not.toBeInTheDocument();
   });
 
   it('transfers to a site the supervisor does not work at, on any project', async () => {

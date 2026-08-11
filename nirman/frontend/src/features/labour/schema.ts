@@ -9,34 +9,27 @@ const optionalAmount = z
   .optional()
   .or(z.literal(''));
 
+/**
+ * Taking a man on at the gate, and nothing more.
+ *
+ * <p>His number is not here because the server assigns it, and his employment basis, his
+ * contractor, his joining date and his Aadhaar are not here because none of them was ever
+ * answered correctly by somebody standing at a gate. The office fills those in later. What
+ * is left is what the muster roll cannot do without: a name, a number to reach him on, the
+ * site he is joining, and — for whoever may set pay — what he earns in a day.</p>
+ */
 export const onboardWorkerSchema = z.object({
-  workerCode: z
-    .string()
-    .trim()
-    .min(1, 'Enter a worker number')
-    .max(40, 'At most 40 characters')
-    .regex(/^[A-Za-z0-9._-]+$/, 'Letters, digits, dot, underscore and hyphen only'),
   fullName: z.string().trim().min(1, 'Enter his full name').max(150, 'At most 150 characters'),
-  mobile: z.string().trim().max(20, 'At most 20 characters').optional(),
-  skillCategoryId: z.string().optional(),
-  employmentType: z.enum(['PERMANENT', 'CONTRACT', 'CASUAL']),
-  labourContractorId: z.string().optional(),
-  wageType: z.enum(['DAILY', 'HOURLY', 'MONTHLY']),
-  joiningDate: z.string().optional().or(z.literal('')),
-  /**
-   * Four digits, never the whole number. The server enforces the same: a muster roll needs
-   * enough to tell two men apart, and holding full Aadhaar numbers on a site phone is a
-   * liability nobody asked for.
-   */
-  aadhaarLast4: z
+  mobile: z
     .string()
     .trim()
-    .regex(/^\d{4}$/, 'The last four digits only')
-    .optional()
-    .or(z.literal('')),
+    .min(1, 'Enter his mobile number')
+    .max(20, 'At most 20 characters')
+    .refine((value) => value.replace(/\D/g, '').length >= 10, 'At least ten digits'),
+  skillCategoryId: z.string().optional(),
   siteId: z.string().min(1, 'Choose the site he is joining'),
+  /** Per day. Overtime is not asked for — see the dialog. */
   normalRate: optionalAmount,
-  overtimeRate: optionalAmount,
 });
 
 export type OnboardWorkerForm = z.infer<typeof onboardWorkerSchema>;

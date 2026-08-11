@@ -42,7 +42,14 @@ public class DocumentNumberService {
          * has not already used. The same counter answers it: unique per organisation, and
          * nobody has to invent a code while a lorry waits.
          */
-        MATERIAL("MAT");
+        MATERIAL("MAT"),
+        /**
+         * Nor is a worker. His number is what goes against his name on the muster roll, and
+         * it was being typed by whoever took him on — which means a supervisor at the gate
+         * inventing one, and two men on two sites given the same. The counter has always
+         * been the answer to that question; nobody was asking it of workers yet.
+         */
+        WORKER("W");
 
         private final String prefix;
 

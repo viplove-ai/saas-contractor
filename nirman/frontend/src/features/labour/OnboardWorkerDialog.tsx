@@ -14,14 +14,8 @@ import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { useAuth } from '../auth/AuthContext';
-import {
-  useLabourContractors,
-  useMySites,
-  useOnboardWorker,
-  useSkillCategories,
-} from './api';
+import { useMySites, useOnboardWorker, useSkillCategories } from './api';
 import { onboardWorkerSchema, type OnboardWorkerForm } from './schema';
-import { EMPLOYMENT_LABEL, WAGE_TYPE_LABEL, type EmploymentType, type WageType } from './types';
 
 interface Props {
   open: boolean;
@@ -30,27 +24,23 @@ interface Props {
   onClose: () => void;
 }
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 /**
- * Taking a man on at the gate.
+ * Taking a man on at the gate, in five fields.
  *
- * <p>Written for the phone it will be filled in on: the site is pre-selected, the joining
- * date defaults to today, and everything the office can supply later — his contractor, his
- * Aadhaar digits, his bank — is optional. A man who starts work at eight and is entered at
- * nine has to be markable at the end of the same day.</p>
+ * <p>Written for the phone it will be filled in on. It asks only what the muster roll cannot
+ * do without — his name, a number to reach him on, the site, his trade if anyone knows it —
+ * and everything the office can supply later is gone from the screen entirely rather than
+ * sitting there marked optional. His worker number is assigned by the server, because a
+ * number invented at a gate is a number another gate has already used.</p>
  *
- * <p>The pay fields appear only for someone who may set pay. A supervisor onboards the man;
- * what he is paid is the office's decision, and the server refuses a rate from anyone
- * without {@code wage:write} rather than trusting this to hide it.</p>
+ * <p>The pay field appears only for someone who may set pay, and it is a day's wage. Nobody
+ * is asked for an overtime rate: the site already carries where its working hours end, and
+ * the hour past them is paid at the rate the day's wage implies.</p>
  */
 export function OnboardWorkerDialog({ open, defaultSiteId, onClose }: Props) {
   const { hasPermission } = useAuth();
   const mySites = useMySites();
   const skills = useSkillCategories();
-  const contractors = useLabourContractors();
   const onboard = useOnboardWorker();
   const [serverError, setServerError] = useState<string | null>(null);
   const canSetPay = hasPermission('wage:write');
@@ -64,18 +54,11 @@ export function OnboardWorkerDialog({ open, defaultSiteId, onClose }: Props) {
   } = useForm<OnboardWorkerForm>({
     resolver: zodResolver(onboardWorkerSchema),
     defaultValues: {
-      workerCode: '',
       fullName: '',
       mobile: '',
       skillCategoryId: '',
-      employmentType: 'CONTRACT',
-      labourContractorId: '',
-      wageType: 'DAILY',
-      joiningDate: todayIso(),
-      aadhaarLast4: '',
       siteId: defaultSiteId,
       normalRate: '',
-      overtimeRate: '',
     },
   });
 
@@ -85,18 +68,11 @@ export function OnboardWorkerDialog({ open, defaultSiteId, onClose }: Props) {
     }
     setServerError(null);
     reset({
-      workerCode: '',
       fullName: '',
       mobile: '',
       skillCategoryId: '',
-      employmentType: 'CONTRACT',
-      labourContractorId: '',
-      wageType: 'DAILY',
-      joiningDate: todayIso(),
-      aadhaarLast4: '',
       siteId: defaultSiteId || mySites.data?.[0]?.id || '',
       normalRate: '',
-      overtimeRate: '',
     });
   }, [open, defaultSiteId, mySites.data, reset]);
 
@@ -104,18 +80,11 @@ export function OnboardWorkerDialog({ open, defaultSiteId, onClose }: Props) {
     setServerError(null);
     try {
       await onboard.mutateAsync({
-        workerCode: values.workerCode,
         fullName: values.fullName,
         mobile: values.mobile,
         skillCategoryId: values.skillCategoryId,
-        employmentType: values.employmentType,
-        labourContractorId: values.labourContractorId,
-        wageType: values.wageType,
-        joiningDate: values.joiningDate,
-        aadhaarLast4: values.aadhaarLast4,
         siteId: values.siteId,
         normalRate: canSetPay && values.normalRate ? Number(values.normalRate) : undefined,
-        overtimeRate: canSetPay && values.overtimeRate ? Number(values.overtimeRate) : undefined,
       });
       onClose();
     } catch (error) {
@@ -138,16 +107,10 @@ export function OnboardWorkerDialog({ open, defaultSiteId, onClose }: Props) {
             {...register('fullName')}
           />
           <TextField
-            label="Worker number"
-            error={!!errors.workerCode}
-            helperText={errors.workerCode?.message ?? 'What goes against his name on the roll.'}
-            {...register('workerCode')}
-          />
-          <TextField
-            label="Mobile (optional)"
+            label="Mobile"
             inputMode="tel"
             error={!!errors.mobile}
-            helperText={errors.mobile?.message}
+            helperText={errors.mobile?.message ?? 'How the site reaches him.'}
             {...register('mobile')}
           />
 
@@ -171,105 +134,34 @@ export function OnboardWorkerDialog({ open, defaultSiteId, onClose }: Props) {
             )}
           />
 
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <Controller
-              control={control}
-              name="skillCategoryId"
-              render={({ field }) => (
-                <TextField {...field} select label="Trade (optional)">
-                  <MenuItem value="">Not set</MenuItem>
-                  {(skills.data ?? [])
-                    .filter((skill) => skill.active)
-                    .map((skill) => (
-                      <MenuItem key={skill.id} value={skill.id}>
-                        {skill.name}
-                      </MenuItem>
-                    ))}
-                </TextField>
-              )}
-            />
-            <Controller
-              control={control}
-              name="employmentType"
-              render={({ field }) => (
-                <TextField {...field} select label="Engaged as">
-                  {(Object.keys(EMPLOYMENT_LABEL) as EmploymentType[]).map((type) => (
-                    <MenuItem key={type} value={type}>
-                      {EMPLOYMENT_LABEL[type]}
+          <Controller
+            control={control}
+            name="skillCategoryId"
+            render={({ field }) => (
+              <TextField {...field} select label="Trade (optional)">
+                <MenuItem value="">Not set</MenuItem>
+                {(skills.data ?? [])
+                  .filter((skill) => skill.active)
+                  .map((skill) => (
+                    <MenuItem key={skill.id} value={skill.id}>
+                      {skill.name}
                     </MenuItem>
                   ))}
-                </TextField>
-              )}
-            />
-          </Stack>
-
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <Controller
-              control={control}
-              name="labourContractorId"
-              render={({ field }) => (
-                <TextField {...field} select label="Through contractor (optional)">
-                  <MenuItem value="">Direct</MenuItem>
-                  {(contractors.data ?? [])
-                    .filter((contractor) => contractor.active)
-                    .map((contractor) => (
-                      <MenuItem key={contractor.id} value={contractor.id}>
-                        {contractor.name}
-                      </MenuItem>
-                    ))}
-                </TextField>
-              )}
-            />
-            <Controller
-              control={control}
-              name="wageType"
-              render={({ field }) => (
-                <TextField {...field} select label="Paid">
-                  {(Object.keys(WAGE_TYPE_LABEL) as WageType[]).map((type) => (
-                    <MenuItem key={type} value={type}>
-                      {WAGE_TYPE_LABEL[type]}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              )}
-            />
-          </Stack>
-
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField
-              label="Joining date"
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              error={!!errors.joiningDate}
-              helperText={errors.joiningDate?.message}
-              {...register('joiningDate')}
-            />
-            <TextField
-              label="Aadhaar last 4 (optional)"
-              inputMode="numeric"
-              error={!!errors.aadhaarLast4}
-              helperText={errors.aadhaarLast4?.message ?? 'Four digits only, never the full number.'}
-              {...register('aadhaarLast4')}
-            />
-          </Stack>
+              </TextField>
+            )}
+          />
 
           {canSetPay ? (
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <TextField
-                label="Rate (optional)"
-                inputMode="decimal"
-                error={!!errors.normalRate}
-                helperText={errors.normalRate?.message ?? 'Per the pay basis chosen above.'}
-                {...register('normalRate')}
-              />
-              <TextField
-                label="Overtime rate an hour (optional)"
-                inputMode="decimal"
-                error={!!errors.overtimeRate}
-                helperText={errors.overtimeRate?.message}
-                {...register('overtimeRate')}
-              />
-            </Stack>
+            <TextField
+              label="Wage a day (optional)"
+              inputMode="decimal"
+              error={!!errors.normalRate}
+              helperText={
+                errors.normalRate?.message ??
+                'Anything past the site’s working hours is overtime, at the hour this works out to.'
+              }
+              {...register('normalRate')}
+            />
           ) : (
             <Alert severity="info">
               Add him now and mark his attendance today. The office sets what he is paid —

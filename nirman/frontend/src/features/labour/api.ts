@@ -2,12 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../shared/apiClient';
 import type {
   Allocation,
-  EmploymentType,
-  LabourContractor,
   PageResponse,
   SiteDirectoryEntry,
   SkillCategory,
-  WageType,
   Worker,
 } from './types';
 
@@ -17,7 +14,6 @@ export const labourKeys = {
   allocations: (workerId: string) => ['labour', 'allocations', workerId] as const,
   directory: ['labour', 'site-directory'] as const,
   skills: ['labour', 'skill-categories'] as const,
-  contractors: ['labour', 'labour-contractors'] as const,
   /** The sites the signed-in user actually works at, as opposed to the whole directory. */
   mySites: ['sites'] as const,
 };
@@ -70,31 +66,18 @@ export function useSkillCategories() {
   });
 }
 
-export function useLabourContractors() {
-  return useQuery({
-    queryKey: labourKeys.contractors,
-    queryFn: async () =>
-      (await apiClient.get<PageResponse<LabourContractor>>('/labour-contractors', {
-        params: { size: PAGE_SIZE },
-      })).data.content,
-    staleTime: 15 * 60_000,
-  });
-}
-
+/**
+ * The whole of what the gate sends. No worker number: the server assigns it, so that two
+ * supervisors cannot reach for the same one. No wage type or overtime rate either — a day's
+ * wage is the basis, and the hour beyond the site's own working hours is priced from it.
+ */
 export interface OnboardWorkerInput {
-  workerCode: string;
   fullName: string;
-  mobile?: string | undefined;
+  mobile: string;
   skillCategoryId?: string | undefined;
-  employmentType: EmploymentType;
-  labourContractorId?: string | undefined;
-  wageType: WageType;
-  joiningDate?: string | undefined;
-  aadhaarLast4?: string | undefined;
   siteId: string;
-  /** Only sent by someone who may set pay; the server refuses it from anyone else. */
+  /** Per day, and only sent by someone who may set pay; the server refuses it from anyone else. */
   normalRate?: number | undefined;
-  overtimeRate?: number | undefined;
 }
 
 export function useOnboardWorker() {
@@ -104,11 +87,7 @@ export function useOnboardWorker() {
       (
         await apiClient.post<Worker>('/workers', {
           ...input,
-          mobile: input.mobile || undefined,
           skillCategoryId: input.skillCategoryId || undefined,
-          labourContractorId: input.labourContractorId || undefined,
-          joiningDate: input.joiningDate || undefined,
-          aadhaarLast4: input.aadhaarLast4 || undefined,
         })
       ).data,
     onSuccess: () => {
