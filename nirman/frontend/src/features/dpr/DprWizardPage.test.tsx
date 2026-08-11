@@ -24,6 +24,16 @@ vi.mock('../../shared/apiClient', async () => {
   };
 });
 
+/** A supervisor: he drafts the report and may name a material at the gate. */
+const permissions = ['dpr:draft', 'inventory:receive', 'masterdata:provisional'];
+
+vi.mock('../auth/AuthContext', () => ({
+  useAuth: () => ({
+    user: { id: 'u-sup', permissions },
+    hasPermission: (code: string) => permissions.includes(code),
+  }),
+}));
+
 const SITES: Site[] = [{ id: 'site-a', code: 'KSN-A', name: 'Kausani Main Block' }];
 
 const BOQ_ITEMS: BoqItem[] = [

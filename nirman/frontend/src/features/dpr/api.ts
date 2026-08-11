@@ -238,6 +238,34 @@ export function useMaterials() {
   });
 }
 
+/** Only needed for a material being named here — a picked one brings its own base unit. */
+export function useUnits() {
+  return useQuery({
+    queryKey: ['units'],
+    queryFn: async () =>
+      (await apiClient.get<{ id: string; code: string; name: string }[]>('/units')).data,
+    staleTime: REFERENCE_STALE_TIME,
+  });
+}
+
+/**
+ * A material named at the gate, when the catalogue has no name for what arrived.
+ *
+ * <p>Duplicated from the inventory feature rather than imported, the same way the material
+ * and store lookups above are: features do not reach into one another, and this is one
+ * mutation rather than a shared module.</p>
+ */
+export function useAddFieldMaterial() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { name: string; baseUnitId: string }) =>
+      (await apiClient.post<DprMaterial>('/materials/field', input)).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['materials'] });
+    },
+  });
+}
+
 export function useStores(siteId: string | undefined) {
   return useQuery({
     queryKey: ['stores', siteId ?? ''],

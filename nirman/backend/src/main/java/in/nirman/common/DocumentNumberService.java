@@ -36,7 +36,13 @@ public class DocumentNumberService {
         PAYMENT("PAY"),
         SITE_ADVANCE("SAD"),
         DPR("DPR"),
-        SETTLEMENT("STL");
+        SETTLEMENT("STL"),
+        /**
+         * Not a document — a material named at the gate, which needs a code the catalogue
+         * has not already used. The same counter answers it: unique per organisation, and
+         * nobody has to invent a code while a lorry waits.
+         */
+        MATERIAL("MAT");
 
         private final String prefix;
 

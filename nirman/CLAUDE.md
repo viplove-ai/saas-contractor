@@ -217,7 +217,7 @@ offline read actually reaches that cache instead of being paused before it fires
 
 ## Database changes
 
-Additive migrations only — an applied migration is **never** edited. Add `V15__…sql` in
+Additive migrations only — an applied migration is **never** edited. Add `V16__…sql` in
 `backend/src/main/resources/db/migration/` and restart the backend.
 
 Before a migration has been applied anywhere, `./scripts/dev.sh reset-db` replays from the
@@ -236,6 +236,13 @@ them. `V14__starter_master_data.sql` gives **every organisation that lacks them*
 starting catalogue, guarded by code so it never overwrites an organisation's own rows and
 inserts nothing in dev and test (where the organisation itself only arrives in `V900`,
 afterwards). Org-specific data — users, projects, BOQs — still never goes in a migration.
+
+`V15` is the other half of the same problem: a catalogue is never complete, and a lorry at the
+gate does not wait for the office. `POST /materials/field` lets somebody holding
+`masterdata:provisional` name a material with nothing but a name and a unit; the row is marked
+`materials.provisional` until an administrator edits it, and a name the org already holds comes
+back as the material it already holds rather than as a second row — two rows for one cement
+would split its stock into two balances, neither of them the amount in the shed.
 
 Hibernate is `ddl-auto: validate`. Flyway owns the schema; an entity that drifts from a
 migration fails at startup.

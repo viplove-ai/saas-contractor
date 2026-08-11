@@ -14,8 +14,10 @@ import {
 import { useEffect, useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { ReferenceNotice } from '../../shared/ReferenceNotice';
+import { useAuth } from '../auth/AuthContext';
 import {
   useAddExpense,
+  useAddFieldMaterial,
   useExpenseCategories,
   useIssueMaterial,
   useLabourContractors,
@@ -25,7 +27,9 @@ import {
   useSaveLabourCounts,
   useSkillCategories,
   useStores,
+  useUnits,
 } from './api';
+import { MATERIAL_NOT_LISTED } from './types';
 
 /**
  * The parts of the day a supervisor can enter <b>from the report itself</b>.
@@ -245,6 +249,10 @@ interface MaterialRow {
   materialId: string;
   quantity: string;
   rate: string;
+  /** What he called it, when the catalogue has no name for what turned up. */
+  newName?: string | undefined;
+  /** Only for a material he is naming: the picked one brings its own base unit. */
+  unitId?: string | undefined;
 }
 
 function emptyMaterial(): MaterialRow {
@@ -268,10 +276,13 @@ export function MaterialCard({
   onSaved,
   mode,
 }: DaySectionProps & { mode: 'RECEIVED' | 'USED' }) {
+  const { hasPermission } = useAuth();
   const stores = useStores(siteId);
   const materials = useMaterials();
+  const units = useUnits();
   const receive = useReceiveMaterial();
   const issue = useIssueMaterial();
+  const nameMaterial = useAddFieldMaterial();
   const [storeId, setStoreId] = useState('');
   const [rows, setRows] = useState<MaterialRow[]>([]);
   const [purpose, setPurpose] = useState('');
@@ -286,19 +297,50 @@ export function MaterialCard({
   }, [stores.data, storeId]);
 
   const receiving = mode === 'RECEIVED';
-  const pending = receive.isPending || issue.isPending;
-  const usable = rows.filter((row) => row.materialId && Number(row.quantity) > 0);
+  const pending = receive.isPending || issue.isPending || nameMaterial.isPending;
+  /*
+    Naming one is offered on the delivery only. What leaves the store for the work face has
+    to be in the store first, and a material nobody has ever received has no stock to issue —
+    so the answer there would create a row and then be refused by the ledger.
+  */
+  const canName = receiving && hasPermission('masterdata:provisional');
+  const usable = rows.filter(
+    (row) =>
+      Number(row.quantity) > 0 &&
+      (row.materialId === MATERIAL_NOT_LISTED
+        ? (row.newName ?? '').trim().length > 0 && Boolean(row.unitId)
+        : Boolean(row.materialId)),
+  );
 
   async function submit() {
     setError(null);
     setDone(null);
     const materialById = new Map((materials.data ?? []).map((m) => [m.id, m]));
-    const lines = usable.map((row) => ({
-      materialId: row.materialId,
-      unitId: materialById.get(row.materialId)?.baseUnitId ?? '',
-      quantity: Number(row.quantity),
-      ...(receiving ? { rate: Number(row.rate) || 0 } : {}),
-    }));
+    let lines: { materialId: string; unitId: string; quantity: number; rate?: number }[];
+    try {
+      // Anything he had to name becomes a material first: a receipt line carries an id, and
+      // there is no way to send a name in its place.
+      lines = await Promise.all(
+        usable.map(async (row) => {
+          const named =
+            row.materialId === MATERIAL_NOT_LISTED
+              ? await nameMaterial.mutateAsync({
+                  name: (row.newName ?? '').trim(),
+                  baseUnitId: row.unitId!,
+                })
+              : undefined;
+          return {
+            materialId: named?.id ?? row.materialId,
+            unitId: named?.baseUnitId ?? materialById.get(row.materialId)?.baseUnitId ?? '',
+            quantity: Number(row.quantity),
+            ...(receiving ? { rate: Number(row.rate) || 0 } : {}),
+          };
+        }),
+      );
+    } catch (caught) {
+      setError(apiErrorDetail(caught));
+      return;
+    }
     try {
       if (receiving) {
         await receive.mutateAsync({
@@ -365,28 +407,79 @@ export function MaterialCard({
       <Stack spacing={1.5}>
         {rows.map((row) => (
           <Stack key={row.key} direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-            <TextField
-              select
-              size="small"
-              label="Material"
-              value={row.materialId}
-              onChange={(event) =>
-                setRows((current) =>
-                  current.map((candidate) =>
-                    candidate.key === row.key
-                      ? { ...candidate, materialId: event.target.value }
-                      : candidate,
-                  ),
-                )
-              }
-              sx={{ minWidth: 220 }}
-            >
-              {(materials.data ?? []).map((material) => (
-                <MenuItem key={material.id} value={material.id}>
-                  {material.name}
-                </MenuItem>
-              ))}
-            </TextField>
+            <Stack spacing={1} sx={{ minWidth: 220 }}>
+              <TextField
+                select
+                size="small"
+                label="Material"
+                value={row.materialId}
+                onChange={(event) =>
+                  setRows((current) =>
+                    current.map((candidate) =>
+                      candidate.key === row.key
+                        ? {
+                            ...candidate,
+                            materialId: event.target.value,
+                            // Switching back to a catalogue material drops what he was typing,
+                            // so a half-typed name cannot ride along with a picked one.
+                            ...(event.target.value === MATERIAL_NOT_LISTED
+                              ? {}
+                              : { newName: undefined, unitId: undefined }),
+                          }
+                        : candidate,
+                    ),
+                  )
+                }
+              >
+                {(materials.data ?? []).map((material) => (
+                  <MenuItem key={material.id} value={material.id}>
+                    {material.name}
+                  </MenuItem>
+                ))}
+                {canName && <MenuItem value={MATERIAL_NOT_LISTED}>Not in the list…</MenuItem>}
+              </TextField>
+              {row.materialId === MATERIAL_NOT_LISTED && (
+                <>
+                  <TextField
+                    size="small"
+                    label="What is it called"
+                    value={row.newName ?? ''}
+                    onChange={(event) =>
+                      setRows((current) =>
+                        current.map((candidate) =>
+                          candidate.key === row.key
+                            ? { ...candidate, newName: event.target.value }
+                            : candidate,
+                        ),
+                      )
+                    }
+                    helperText="As it reads on the challan. The office prices it later."
+                  />
+                  {/* No catalogue row means no base unit, so this one is his to say. */}
+                  <TextField
+                    select
+                    size="small"
+                    label="Counted in"
+                    value={row.unitId ?? ''}
+                    onChange={(event) =>
+                      setRows((current) =>
+                        current.map((candidate) =>
+                          candidate.key === row.key
+                            ? { ...candidate, unitId: event.target.value }
+                            : candidate,
+                        ),
+                      )
+                    }
+                  >
+                    {(units.data ?? []).map((unit) => (
+                      <MenuItem key={unit.id} value={unit.id}>
+                        {unit.code} — {unit.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </>
+              )}
+            </Stack>
             <TextField
               size="small"
               type="number"

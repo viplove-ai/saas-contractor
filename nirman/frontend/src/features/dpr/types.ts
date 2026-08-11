@@ -151,6 +151,13 @@ export interface DprMaterial {
   baseUnitCode?: string;
 }
 
+/**
+ * The value the material picker carries for "not in the list" — a sentinel rather than an
+ * empty string, because a picker nobody has answered and one answered with "none of these"
+ * are different states, and only the second one asks for a name.
+ */
+export const MATERIAL_NOT_LISTED = '__not-listed__';
+
 export interface LabourCountLine {
   skillCategoryId: string;
   labourContractorId?: string | undefined;

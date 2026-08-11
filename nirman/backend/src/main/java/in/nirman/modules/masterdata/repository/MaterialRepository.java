@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -15,6 +16,21 @@ public interface MaterialRepository extends JpaRepository<Material, UUID> {
     Optional<Material> findByIdAndOrgIdAndDeletedAtIsNull(UUID id, UUID orgId);
 
     boolean existsByOrgIdAndCode(UUID orgId, String code);
+
+    /**
+     * The same material under the name somebody typed at the gate.
+     *
+     * <p>Case- and space-insensitive, because "cement opc 43" and "Cement OPC 43" are one
+     * material and two rows would split its stock into two balances that never add up.
+     * Oldest first: if the catalogue already holds duplicates, the established one wins.</p>
+     */
+    @Query("""
+            SELECT m FROM Material m
+            WHERE m.orgId = :orgId AND m.deletedAt IS NULL
+              AND lower(trim(m.name)) = lower(trim(:name))
+            ORDER BY m.createdAt ASC
+            """)
+    List<Material> findByName(@Param("orgId") UUID orgId, @Param("name") String name);
 
     /** {@code CAST(:q AS string)} for the reason spelled out in {@link LabourContractorRepository}. */
     @Query("""

@@ -53,6 +53,15 @@ public class Material extends BaseEntity {
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
+    /**
+     * Named from the field on a receipt rather than set up by the office — a name off a
+     * challan, with no rate, HSN or GST behind it, and possibly a second name for something
+     * the catalogue already holds. The office's cue to merge or complete the row; cleared
+     * when an administrator edits it, because editing it is the act of vetting it.
+     */
+    @Column(name = "provisional", nullable = false)
+    private boolean provisional = false;
+
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
@@ -148,6 +157,14 @@ public class Material extends BaseEntity {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public boolean isProvisional() {
+        return provisional;
+    }
+
+    public void setProvisional(boolean provisional) {
+        this.provisional = provisional;
     }
 
     public Instant getDeletedAt() {

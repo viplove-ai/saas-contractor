@@ -134,10 +134,27 @@ public final class MasterDataDtos {
 
     // ------------------------------------------------------------------ materials
 
+    /**
+     * @param provisional the row was named from the field on a receipt and nobody has vetted
+     *                    it — no rate, no HSN, and possibly a second name for something the
+     *                    catalogue already holds.
+     */
     public record MaterialResponse(
             UUID id, String code, String name, UUID categoryId, UUID baseUnitId, String hsnCode,
             BigDecimal gstPercent, BigDecimal minStockLevel, BigDecimal standardRate,
-            UUID preferredVendorId, boolean consumable, boolean active, Long version) {
+            UUID preferredVendorId, boolean consumable, boolean active, boolean provisional,
+            Long version) {
+    }
+
+    /**
+     * A material named at the gate, with only what the man holding the challan actually knows.
+     *
+     * <p>No rate, no HSN code and no GST percentage, on purpose: those are the office's to
+     * set, and a guess typed at a gate becomes a figure somebody later costs work against.</p>
+     */
+    public record AddFieldMaterialRequest(
+            @NotBlank @Size(max = 200) String name,
+            @NotNull UUID baseUnitId) {
     }
 
     public record CreateMaterialRequest(
