@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -172,7 +172,10 @@ describe('DprWizardPage', () => {
     // The figure under its own label, rather than a bare '3' the stepper also renders.
     expect(screen.getByText('Present').nextSibling).toHaveTextContent('3');
     expect(screen.getByText('21.00 h')).toBeInTheDocument();
-    expect(screen.getByText('Mason')).toBeInTheDocument();
+    // The trade breakdown draws a table and a card list at once, so scope to one.
+    expect(
+      within(screen.getByRole('table', { name: 'Labour on site' })).getByText('Mason'),
+    ).toBeInTheDocument();
   });
 
   /**

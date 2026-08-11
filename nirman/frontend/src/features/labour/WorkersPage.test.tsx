@@ -90,6 +90,14 @@ function renderPage() {
   );
 }
 
+/*
+  The register draws a table and a card list at once and hides one by breakpoint, so every
+  worker's name is in the document twice. Scope to the layout under test, the same way the
+  projects register's tests do.
+*/
+const table = () => within(screen.getByRole('table', { name: 'Workers' }));
+const cards = () => within(screen.getByRole('list', { name: 'Workers' }));
+
 describe('WorkersPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -123,17 +131,22 @@ describe('WorkersPage', () => {
 
   it('says plainly when the office has not set a rate yet', async () => {
     renderPage();
-    const unpaid = (await screen.findByText('Naya Mazdoor')).closest('tr') as HTMLElement;
-    const paid = screen.getByText('Karam Singh').closest('tr') as HTMLElement;
+    await screen.findAllByText('Naya Mazdoor');
+    const unpaid = table().getByText('Naya Mazdoor').closest('tr') as HTMLElement;
+    const paid = table().getByText('Karam Singh').closest('tr') as HTMLElement;
 
     expect(within(unpaid).getByText('Not set by office')).toBeInTheDocument();
     expect(within(paid).getByText(/625/)).toBeInTheDocument();
+
+    // And the same two facts on the card the phone gets.
+    const unpaidCard = cards().getByText('Naya Mazdoor').closest('li') as HTMLElement;
+    expect(within(unpaidCard).getByText('Not set by office')).toBeInTheDocument();
   });
 
   it('onboards a man onto the supervisor’s own site without touching pay', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
-    await screen.findByText('Karam Singh');
+    await screen.findAllByText('Karam Singh');
 
     await user.click(screen.getByRole('button', { name: 'Take on a worker' }));
     await user.type(await screen.findByLabelText('Full name'), 'Bhola Ram');
@@ -157,7 +170,7 @@ describe('WorkersPage', () => {
     permissions = ['worker:read', 'worker:write', 'wage:write'];
     const user = userEvent.setup({ delay: null });
     renderPage();
-    await screen.findByText('Karam Singh');
+    await screen.findAllByText('Karam Singh');
 
     await user.click(screen.getByRole('button', { name: 'Take on a worker' }));
     expect(await screen.findByLabelText('Rate (optional)')).toBeInTheDocument();
@@ -166,7 +179,8 @@ describe('WorkersPage', () => {
   it('transfers to a site the supervisor does not work at, on any project', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
-    const row = (await screen.findByText('Karam Singh')).closest('tr') as HTMLElement;
+    await screen.findAllByText('Karam Singh');
+    const row = table().getByText('Karam Singh').closest('tr') as HTMLElement;
     await user.click(within(row).getByRole('button', { name: 'Transfer' }));
 
     await user.click(await screen.findByRole('combobox', { name: 'Send him to' }));

@@ -8,17 +8,13 @@ import {
   Paper,
   Stack,
   Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatQuantity } from '../../shared/formatters';
+import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
 import { useLedger, useStock } from './api';
 import { StorePicker } from './StorePicker';
 import type { LedgerRow, StockRow, TxnType } from './types';
@@ -58,6 +54,60 @@ export function StockPage() {
 
   const stock = useStock(storeId || undefined, lowOnly);
 
+  const columns: RecordColumn<StockRow>[] = [
+    {
+      key: 'material',
+      header: 'Material',
+      card: 'title',
+      cell: (row) => (
+        <>
+          <Typography fontWeight={600}>{row.materialName}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {row.materialCode}
+            {row.low && (
+              <>
+                {' · '}
+                <Typography component="span" variant="body2" color="warning.main">
+                  below {formatQuantity(row.minStockLevel, row.baseUnitCode)}
+                </Typography>
+              </>
+            )}
+          </Typography>
+        </>
+      ),
+    },
+    {
+      key: 'inStock',
+      header: 'In stock',
+      align: 'right',
+      cell: (row) => formatQuantity(row.quantityBase, row.baseUnitCode),
+    },
+    {
+      /*
+        In transit is deliberately its own column rather than folded into the quantity:
+        material on a lorry cannot be issued, and a storekeeper who sees it in the stock
+        figure will promise it to somebody.
+      */
+      key: 'coming',
+      header: 'Coming',
+      align: 'right',
+      cell: (row) =>
+        row.inTransitQtyBase > 0 ? formatQuantity(row.inTransitQtyBase, row.baseUnitCode) : '—',
+    },
+    {
+      key: 'rate',
+      header: 'Average rate',
+      align: 'right',
+      cell: (row) => formatAmount(row.movingAvgRate),
+    },
+    {
+      key: 'value',
+      header: 'Value',
+      align: 'right',
+      cell: (row) => formatAmount(row.stockValue),
+    },
+  ];
+
   return (
     <Stack spacing={2}>
       <Typography variant="h1">Stock</Typography>
@@ -95,59 +145,13 @@ export function StockPage() {
       )}
 
       {stock.data && stock.data.rows.length > 0 && (
-        <Paper elevation={0} sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Material</TableCell>
-                <TableCell align="right">In stock</TableCell>
-                <TableCell align="right">Coming</TableCell>
-                <TableCell align="right">Average rate</TableCell>
-                <TableCell align="right">Value</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {stock.data.rows.map((row) => (
-                <TableRow
-                  key={`${row.storeId}-${row.materialId}`}
-                  hover
-                  onClick={() => setOpenRow(row)}
-                  sx={{ cursor: 'pointer' }}
-                >
-                  <TableCell>
-                    <Typography fontWeight={600}>{row.materialName}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {row.materialCode}
-                      {row.low && (
-                        <>
-                          {' · '}
-                          <Typography component="span" variant="body2" color="warning.main">
-                            below {formatQuantity(row.minStockLevel, row.baseUnitCode)}
-                          </Typography>
-                        </>
-                      )}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    {formatQuantity(row.quantityBase, row.baseUnitCode)}
-                  </TableCell>
-                  {/*
-                    In transit is deliberately its own column rather than folded into the
-                    quantity: material on a lorry cannot be issued, and a storekeeper who
-                    sees it in the stock figure will promise it to somebody.
-                  */}
-                  <TableCell align="right">
-                    {row.inTransitQtyBase > 0
-                      ? formatQuantity(row.inTransitQtyBase, row.baseUnitCode)
-                      : '—'}
-                  </TableCell>
-                  <TableCell align="right">{formatAmount(row.movingAvgRate)}</TableCell>
-                  <TableCell align="right">{formatAmount(row.stockValue)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Paper>
+        <RecordTable
+          columns={columns}
+          rows={stock.data.rows}
+          rowKey={(row) => `${row.storeId}-${row.materialId}`}
+          onRowClick={setOpenRow}
+          ariaLabel="Stock"
+        />
       )}
 
       <Drawer

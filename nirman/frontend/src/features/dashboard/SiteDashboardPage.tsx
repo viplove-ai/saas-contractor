@@ -6,11 +6,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
 } from '@mui/material';
@@ -18,10 +13,59 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatHours, formatQuantity } from '../../shared/formatters';
+import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
 import { monthToDate, useSiteDashboard, useSites } from './api';
 import { CostTrendChart } from './CostTrendChart';
 import { MaterialPositionCard } from './MaterialPositionCard';
 import { PeriodPicker } from './PeriodPicker';
+import type { WorkItemRow } from './types';
+
+/** The lines this site has moved furthest on. */
+const WORK_ITEM_COLUMNS: RecordColumn<WorkItemRow>[] = [
+  {
+    key: 'item',
+    header: 'Item',
+    card: 'title',
+    cell: (item) => (
+      <>
+        <Typography fontWeight={600}>{item.itemNumber}</Typography>
+        <Typography variant="body2" color="text.secondary">
+          {item.description}
+        </Typography>
+      </>
+    ),
+  },
+  {
+    key: 'contract',
+    header: 'Contract',
+    align: 'right',
+    cell: (item) => formatQuantity(item.contractQuantity),
+  },
+  {
+    key: 'done',
+    header: 'Done',
+    align: 'right',
+    cell: (item) => formatQuantity(item.completedQuantity),
+  },
+  {
+    key: 'complete',
+    header: 'Complete',
+    align: 'right',
+    cell: (item) => (
+      <>
+        {item.percentComplete == null ? '—' : `${item.percentComplete.toFixed(1)}%`}
+        {item.percentComplete != null && (
+          <LinearProgress
+            variant="determinate"
+            value={Math.min(item.percentComplete, 100)}
+            color={item.overClaimedQuantity > 0 ? 'warning' : 'primary'}
+            sx={{ mt: 0.5, height: 6, borderRadius: 3 }}
+          />
+        )}
+      </>
+    ),
+  },
+];
 
 /**
  * One site: what it spent, what it holds, what it has built, and what its diary is missing.
@@ -198,43 +242,13 @@ export function SiteDashboardPage() {
             )}
 
             {dashboard.data.topWorkItems.length > 0 && (
-              <Table size="small" sx={{ mt: 1.5 }}>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Item</TableCell>
-                    <TableCell align="right">Contract</TableCell>
-                    <TableCell align="right">Done</TableCell>
-                    <TableCell align="right">Complete</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {dashboard.data.topWorkItems.map((item) => (
-                    <TableRow key={item.boqItemId}>
-                      <TableCell>
-                        <Typography fontWeight={600}>{item.itemNumber}</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {item.description}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right">{formatQuantity(item.contractQuantity)}</TableCell>
-                      <TableCell align="right">{formatQuantity(item.completedQuantity)}</TableCell>
-                      <TableCell align="right">
-                        {item.percentComplete == null
-                          ? '—'
-                          : `${item.percentComplete.toFixed(1)}%`}
-                        {item.percentComplete != null && (
-                          <LinearProgress
-                            variant="determinate"
-                            value={Math.min(item.percentComplete, 100)}
-                            color={item.overClaimedQuantity > 0 ? 'warning' : 'primary'}
-                            sx={{ mt: 0.5, height: 6, borderRadius: 3 }}
-                          />
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <RecordTable
+                nested
+                columns={WORK_ITEM_COLUMNS}
+                rows={dashboard.data.topWorkItems}
+                rowKey={(item) => item.boqItemId}
+                ariaLabel="Work items"
+              />
             )}
           </Paper>
 

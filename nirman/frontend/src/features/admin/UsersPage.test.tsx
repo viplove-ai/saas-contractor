@@ -111,6 +111,12 @@ function renderPage() {
   );
 }
 
+/*
+  Both layouts are in the DOM at once and a breakpoint hides one, so every name is present
+  twice. Scope to the layout under test, the same way the projects register's tests do.
+*/
+const table = () => within(screen.getByRole('table', { name: 'Members' }));
+
 describe('UsersPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -127,10 +133,11 @@ describe('UsersPage', () => {
 
   it('separates a company-wide role from a site-scoped one', async () => {
     renderPage();
-    const supervisorRow = (await screen.findByText('Vivek Aggarwal')).closest(
+    await screen.findAllByText('Vivek Aggarwal');
+    const supervisorRow = table().getByText('Vivek Aggarwal').closest(
       'tr',
     ) as HTMLElement;
-    const adminRow = screen.getByText('Viplove Chaudhary').closest('tr') as HTMLElement;
+    const adminRow = table().getByText('Viplove Chaudhary').closest('tr') as HTMLElement;
 
     expect(within(supervisorRow).getByText('KSN-A')).toBeInTheDocument();
     // An admin's blank posting list would otherwise read as "no access at all".
@@ -142,7 +149,8 @@ describe('UsersPage', () => {
   // company-wide role held alongside a site-scoped one must not read as "this site only".
   it('lists every role held, and says the widest one decides what they see', async () => {
     renderPage();
-    const bothRow = (await screen.findByText('Uttam Rana')).closest('tr') as HTMLElement;
+    await screen.findAllByText('Uttam Rana');
+    const bothRow = table().getByText('Uttam Rana').closest('tr') as HTMLElement;
 
     expect(within(bothRow).getByText('Accountant')).toBeInTheDocument();
     expect(within(bothRow).getByText('Site engineer')).toBeInTheDocument();
@@ -152,7 +160,7 @@ describe('UsersPage', () => {
   it('onboards a member with a first-time password and one role', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
-    await screen.findByText('Vivek Aggarwal');
+    await screen.findAllByText('Vivek Aggarwal');
 
     await user.click(screen.getByRole('button', { name: 'Onboard a member' }));
     await user.type(screen.getByLabelText('Username'), 'ramesh.k');
@@ -180,7 +188,7 @@ describe('UsersPage', () => {
   it('warns while a site-scoped member has no posting', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
-    await screen.findByText('Vivek Aggarwal');
+    await screen.findAllByText('Vivek Aggarwal');
 
     await user.click(screen.getByRole('button', { name: 'Onboard a member' }));
     expect(await screen.findByText(/Not posted anywhere yet/)).toBeInTheDocument();
@@ -192,9 +200,9 @@ describe('UsersPage', () => {
   it('drops site postings when the last site-scoped role is taken away', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
-    await screen.findByText('Vivek Aggarwal');
+    await screen.findAllByText('Vivek Aggarwal');
 
-    const supervisorRow = screen.getByText('Vivek Aggarwal').closest('tr') as HTMLElement;
+    const supervisorRow = table().getByText('Vivek Aggarwal').closest('tr') as HTMLElement;
     await user.click(within(supervisorRow).getByRole('button', { name: 'Edit' }));
     await user.click(await screen.findByRole('checkbox', { name: 'Site supervisor' }));
     await user.click(screen.getByRole('checkbox', { name: 'Accountant' }));
@@ -209,9 +217,9 @@ describe('UsersPage', () => {
   it('opens on every role a member holds and sends the whole set back', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
-    await screen.findByText('Uttam Rana');
+    await screen.findAllByText('Uttam Rana');
 
-    const bothRow = screen.getByText('Uttam Rana').closest('tr') as HTMLElement;
+    const bothRow = table().getByText('Uttam Rana').closest('tr') as HTMLElement;
     await user.click(within(bothRow).getByRole('button', { name: 'Edit' }));
 
     expect(await screen.findByRole('checkbox', { name: 'Accountant' })).toBeChecked();
@@ -233,9 +241,9 @@ describe('UsersPage', () => {
   it('refuses to save a member with no role at all', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
-    await screen.findByText('Vivek Aggarwal');
+    await screen.findAllByText('Vivek Aggarwal');
 
-    const supervisorRow = screen.getByText('Vivek Aggarwal').closest('tr') as HTMLElement;
+    const supervisorRow = table().getByText('Vivek Aggarwal').closest('tr') as HTMLElement;
     await user.click(within(supervisorRow).getByRole('button', { name: 'Edit' }));
     await user.click(await screen.findByRole('checkbox', { name: 'Site supervisor' }));
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
@@ -247,9 +255,9 @@ describe('UsersPage', () => {
   it('shows the reset password once, after the reset has gone through', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
-    await screen.findByText('Vivek Aggarwal');
+    await screen.findAllByText('Vivek Aggarwal');
 
-    const supervisorRow = screen.getByText('Vivek Aggarwal').closest('tr') as HTMLElement;
+    const supervisorRow = table().getByText('Vivek Aggarwal').closest('tr') as HTMLElement;
     await user.click(within(supervisorRow).getByRole('button', { name: 'Reset password' }));
 
     const field = (await screen.findByLabelText('New temporary password')) as HTMLInputElement;
@@ -273,8 +281,8 @@ describe('UsersPage', () => {
 
   it('refuses to let an admin disable the account they are signed in with', async () => {
     renderPage();
-    await screen.findByText('Vivek Aggarwal');
-    const adminRow = screen.getByText('Viplove Chaudhary').closest('tr') as HTMLElement;
+    await screen.findAllByText('Vivek Aggarwal');
+    const adminRow = table().getByText('Viplove Chaudhary').closest('tr') as HTMLElement;
     // The signed-in user is u-admin in this fixture; the row is viplove's, id u-admin.
     expect(within(adminRow).getByRole('button', { name: 'Disable' })).toBeDisabled();
   });

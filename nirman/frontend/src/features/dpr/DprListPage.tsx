@@ -14,11 +14,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
 } from '@mui/material';
@@ -29,12 +24,13 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatHours, formatQuantity } from '../../shared/formatters';
+import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
 import { StatusChip, type RecordStatus } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
 import { DeleteRecordDialog } from '../../shared/DeleteRecordDialog';
 import { downloadDprPdf, useDecideDpr, useDeleteDpr, useDpr, useDprs, useSites } from './api';
 import { isEditable } from './types';
-import type { Dpr, DprWorkflow } from './types';
+import type { Dpr, DprWorkflow, WorkItemResponse } from './types';
 
 const STATUS_CHIP: Record<DprWorkflow, RecordStatus> = {
   DRAFT: 'DRAFT',
@@ -42,6 +38,35 @@ const STATUS_CHIP: Record<DprWorkflow, RecordStatus> = {
   VERIFIED: 'VERIFIED',
   REJECTED: 'REJECTED',
 };
+
+/**
+ * The lines this report claims. The work is the headline, because an item number is what the
+ * contract calls it and the activity is what the engineer recognises.
+ */
+const CLAIMED_COLUMNS: RecordColumn<WorkItemResponse>[] = [
+  { key: 'item', header: 'Item', cell: (item) => item.itemNumber ?? '—' },
+  {
+    key: 'work',
+    header: 'Work',
+    card: 'title',
+    cell: (item) => (
+      <>
+        {item.activity}
+        {item.workLocation && (
+          <Typography variant="body2" color="text.secondary">
+            {item.workLocation}
+          </Typography>
+        )}
+      </>
+    ),
+  },
+  {
+    key: 'quantity',
+    header: 'Quantity',
+    align: 'right',
+    cell: (item) => formatQuantity(item.quantity),
+  },
+];
 
 /**
  * The reports, and the engineer's queue.
@@ -66,6 +91,54 @@ export function DprListPage() {
   const reports = useDprs(siteId || undefined, status);
   const canVerify = hasPermission('dpr:verify');
   const canDelete = hasPermission('dpr:delete');
+
+  const columns: RecordColumn<Dpr>[] = [
+    { key: 'report', header: 'Report', card: 'title', cell: (report) => report.dprNumber },
+    { key: 'site', header: 'Site', cell: (report) => report.siteName },
+    { key: 'date', header: 'Date', cell: (report) => report.reportDate },
+    {
+      key: 'men',
+      header: 'Men',
+      align: 'right',
+      cell: (report) => report.labourPresentCount ?? '—',
+    },
+    {
+      key: 'cost',
+      header: 'Day cost',
+      align: 'right',
+      cell: (report) => formatAmount(report.dayCost),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      card: 'status',
+      cell: (report) => <StatusChip status={STATUS_CHIP[report.workflowStatus]} />,
+    },
+    {
+      /*
+        The way back into an unfinished report. Without it a draft is a row you can read and
+        never finish, which is what a draft is least useful as. The heading is blank because
+        the column holds one conditional button, and "Actions" over mostly-empty cells reads
+        as a column that failed to load.
+      */
+      key: 'continue',
+      header: '',
+      align: 'right',
+      card: 'actions',
+      cell: (report) =>
+        isEditable(report.workflowStatus) && (
+          <Button
+            component={Link}
+            to={`/dpr/${report.id}`}
+            size="small"
+            startIcon={<EditIcon />}
+            onClick={(event) => event.stopPropagation()}
+          >
+            Continue
+          </Button>
+        ),
+    },
+  ];
 
   return (
     <Stack spacing={2}>
@@ -110,57 +183,13 @@ export function DprListPage() {
       )}
 
       {reports.data && reports.data.content.length > 0 && (
-        <Paper elevation={0} sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Report</TableCell>
-                <TableCell>Site</TableCell>
-                <TableCell>Date</TableCell>
-                <TableCell align="right">Men</TableCell>
-                <TableCell align="right">Day cost</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell />
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {reports.data.content.map((report) => (
-                <TableRow
-                  key={report.id}
-                  hover
-                  onClick={() => setOpenId(report.id)}
-                  sx={{ cursor: 'pointer' }}
-                >
-                  <TableCell>{report.dprNumber}</TableCell>
-                  <TableCell>{report.siteName}</TableCell>
-                  <TableCell>{report.reportDate}</TableCell>
-                  <TableCell align="right">{report.labourPresentCount ?? '—'}</TableCell>
-                  <TableCell align="right">{formatAmount(report.dayCost)}</TableCell>
-                  <TableCell>
-                    <StatusChip status={STATUS_CHIP[report.workflowStatus]} />
-                  </TableCell>
-                  {/*
-                    The way back into an unfinished report. Without it a draft is a row you can
-                    read and never finish, which is what a draft is least useful as.
-                  */}
-                  <TableCell align="right">
-                    {isEditable(report.workflowStatus) && (
-                      <Button
-                        component={Link}
-                        to={`/dpr/${report.id}`}
-                        size="small"
-                        startIcon={<EditIcon />}
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        Continue
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Paper>
+        <RecordTable
+          columns={columns}
+          rows={reports.data.content}
+          rowKey={(report) => report.id}
+          onRowClick={(report) => setOpenId(report.id)}
+          ariaLabel="Daily reports"
+        />
       )}
 
       <Drawer
@@ -307,31 +336,13 @@ function ReportPanel({
           <Typography fontWeight={600} gutterBottom>
             Claimed against the contract
           </Typography>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Item</TableCell>
-                <TableCell>Work</TableCell>
-                <TableCell align="right">Quantity</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {measured.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>{item.itemNumber ?? '—'}</TableCell>
-                  <TableCell>
-                    {item.activity}
-                    {item.workLocation && (
-                      <Typography variant="body2" color="text.secondary">
-                        {item.workLocation}
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell align="right">{formatQuantity(item.quantity)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <RecordTable
+            nested
+            columns={CLAIMED_COLUMNS}
+            rows={measured}
+            rowKey={(item) => item.id}
+            ariaLabel="Claimed against the contract"
+          />
         </Paper>
       )}
 

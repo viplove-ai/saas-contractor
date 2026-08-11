@@ -354,4 +354,24 @@ describe('MarkAttendancePage', () => {
     expect(await screen.findByText(/This month is closed for attendance/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mark all present' })).toBeDisabled();
   });
+
+  it('sends a supervisor with no men to the workers page rather than leaving him on an empty muster', async () => {
+    get.mockImplementation((url: string) => {
+      if (url === '/sites') return Promise.resolve({ data: SITES });
+      return Promise.resolve({ data: { ...ROSTER, entries: [] } });
+    });
+    renderPage();
+
+    expect(await screen.findByText('Nobody to mark yet')).toBeInTheDocument();
+    // The site is named, so a supervisor on two sites knows which one is empty.
+    expect(
+      screen.getByText(/No worker is posted to KSN-A — Kausani Main Block/),
+    ).toBeInTheDocument();
+
+    const goToWorkers = screen.getByRole('link', { name: 'Add workers' });
+    expect(goToWorkers).toHaveAttribute('href', '/workers');
+
+    // Nothing to mark means nothing that marks: the roll and its buttons stay away.
+    expect(screen.queryByRole('button', { name: 'Mark all present' })).not.toBeInTheDocument();
+  });
 });

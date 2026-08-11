@@ -10,12 +10,6 @@ import {
   IconButton,
   Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
   Tooltip,
   Typography,
@@ -24,6 +18,7 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatQuantity } from '../../shared/formatters';
+import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
 import { useBoqItems, useNitDocument, useProject, useUnits } from './api';
 import type { BoqItem, NitFields, ProjectStatus } from './types';
 
@@ -78,6 +73,74 @@ export function ProjectDetailPage() {
         (line.category ?? '').toLowerCase().includes(needle),
     );
   }, [lines, filter]);
+
+  /*
+    Built here rather than at module scope because the quantity column needs `unitCode`, which
+    only exists once the unit master data has loaded.
+  */
+  const boqColumns = useMemo<RecordColumn<BoqItem>[]>(
+    () => [
+      {
+        key: 'item',
+        header: 'Item',
+        sx: { whiteSpace: 'nowrap', fontFamily: 'monospace' },
+        cell: (line) => line.itemNumber,
+      },
+      {
+        key: 'description',
+        header: 'Description',
+        card: 'title',
+        sx: { minWidth: 260 },
+        cell: (line) => (
+          <>
+            <Typography variant="body2">{line.description}</Typography>
+            <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
+              {line.workPart && (
+                <Chip size="small" variant="outlined" label={line.workPart} sx={{ height: 18 }} />
+              )}
+              {line.synthetic && (
+                <Tooltip title="A gap between the extracted lines and the tender's stated total. Nothing can be charged against it.">
+                  <Chip size="small" color="warning" label="reconciliation" sx={{ height: 18 }} />
+                </Tooltip>
+              )}
+            </Stack>
+          </>
+        ),
+      },
+      {
+        key: 'category',
+        header: 'Category',
+        sx: { whiteSpace: 'nowrap' },
+        cell: (line) => (
+          <Typography variant="caption" color="text.secondary">
+            {line.category ?? '—'}
+          </Typography>
+        ),
+      },
+      {
+        key: 'quantity',
+        header: 'Quantity',
+        align: 'right',
+        sx: { whiteSpace: 'nowrap' },
+        cell: (line) => formatQuantity(line.contractQuantity, unitCode(line.unitId)),
+      },
+      {
+        key: 'rate',
+        header: 'Rate',
+        align: 'right',
+        sx: { whiteSpace: 'nowrap' },
+        cell: (line) => formatAmount(line.contractRate),
+      },
+      {
+        key: 'amount',
+        header: 'Amount',
+        align: 'right',
+        sx: { whiteSpace: 'nowrap' },
+        cell: (line) => formatAmount(line.contractAmount),
+      },
+    ],
+    [unitCode],
+  );
 
   const totals = useMemo(() => {
     const value = lines.reduce((sum, line) => sum + line.contractAmount, 0);
@@ -202,26 +265,19 @@ export function ProjectDetailPage() {
 
         {lines.length > 0 && (
           <>
-            {/* The table scrolls inside its own box; the page itself never scrolls sideways. */}
-            <TableContainer sx={{ maxHeight: 560 }}>
-              <Table size="small" stickyHeader>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Item</TableCell>
-                    <TableCell>Description</TableCell>
-                    <TableCell>Category</TableCell>
-                    <TableCell align="right">Quantity</TableCell>
-                    <TableCell align="right">Rate</TableCell>
-                    <TableCell align="right">Amount</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {visible.map((line) => (
-                    <BoqRow key={line.id} line={line} unit={unitCode(line.unitId)} />
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            {/* The list scrolls inside its own box; the page itself never scrolls sideways. */}
+            <Box sx={{ px: { xs: 2, sm: 0 } }}>
+              <RecordTable
+                nested
+                maxHeight={560}
+                columns={boqColumns}
+                rows={visible}
+                rowKey={(line) => line.id}
+                // Reconciliation placeholders are muted for what they are.
+                rowSx={(line) => (line.synthetic ? { bgcolor: 'action.hover' } : {})}
+                ariaLabel="Schedule of quantities"
+              />
+            </Box>
             {visible.length === 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
                 No item matches “{filter}”.
@@ -245,44 +301,6 @@ export function ProjectDetailPage() {
         )}
       </Paper>
     </Stack>
-  );
-}
-
-/** One BOQ line. Reconciliation placeholders are muted and labelled for what they are. */
-function BoqRow({ line, unit }: { line: BoqItem; unit: string }) {
-  return (
-    <TableRow hover sx={line.synthetic ? { bgcolor: 'action.hover' } : {}}>
-      <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>
-        {line.itemNumber}
-      </TableCell>
-      <TableCell sx={{ minWidth: 260 }}>
-        <Typography variant="body2">{line.description}</Typography>
-        <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
-          {line.workPart && (
-            <Chip size="small" variant="outlined" label={line.workPart} sx={{ height: 18 }} />
-          )}
-          {line.synthetic && (
-            <Tooltip title="A gap between the extracted lines and the tender's stated total. Nothing can be charged against it.">
-              <Chip size="small" color="warning" label="reconciliation" sx={{ height: 18 }} />
-            </Tooltip>
-          )}
-        </Stack>
-      </TableCell>
-      <TableCell sx={{ whiteSpace: 'nowrap' }}>
-        <Typography variant="caption" color="text.secondary">
-          {line.category ?? '—'}
-        </Typography>
-      </TableCell>
-      <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-        {formatQuantity(line.contractQuantity, unit)}
-      </TableCell>
-      <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-        {formatAmount(line.contractRate)}
-      </TableCell>
-      <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-        {formatAmount(line.contractAmount)}
-      </TableCell>
-    </TableRow>
   );
 }
 

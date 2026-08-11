@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -115,6 +115,18 @@ function mockGets(detail: Dpr = SUBMITTED, listed: Dpr[] = [SUBMITTED]) {
   });
 }
 
+/*
+  The queue draws a table and a card list at once and hides one by breakpoint, so every report
+  number is in the document twice. Scope to the layout under test.
+*/
+const table = () => within(screen.getByRole('table', { name: 'Daily reports' }));
+
+/** Opens a report from the desk layout, which is what these tests drive. */
+async function openReport(user: ReturnType<typeof userEvent.setup>, number: string) {
+  await screen.findAllByText(number);
+  await user.click(table().getByText(number));
+}
+
 describe('DprListPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -126,8 +138,9 @@ describe('DprListPage', () => {
   it('lists reports with their status and day cost', async () => {
     renderPage();
 
-    expect(await screen.findByText('DPR-2025-9002')).toBeInTheDocument();
-    expect(screen.getByText('Submitted')).toBeInTheDocument();
+    await screen.findAllByText('DPR-2025-9002');
+    expect(table().getByText('DPR-2025-9002')).toBeInTheDocument();
+    expect(table().getByText('Submitted')).toBeInTheDocument();
   });
 
   /**
@@ -138,10 +151,12 @@ describe('DprListPage', () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
 
-    await user.click(await screen.findByText('DPR-2025-9002'));
+    await openReport(user, 'DPR-2025-9002');
 
     expect(await screen.findByText('Claimed against the contract')).toBeInTheDocument();
-    expect(screen.getByText('B-003')).toBeInTheDocument();
+    // The claimed lines are their own register on the panel, and draw both layouts too.
+    const claimed = within(screen.getByRole('table', { name: 'Claimed against the contract' }));
+    expect(claimed.getByText('B-003')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Verify and claim 1 line(s)' }),
     ).toBeInTheDocument();
@@ -152,7 +167,7 @@ describe('DprListPage', () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
 
-    await user.click(await screen.findByText('DPR-2025-9002'));
+    await openReport(user, 'DPR-2025-9002');
 
     expect(await screen.findByText('Recorded, not claimed')).toBeInTheDocument();
     expect(screen.getByText('Shuttering struck and stacked')).toBeInTheDocument();
@@ -163,7 +178,7 @@ describe('DprListPage', () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
 
-    await user.click(await screen.findByText('DPR-2025-9002'));
+    await openReport(user, 'DPR-2025-9002');
 
     expect(await screen.findByText(/frozen when the report was sent/)).toBeInTheDocument();
   });
@@ -172,7 +187,7 @@ describe('DprListPage', () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
 
-    await user.click(await screen.findByText('DPR-2025-9002'));
+    await openReport(user, 'DPR-2025-9002');
     await user.click(await screen.findByRole('button', { name: 'Verify and claim 1 line(s)' }));
 
     await waitFor(() => expect(post).toHaveBeenCalledOnce());
@@ -185,7 +200,7 @@ describe('DprListPage', () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
 
-    await user.click(await screen.findByText('DPR-2025-9002'));
+    await openReport(user, 'DPR-2025-9002');
     await user.click(await screen.findByRole('button', { name: 'Send back' }));
 
     const confirm = screen.getAllByRole('button', { name: 'Send back' }).at(-1)!;
@@ -210,7 +225,7 @@ describe('DprListPage', () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
 
-    await user.click(await screen.findByText('DPR-2025-9002'));
+    await openReport(user, 'DPR-2025-9002');
     await screen.findByText('Claimed against the contract');
 
     expect(screen.queryByRole('button', { name: /^Verify/ })).not.toBeInTheDocument();
@@ -226,8 +241,9 @@ describe('DprListPage', () => {
     mockGets(SUBMITTED, [SUBMITTED, draft]);
     renderPage();
 
-    await screen.findByText('DPR-2025-9003');
-    const links = screen.getAllByRole('link', { name: 'Continue' });
+    await screen.findAllByText('DPR-2025-9003');
+    // One per layout, and only against the draft.
+    const links = table().getAllByRole('link', { name: 'Continue' });
     expect(links).toHaveLength(1);
     expect(links[0]).toHaveAttribute('href', '/dpr/d2');
   });
@@ -246,7 +262,7 @@ describe('DprListPage', () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
 
-    await user.click(await screen.findByText('DPR-2025-9003'));
+    await openReport(user, 'DPR-2025-9003');
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
 
     // Asked for, not encouraged: the dialog will not close on an empty box.
@@ -269,7 +285,7 @@ describe('DprListPage', () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
 
-    await user.click(await screen.findByText('DPR-2025-9002'));
+    await openReport(user, 'DPR-2025-9002');
     await screen.findByRole('button', { name: 'Send back' });
     expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
   });
@@ -288,7 +304,7 @@ describe('DprListPage', () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
 
-    await user.click(await screen.findByText('DPR-2025-9002'));
+    await openReport(user, 'DPR-2025-9002');
 
     expect(
       await screen.findByText(/1 claim\(s\) posted to the measurement book/),
