@@ -8,6 +8,7 @@ import type { Dpr, PageResponse, Site } from './types';
 
 const get = vi.fn();
 const post = vi.fn();
+const del = vi.fn();
 
 vi.mock('../../shared/apiClient', async () => {
   const actual = await vi.importActual<typeof import('../../shared/apiClient')>(
@@ -18,12 +19,13 @@ vi.mock('../../shared/apiClient', async () => {
     apiClient: {
       get: (...args: unknown[]) => get(...args),
       post: (...args: unknown[]) => post(...args),
+      delete: (...args: unknown[]) => del(...args),
     },
   };
 });
 
 /** An engineer signs reports. A supervisor writes them and does not. */
-let permissions = ['dpr:draft', 'dpr:verify'];
+let permissions = ['dpr:draft', 'dpr:verify', 'dpr:delete'];
 
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
@@ -228,6 +230,48 @@ describe('DprListPage', () => {
     const links = screen.getAllByRole('link', { name: 'Continue' });
     expect(links).toHaveLength(1);
     expect(links[0]).toHaveAttribute('href', '/dpr/d2');
+  });
+
+  /**
+   * Deleting is the other answer to an unfinished report, and it is offered in the same place
+   * as the way back into it: either this report is worth finishing, or it should never have
+   * been opened. The reason is required — a document that vanished without one is
+   * indistinguishable from data loss six months later.
+   */
+  it('deletes a draft with a reason, and offers nothing of the kind on a signed report', async () => {
+    permissions = ['dpr:draft', 'dpr:verify', 'dpr:delete'];
+    const draft = dpr({ id: 'd1', dprNumber: 'DPR-2025-9003', workflowStatus: 'DRAFT' });
+    mockGets(draft, [draft]);
+    del.mockResolvedValue({ data: { ...draft } });
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+
+    await user.click(await screen.findByText('DPR-2025-9003'));
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    // Asked for, not encouraged: the dialog will not close on an empty box.
+    await user.click(screen.getByRole('button', { name: 'Delete report' }));
+    expect(del).not.toHaveBeenCalled();
+
+    await user.type(
+      screen.getByRole('textbox', { name: /Why is it being deleted/ }),
+      'Opened on the wrong site',
+    );
+    await user.click(screen.getByRole('button', { name: 'Delete report' }));
+
+    await waitFor(() => expect(del).toHaveBeenCalledOnce());
+    expect(del.mock.calls[0]![0]).toBe('/dprs/d1');
+    expect(del.mock.calls[0]![1]).toMatchObject({ data: { reason: 'Opened on the wrong site' } });
+  });
+
+  it('does not offer to delete a report that has gone for signature', async () => {
+    permissions = ['dpr:draft', 'dpr:verify', 'dpr:delete'];
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+
+    await user.click(await screen.findByText('DPR-2025-9002'));
+    await screen.findByRole('button', { name: 'Send back' });
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
   });
 
   /** A verified report reports what it posted, so the claim is visible after the fact. */

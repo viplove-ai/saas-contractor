@@ -23,6 +23,7 @@ import {
   Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditIcon from '@mui/icons-material/Edit';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -30,7 +31,8 @@ import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatHours, formatQuantity } from '../../shared/formatters';
 import { StatusChip, type RecordStatus } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
-import { downloadDprPdf, useDecideDpr, useDpr, useDprs, useSites } from './api';
+import { DeleteRecordDialog } from '../../shared/DeleteRecordDialog';
+import { downloadDprPdf, useDecideDpr, useDeleteDpr, useDpr, useDprs, useSites } from './api';
 import { isEditable } from './types';
 import type { Dpr, DprWorkflow } from './types';
 
@@ -63,6 +65,7 @@ export function DprListPage() {
   const sites = useSites();
   const reports = useDprs(siteId || undefined, status);
   const canVerify = hasPermission('dpr:verify');
+  const canDelete = hasPermission('dpr:delete');
 
   return (
     <Stack spacing={2}>
@@ -167,7 +170,12 @@ export function DprListPage() {
         PaperProps={{ sx: { width: { xs: '100%', sm: 640 }, p: 2 } }}
       >
         {openId && (
-          <ReportPanel id={openId} canVerify={canVerify} onClose={() => setOpenId(null)} />
+          <ReportPanel
+            id={openId}
+            canVerify={canVerify}
+            canDelete={canDelete}
+            onClose={() => setOpenId(null)}
+          />
         )}
       </Drawer>
     </Stack>
@@ -177,15 +185,19 @@ export function DprListPage() {
 function ReportPanel({
   id,
   canVerify,
+  canDelete,
   onClose,
 }: {
   id: string;
   canVerify: boolean;
+  canDelete: boolean;
   onClose: () => void;
 }) {
   const report = useDpr(id);
   const decide = useDecideDpr();
+  const deleteDpr = useDeleteDpr();
   const [rejecting, setRejecting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [remarks, setRemarks] = useState('');
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
@@ -236,6 +248,22 @@ function ReportPanel({
             onClick={onClose}
           >
             Continue this report
+          </Button>
+        )}
+        {/*
+          Beside Continue, because they answer the same question in opposite directions: this
+          report is unfinished, and either it is worth finishing or it should never have been
+          opened. Only while it is still the writer's — once it has gone for signature the
+          server refuses, and a button that only ever errs is worse than no button.
+        */}
+        {canDelete && isEditable(data.workflowStatus) && (
+          <Button
+            size="small"
+            color="error"
+            startIcon={<DeleteOutlineIcon />}
+            onClick={() => setDeleting(true)}
+          >
+            Delete
           </Button>
         )}
       </Stack>
@@ -397,6 +425,18 @@ function ReportPanel({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <DeleteRecordDialog
+        open={deleting}
+        kind="report"
+        label={`${data.dprNumber} (${data.reportDate})`}
+        description="It comes off the reports list and the day is free to be written again. The report itself is kept, with this reason on it."
+        onConfirm={async (reason) => {
+          await deleteDpr.mutateAsync({ id: data.id, reason });
+          onClose();
+        }}
+        onClose={() => setDeleting(false)}
+      />
     </Stack>
   );
 }

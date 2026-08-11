@@ -26,11 +26,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatHours, formatQuantity } from '../../shared/formatters';
+import { DeleteRecordDialog } from '../../shared/DeleteRecordDialog';
 import { StatusChip } from '../../shared/StatusChip';
+import { useAuth } from '../auth/AuthContext';
 import {
   useAttachDprPhoto,
   useBoqItems,
   useCreateDpr,
+  useDeleteDpr,
   useDpr,
   usePrefill,
   useSites,
@@ -129,6 +132,8 @@ export function DprWizardPage() {
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
+  const { hasPermission } = useAuth();
+  const canDelete = hasPermission('dpr:delete');
   const sites = useSites();
   const prefill = usePrefill(siteId || undefined, reportDate);
   const boqItems = useBoqItems(siteId || undefined);
@@ -466,8 +471,17 @@ export function DprWizardPage() {
       {mustChoose && existingReport && !closed && (
         <ExistingDraftChoice
           report={existingReport}
+          canDelete={canDelete}
           onResume={() => resumeDraft(existingReport)}
           onStartFresh={() => startFresh(existingReport)}
+          onDeleted={() => {
+            // The day is free again and nothing on this screen is standing on that report
+            // any more, so the wizard goes back to what it is on an empty day: a blank one.
+            clearForm();
+            setDraftChoice('UNDECIDED');
+            setStep(0);
+            void prefill.refetch();
+          }}
         />
       )}
 
@@ -684,17 +698,30 @@ export function DprWizardPage() {
  *
  * <p>Starting fresh asks twice. It is the only button on the screen that throws away work
  * somebody typed, and the second press is what separates it from a mis-tap.</p>
+ *
+ * <p>Three answers now, because starting fresh answers only two of the three cases. It is
+ * right when the day happened and was written up badly; it is no help at all when the report
+ * should not exist — the wrong site picked at six in the morning, a Sunday opened out of
+ * habit. An emptied draft still holds a number, still sits in the register as a draft, and
+ * still holds the day against the one report per site per day rule. Deleting it hands the
+ * day back.</p>
  */
 function ExistingDraftChoice({
   report,
+  canDelete,
   onResume,
   onStartFresh,
+  onDeleted,
 }: {
   report: Dpr;
+  canDelete: boolean;
   onResume: () => void;
   onStartFresh: () => void;
+  onDeleted: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const deleteDpr = useDeleteDpr();
   const lines = report.workItems.length;
 
   return (
@@ -737,6 +764,21 @@ function ExistingDraftChoice({
             </Button>
           </>
         )}
+        {/*
+          The third answer, and the quiet one: it asks for a reason in a dialog rather than
+          escalating in place, because it is the least common of the three and the only one
+          that takes the report off the register altogether.
+        */}
+        {!confirming && canDelete && (
+          <Button
+            variant="text"
+            color="error"
+            onClick={() => setDeleting(true)}
+            sx={{ minHeight: 48 }}
+          >
+            Delete it
+          </Button>
+        )}
       </Stack>
       {confirming && (
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
@@ -744,6 +786,18 @@ function ExistingDraftChoice({
           save. The muster, the material and the bills behind the day are not touched.
         </Typography>
       )}
+
+      <DeleteRecordDialog
+        open={deleting}
+        kind="report"
+        label={`${report.dprNumber} (${report.reportDate})`}
+        description="It comes off the reports list and this day is free to be written again from scratch. The muster, the material and the bills behind the day are not touched."
+        onConfirm={async (reason) => {
+          await deleteDpr.mutateAsync({ id: report.id, reason });
+          onDeleted();
+        }}
+        onClose={() => setDeleting(false)}
+      />
     </Paper>
   );
 }

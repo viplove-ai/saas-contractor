@@ -101,7 +101,7 @@ public class DprPrefillService {
         SiteLookup.SiteInfo site = sites.require(siteId);
 
         Rollup rollup = rollup(siteId, date);
-        var existing = reports.findBySiteIdAndReportDate(siteId, date);
+        var existing = reports.findBySiteIdAndReportDateAndDeletedAtIsNull(siteId, date);
 
         return new DprPrefill(siteId, site.name(), date,
                 existing.isPresent(),

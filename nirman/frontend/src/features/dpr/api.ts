@@ -117,6 +117,26 @@ export function useSubmitDpr() {
 }
 
 /**
+ * Takes a report off the register and gives its day back.
+ *
+ * <p>Not the same act as the wizard's "start fresh", which empties a report and writes over
+ * it. This one is for the report that should not exist — the wrong site, a day opened out of
+ * habit — and it is refused once the report has gone for signature. The prefill goes with it
+ * because the day is free again, and the dashboards because their counts have changed.</p>
+ */
+export function useDeleteDpr() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) =>
+      (await apiClient.delete<Dpr>(`/dprs/${id}`, { data: { reason } })).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: dprKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+
+/**
  * The engineer's decision. Verifying posts the measured quantities to the measurement book,
  * so the caches that show contract progress go with it.
  */

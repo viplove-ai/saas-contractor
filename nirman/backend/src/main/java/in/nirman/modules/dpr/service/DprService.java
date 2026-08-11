@@ -167,9 +167,20 @@ public class DprService {
 
         var replay = reports.findByIdAndOrgId(request.id(), orgId());
         if (replay.isPresent()) {
+            // A phone can be holding a report that was deleted from the office while it had
+            // no signal. Re-sending it must not quietly resurrect it, and must not collide
+            // with its own primary key either — so it is told what happened to it.
+            if (replay.get().isDeleted()) {
+                throw BusinessException.conflict("dpr.deleted",
+                        "%s was deleted%s. Write the day again if it still needs a report — this "
+                                .formatted(replay.get().getDprNumber(),
+                                        replay.get().getDeletedReason() == null ? ""
+                                                : ": " + replay.get().getDeletedReason())
+                                + "one is not coming back.");
+            }
             return responses.toResponse(replay.get());   // the offline replay
         }
-        reports.findBySiteIdAndReportDate(request.siteId(), request.reportDate())
+        reports.findBySiteIdAndReportDateAndDeletedAtIsNull(request.siteId(), request.reportDate())
                 .ifPresent(existing -> {
                     throw BusinessException.conflict("dpr.already-exists",
                             "%s already covers %s at this site. Open it rather than starting a second one."
@@ -245,6 +256,45 @@ public class DprService {
 
         audit.record(ENTITY_TYPE, id, "ATTACH_PHOTO", null,
                 Map.of("attachmentId", request.attachmentId().toString()), null);
+        return responses.toResponse(report);
+    }
+
+    /**
+     * Takes a report off the register, and gives its day back.
+     *
+     * <p>The wizard's "start fresh" empties a draft and writes over it, which is right when
+     * the day happened and was written up badly. It is no answer to a report that should not
+     * exist — the wrong site, a Sunday opened out of habit — because an emptied draft still
+     * holds a DPR number, still sits in the register, and still occupies the day so nobody
+     * can write it properly later.</p>
+     *
+     * <p>Only a draft or a report the engineer sent back. A submitted report is on somebody's
+     * desk and the answer to it is to send it back first; a verified one has posted measured
+     * quantities to the measurement book, and that is exactly the history that does not move.
+     * The reason is required for the reason it is required to delete a project: six months on,
+     * a document that vanished without an explanation is indistinguishable from data loss.</p>
+     */
+    @PreAuthorize("hasAuthority('dpr:delete')")
+    public DprResponse delete(UUID id, String reason) {
+        DailyProgressReport report = require(id);
+        siteAccessGuard.assertCanAccess(report.getSiteId());
+        if (!report.getWorkflowStatus().isEditable()) {
+            throw new BusinessException("dpr.not-deletable",
+                    "Report " + report.getDprNumber() + " has been "
+                            + report.getWorkflowStatus().name().toLowerCase()
+                            + " and cannot be deleted. "
+                            + (report.getWorkflowStatus() == Workflow.SUBMITTED
+                            ? "Ask the engineer to send it back first."
+                            : "Its figures are what was signed, and its measured lines are "
+                            + "in the measurement book."));
+        }
+
+        report.delete(Instant.now(), currentUser.currentUserIdOrNull(), reason);
+        audit.record(ENTITY_TYPE, id, "DELETE",
+                Map.of("dprNumber", report.getDprNumber(),
+                        "workflowStatus", report.getWorkflowStatus().name()),
+                Map.of("reportDate", report.getReportDate().toString(),
+                        "siteId", report.getSiteId().toString()), reason);
         return responses.toResponse(report);
     }
 
@@ -433,7 +483,7 @@ public class DprService {
     }
 
     private DailyProgressReport require(UUID id) {
-        DailyProgressReport report = reports.findByIdAndOrgId(id, orgId())
+        DailyProgressReport report = reports.findByIdAndOrgIdAndDeletedAtIsNull(id, orgId())
                 .orElseThrow(() -> BusinessException.notFound("DPR", id));
         if (!Objects.equals(report.getOrgId(), orgId())) {
             throw BusinessException.notFound("DPR", id);

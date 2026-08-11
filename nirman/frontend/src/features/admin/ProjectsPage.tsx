@@ -22,7 +22,7 @@ import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount } from '../../shared/formatters';
 import { useAuth } from '../auth/AuthContext';
 import { useAdminSites, useDeleteProject, useProjects, useRestoreProject } from './api';
-import { DeleteRecordDialog } from './DeleteRecordDialog';
+import { DeleteRecordDialog } from '../../shared/DeleteRecordDialog';
 import { ProjectFormDialog } from './ProjectFormDialog';
 import type { AdminProject, ProjectStatus } from './types';
 

@@ -234,6 +234,17 @@ public final class DprDtos {
         public enum Action { VERIFY, REJECT }
     }
 
+    /**
+     * Why a report is being deleted, and it is not optional.
+     *
+     * <p>The same rule a project's deletion follows: what is being removed carries a document
+     * number and sat in the register, and six months later "it is not there" without a reason
+     * beside it is indistinguishable from something having gone wrong.</p>
+     */
+    public record DeleteDprRequest(
+            @NotBlank @Size(max = 500) String reason) {
+    }
+
     // ---------------------------------------------------------------- read
 
     public record WorkItemResponse(

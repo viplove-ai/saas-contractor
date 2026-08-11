@@ -9,6 +9,7 @@ import type { BoqItem, Dpr, DprPrefill, DprWorkflow, Site } from './types';
 const get = vi.fn();
 const post = vi.fn();
 const put = vi.fn();
+const del = vi.fn();
 
 vi.mock('../../shared/apiClient', async () => {
   const actual = await vi.importActual<typeof import('../../shared/apiClient')>(
@@ -20,12 +21,13 @@ vi.mock('../../shared/apiClient', async () => {
       get: (...args: unknown[]) => get(...args),
       post: (...args: unknown[]) => post(...args),
       put: (...args: unknown[]) => put(...args),
+      delete: (...args: unknown[]) => del(...args),
     },
   };
 });
 
 /** A supervisor: he drafts the report and may name a material at the gate. */
-const permissions = ['dpr:draft', 'inventory:receive', 'masterdata:provisional'];
+const permissions = ['dpr:draft', 'dpr:delete', 'inventory:receive', 'masterdata:provisional'];
 
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
@@ -254,6 +256,34 @@ describe('DprWizardPage', () => {
    * rule, so "fresh" cannot mean a second row — and the PUT rather than a POST is what proves
    * the screen is not quietly trying for one.
    */
+  /**
+   * The third answer to a day that already has a report, and the one starting fresh cannot
+   * give: this report should not exist at all. Deleting hands the day back — an emptied
+   * draft would still hold it against the one-per-site-per-day rule.
+   */
+  it('deletes the report that should never have been opened, and frees the day', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockGets(prefill({ reportExists: true, existingDprId: 'dpr-existing' }));
+    del.mockResolvedValue({ data: { id: 'dpr-existing' } });
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Delete it' }));
+    await user.type(
+      screen.getByRole('textbox', { name: /Why is it being deleted/ }),
+      'Wrong site — this was KSN-B',
+    );
+    await user.click(screen.getByRole('button', { name: 'Delete report' }));
+
+    await waitFor(() => expect(del).toHaveBeenCalledOnce());
+    expect(del.mock.calls[0]![0]).toBe('/dprs/dpr-existing');
+    expect(del.mock.calls[0]![1]).toMatchObject({
+      data: { reason: 'Wrong site — this was KSN-B' },
+    });
+    // Nothing was written to the report on the way past: deleting is not a save.
+    expect(put).not.toHaveBeenCalled();
+    expect(post).not.toHaveBeenCalled();
+  });
+
   it('starts fresh over the same report rather than opening a second one', async () => {
     const user = userEvent.setup({ delay: null });
     mockGets(prefill({ reportExists: true, existingDprId: 'dpr-existing' }));

@@ -10,7 +10,7 @@ import {
   TextField,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { apiErrorDetail } from '../../shared/apiClient';
+import { apiErrorDetail } from './apiClient';
 
 interface Props {
   open: boolean;
@@ -20,6 +20,12 @@ interface Props {
   label: string;
   /** Sites that will go down with a project, if any. Empty for a site of its own. */
   cascade?: string[];
+  /**
+   * What deletion means for this kind of record, when it is not the register's own story.
+   * A project or a site goes to the deleted list and can be put back; a daily report frees
+   * its day instead, and saying "an administrator can restore it" there would be a lie.
+   */
+  description?: string;
   onConfirm: (reason: string) => Promise<unknown>;
   onClose: () => void;
 }
@@ -35,7 +41,15 @@ interface Props {
  * always the interesting answer: it arrives carrying the count of what is recorded at the
  * site, which is the fact that changes the admin's mind about deleting it at all.</p>
  */
-export function DeleteRecordDialog({ open, kind, label, cascade = [], onConfirm, onClose }: Props) {
+export function DeleteRecordDialog({
+  open,
+  kind,
+  label,
+  cascade = [],
+  description,
+  onConfirm,
+  onClose,
+}: Props) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -72,8 +86,8 @@ export function DeleteRecordDialog({ open, kind, label, cascade = [], onConfirm,
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           <DialogContentText>
-            It comes off the lists and the dashboards, and stays in the deleted register where
-            an administrator can put it back. Nothing is erased.
+            {description ??
+              'It comes off the lists and the dashboards, and stays in the deleted register where an administrator can put it back. Nothing is erased.'}
           </DialogContentText>
 
           {cascade.length > 0 && (

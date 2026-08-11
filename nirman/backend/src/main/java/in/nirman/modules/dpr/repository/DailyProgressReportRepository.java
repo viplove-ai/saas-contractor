@@ -14,16 +14,28 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Every read here is of the live register: a deleted report is gone from the list, from the
+ * dashboards' day counts and from the verification queue, and the day it covered is free
+ * again. The one method that still sees a deleted row is {@link #findByIdAndOrgId}, and only
+ * so that an offline device re-sending a report somebody deleted meanwhile is answered with
+ * a sentence rather than a primary key violation.
+ */
 public interface DailyProgressReportRepository extends JpaRepository<DailyProgressReport, UUID> {
 
+    Optional<DailyProgressReport> findByIdAndOrgIdAndDeletedAtIsNull(UUID id, UUID orgId);
+
+    /** Deleted rows included. Only the create path wants this — see the interface note. */
     Optional<DailyProgressReport> findByIdAndOrgId(UUID id, UUID orgId);
 
-    /** Mirrors {@code uq_dpr_site_date}: one report per site per day, checked before the index. */
-    Optional<DailyProgressReport> findBySiteIdAndReportDate(UUID siteId, LocalDate reportDate);
+    /** Mirrors {@code uq_dpr_site_date}: one live report per site per day. */
+    Optional<DailyProgressReport> findBySiteIdAndReportDateAndDeletedAtIsNull(UUID siteId,
+                                                                             LocalDate reportDate);
 
     @Query("""
             SELECT d FROM DailyProgressReport d
             WHERE d.orgId = :orgId
+              AND d.deletedAt IS NULL
               AND (:siteId IS NULL OR d.siteId = :siteId)
               AND (:status IS NULL OR d.workflowStatus = :status)
               AND (:from IS NULL OR d.reportDate >= :from)
@@ -42,6 +54,7 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
     @Query("""
             SELECT d FROM DailyProgressReport d
             WHERE d.orgId = :orgId
+              AND d.deletedAt IS NULL
               AND (:siteId IS NULL OR d.siteId = :siteId)
               AND d.reportDate BETWEEN :from AND :to
             ORDER BY d.reportDate ASC
@@ -55,6 +68,7 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
     @Query("""
             SELECT count(d) FROM DailyProgressReport d
             WHERE d.orgId = :orgId
+              AND d.deletedAt IS NULL
               AND (:siteId IS NULL OR d.siteId = :siteId)
               AND d.workflowStatus = in.nirman.modules.dpr.domain.DailyProgressReport$Workflow.SUBMITTED
             """)

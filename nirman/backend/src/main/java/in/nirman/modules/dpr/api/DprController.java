@@ -3,6 +3,7 @@ package in.nirman.modules.dpr.api;
 import in.nirman.common.PageResponse;
 import in.nirman.modules.dpr.api.dto.DprDtos.AttachPhotoRequest;
 import in.nirman.modules.dpr.api.dto.DprDtos.CreateDprRequest;
+import in.nirman.modules.dpr.api.dto.DprDtos.DeleteDprRequest;
 import in.nirman.modules.dpr.api.dto.DprDtos.DprPrefill;
 import in.nirman.modules.dpr.api.dto.DprDtos.DprResponse;
 import in.nirman.modules.dpr.api.dto.DprDtos.UpdateDprRequest;
@@ -20,6 +21,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -87,6 +89,16 @@ public class DprController {
     public DprResponse update(@PathVariable UUID id,
                               @Valid @RequestBody UpdateDprRequest request) {
         return dprs.update(id, request);
+    }
+
+    /**
+     * A body on a DELETE, which is unusual and deliberate — the reason is required, and a
+     * query string leaves it in every access log. The same shape the project register uses.
+     */
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Delete a draft or returned report, freeing its day. Refused once it has been sent.")
+    public DprResponse delete(@PathVariable UUID id, @Valid @RequestBody DeleteDprRequest request) {
+        return dprs.delete(id, request.reason());
     }
 
     @PostMapping("/{id}/submit")
