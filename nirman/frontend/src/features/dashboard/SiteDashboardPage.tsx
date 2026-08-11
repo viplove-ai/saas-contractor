@@ -2,7 +2,6 @@ import {
   Alert,
   Box,
   CircularProgress,
-  Grid,
   LinearProgress,
   MenuItem,
   Paper,
@@ -80,78 +79,87 @@ export function SiteDashboardPage() {
             {dashboard.data.projectName && ` · ${dashboard.data.projectName}`}
           </Typography>
 
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider', height: '100%' }}>
-                <Typography fontWeight={600} gutterBottom>
-                  Labour
+          {/*
+            A CSS grid rather than <Grid container>. MUI's Grid pays for its gutters with a
+            negative margin on the container, and the Stack around this screen sets `margin: 0`
+            on each of its children — so the negative margin was dropped while the matching
+            `width: calc(100% + 16px)` was not, and Labour and Cash sat 16px right of every
+            other card on the page. Nothing here needs the twelve-column arithmetic.
+          */}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' },
+              gap: 2,
+            }}
+          >
+            <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider', height: '100%' }}>
+              <Typography fontWeight={600} gutterBottom>
+                Labour
+              </Typography>
+              <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap>
+                <Figure label="Man-days" value={formatQuantity(dashboard.data.labour.manDays)} />
+                <Figure label="Regular" value={formatHours(dashboard.data.labour.regularHours)} />
+                <Figure
+                  label="Overtime"
+                  value={formatHours(dashboard.data.labour.overtimeHours)}
+                />
+                <Figure label="Wage cost" value={formatAmount(dashboard.data.labour.cost)} />
+              </Stack>
+              {/*
+                The wage is frozen at verification, so the unsigned part can still move
+                without anybody editing anything. A single blended figure would move with it
+                silently.
+              */}
+              {dashboard.data.labour.unverifiedCost > 0 && (
+                <Alert severity="warning" sx={{ mt: 1.5 }}>
+                  {formatAmount(dashboard.data.labour.unverifiedCost)} of this is not verified
+                  yet ({dashboard.data.labour.pendingVerification} row(s) waiting), so it can
+                  still change.
+                </Alert>
+              )}
+              {dashboard.data.labour.daysWithoutAttendance > 0 && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  {dashboard.data.labour.daysWithoutAttendance} day(s) in this period have no
+                  muster at all.
                 </Typography>
-                <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap>
-                  <Figure label="Man-days" value={formatQuantity(dashboard.data.labour.manDays)} />
-                  <Figure label="Regular" value={formatHours(dashboard.data.labour.regularHours)} />
-                  <Figure
-                    label="Overtime"
-                    value={formatHours(dashboard.data.labour.overtimeHours)}
-                  />
-                  <Figure label="Wage cost" value={formatAmount(dashboard.data.labour.cost)} />
-                </Stack>
-                {/*
-                  The wage is frozen at verification, so the unsigned part can still move
-                  without anybody editing anything. A single blended figure would move with it
-                  silently.
-                */}
-                {dashboard.data.labour.unverifiedCost > 0 && (
-                  <Alert severity="warning" sx={{ mt: 1.5 }}>
-                    {formatAmount(dashboard.data.labour.unverifiedCost)} of this is not verified
-                    yet ({dashboard.data.labour.pendingVerification} row(s) waiting), so it can
-                    still change.
-                  </Alert>
-                )}
-                {dashboard.data.labour.daysWithoutAttendance > 0 && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    {dashboard.data.labour.daysWithoutAttendance} day(s) in this period have no
-                    muster at all.
-                  </Typography>
-                )}
-              </Paper>
-            </Grid>
+              )}
+            </Paper>
 
-            <Grid item xs={12} md={6}>
-              <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider', height: '100%' }}>
-                <Typography fontWeight={600} gutterBottom>
-                  Cash
+            <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider', height: '100%' }}>
+              <Typography fontWeight={600} gutterBottom>
+                Cash
+              </Typography>
+              <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap>
+                <Figure
+                  label="Cost incurred"
+                  value={formatAmount(dashboard.data.cash.costIncurred)}
+                />
+                <Figure
+                  label="Material purchases"
+                  value={formatAmount(dashboard.data.cash.materialPurchases)}
+                />
+                <Figure
+                  label="Wage payments"
+                  value={formatAmount(dashboard.data.cash.labourDisbursements)}
+                />
+                <Figure
+                  label="Total booked"
+                  value={formatAmount(dashboard.data.cash.totalBooked)}
+                  strong
+                />
+              </Stack>
+              <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
+                <Figure label="Paid" value={formatAmount(dashboard.data.cash.paid)} />
+                <Figure label="Still owed" value={formatAmount(dashboard.data.cash.payable)} />
+              </Stack>
+              {dashboard.data.cash.awaitingApproval > 0 && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  {dashboard.data.cash.awaitingApproval} bill(s) waiting on an approval.
                 </Typography>
-                <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap>
-                  <Figure
-                    label="Cost incurred"
-                    value={formatAmount(dashboard.data.cash.costIncurred)}
-                  />
-                  <Figure
-                    label="Material purchases"
-                    value={formatAmount(dashboard.data.cash.materialPurchases)}
-                  />
-                  <Figure
-                    label="Wage payments"
-                    value={formatAmount(dashboard.data.cash.labourDisbursements)}
-                  />
-                  <Figure
-                    label="Total booked"
-                    value={formatAmount(dashboard.data.cash.totalBooked)}
-                    strong
-                  />
-                </Stack>
-                <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
-                  <Figure label="Paid" value={formatAmount(dashboard.data.cash.paid)} />
-                  <Figure label="Still owed" value={formatAmount(dashboard.data.cash.payable)} />
-                </Stack>
-                {dashboard.data.cash.awaitingApproval > 0 && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    {dashboard.data.cash.awaitingApproval} bill(s) waiting on an approval.
-                  </Typography>
-                )}
-              </Paper>
-            </Grid>
-          </Grid>
+              )}
+            </Paper>
+          </Box>
 
           <MaterialPositionCard material={dashboard.data.material} />
 
