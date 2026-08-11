@@ -65,7 +65,23 @@ export function RootLayout({ signoffCount = 0 }: { signoffCount?: number }) {
           )}
         </Stack>
 
-        <Box component="main" sx={{ flex: 1, px: { xs: 2, md: 4 }, py: { xs: 1, md: 3 }, maxWidth: 1180, width: '100%' }}>
+        {/*
+          mx: auto, or the 1180px measure is pinned to the rail and the rest of a wide screen
+          is dead space on the right — 490px of it on a 1920 monitor. The cap is the reading
+          measure and stays; where it sits inside the window is a separate question, and the
+          answer on every screen wider than the measure is "in the middle of what is left".
+        */}
+        <Box
+          component="main"
+          sx={{
+            flex: 1,
+            px: { xs: 2, md: 4 },
+            py: { xs: 1, md: 3 },
+            maxWidth: 1180,
+            width: '100%',
+            mx: 'auto',
+          }}
+        >
           <Outlet />
         </Box>
 
@@ -83,6 +99,12 @@ export function RootLayout({ signoffCount = 0 }: { signoffCount?: number }) {
               px: 4,
               py: 2,
               mt: 2,
+              // The same measure the content above it keeps. Left to itself this rule ran the
+              // full width of the window while every card stopped at 1180, so the page ended
+              // in a dashed line pointing at nothing.
+              maxWidth: 1180,
+              width: '100%',
+              mx: 'auto',
               borderTop: '1.4px dashed rgba(20,24,29,0.3)',
             }}
           >
