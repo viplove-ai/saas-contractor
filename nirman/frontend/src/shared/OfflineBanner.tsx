@@ -4,15 +4,25 @@ import { Link } from 'react-router-dom';
 import { offlineDb, UNSENT_STATUSES } from '../offline/db';
 
 /**
- * Visible only when something is actually waiting. An always-on connection indicator
- * becomes wallpaper; a count of unsent records does not.
+ * Visible only when something is actually the matter. An always-on connection indicator
+ * becomes wallpaper; a count of unsent records does not, and neither does a line that
+ * appears the moment the signal goes.
  *
- * <p>A record stuck on a decision is called out separately and in a louder colour, because
- * the two states need opposite things from the reader. Records merely waiting need nothing —
- * saying so is the reassurance. A conflict needs somebody to open the screen, and it will
- * still be there tomorrow if the banner lets it hide inside a count.</p>
+ * <p>Three states, ranked, and only the top one shows. A record stuck on a decision is
+ * loudest and named separately, because it will still be there tomorrow if the banner lets
+ * it hide inside a count. Records merely waiting need nothing from the reader — saying so is
+ * the reassurance. And plain "no connection" with nothing waiting is the quietest of the
+ * three, because on its own it is not a problem: it is the answer to why the dashboard is
+ * empty, which is a question a supervisor would otherwise answer by deciding the app is
+ * broken.</p>
+ *
+ * @param offline whether to show that third state. Passed in rather than read from
+ *   {@code navigator.onLine} here, because that flag answers "is there a network" and the
+ *   question worth putting on screen is "did anything reach the server" — a phone on a wifi
+ *   with no uplink says yes to the first and no to the second. The shell composes the answer
+ *   from both the browser's opinion and whether the session could be checked.
  */
-export function OfflineBanner() {
+export function OfflineBanner({ offline = false }: { offline?: boolean }) {
   const counts = useLiveQuery(
     async () => {
       const waiting = await offlineDb.drafts.where('status').anyOf(UNSENT_STATUSES).count();
@@ -24,7 +34,15 @@ export function OfflineBanner() {
   );
 
   if (!counts.waiting) {
-    return null;
+    if (!offline) {
+      return null;
+    }
+    return (
+      <Alert severity="info" square>
+        No connection. You can carry on — what you enter is kept on this phone and goes out by
+        itself.
+      </Alert>
+    );
   }
 
   return (

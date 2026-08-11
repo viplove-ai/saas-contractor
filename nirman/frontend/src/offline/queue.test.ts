@@ -178,6 +178,31 @@ describe('the offline sync queue', () => {
     expect(row?.lastError).toContain('Given up after 8 tries');
   });
 
+  /**
+   * The give-up budget is for a server that keeps saying something unhelpful. Silence is not
+   * the server saying anything at all, and a phone at the edge of a cell — where the browser
+   * reports a connection that is actually dead, so the drain does run — produces a whole day
+   * of it. Counting those would hand the supervisor an evening's work of pressing Retry on
+   * records that were never refused by anybody.
+   */
+  it('never gives up on a record that simply got no answer', async () => {
+    send.mockRejectedValue(offline());
+    await enqueue(muster);
+
+    for (let attempt = 1; attempt <= 20; attempt++) {
+      await drain(attempt * 3_600_000);
+    }
+
+    const row = await offlineDb.drafts.get(muster.clientId);
+    expect(row?.status).toBe('PENDING');
+    expect(row?.attempts).toBe(20);
+
+    // And it still goes out under its own id the moment somebody answers.
+    send.mockResolvedValue(undefined);
+    await drain(21 * 3_600_000);
+    expect((await offlineDb.drafts.get(muster.clientId))?.status).toBe('SYNCED');
+  });
+
   it('marks a refusal on the merits failed at once, without eight rounds of hope', async () => {
     send.mockRejectedValue(refused(422, 'August is closed for attendance.'));
     await enqueue(muster);

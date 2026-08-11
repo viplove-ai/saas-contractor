@@ -5,8 +5,18 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { useAuth } from '../auth/AuthContext';
+import { SignOutButton } from '../auth/SignOutButton';
 import { ROLE_LABEL } from '../../shared/roles';
 import { changePasswordSchema, type ChangePasswordForm } from './schema';
+
+/** "2 days ago", for a timestamp whose exact minute nobody needs. */
+function describeAge(iso: string): string {
+  const hours = Math.floor((Date.now() - Date.parse(iso)) / 3_600_000);
+  if (!Number.isFinite(hours) || hours < 1) return 'less than an hour ago';
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
 
 /**
  * The member's own account: who the system thinks they are, and the one thing they can
@@ -18,7 +28,7 @@ import { changePasswordSchema, type ChangePasswordForm } from './schema';
  * wrong with the screen they asked for.</p>
  */
 export function ProfilePage() {
-  const { user, changePassword, signOut } = useAuth();
+  const { user, changePassword, unverified, verifiedAt } = useAuth();
   const navigate = useNavigate();
   const [serverError, setServerError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -33,11 +43,6 @@ export function ProfilePage() {
     resolver: zodResolver(changePasswordSchema),
     defaultValues: { currentPassword: '', newPassword: '', confirmPassword: '' },
   });
-
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/login', { replace: true });
-  };
 
   const onSubmit = handleSubmit(async (form) => {
     setServerError(null);
@@ -83,6 +88,20 @@ export function ProfilePage() {
           <Typography variant="body2" color="text.secondary">
             Your name, role and site postings are set by an administrator.
           </Typography>
+          {/*
+            Only when it is true, and phrased as the age of the answer rather than as a
+            fault. What is on this screen while offline is the last thing the server said,
+            and a role or a site posting changed since then has not reached the phone — this
+            is the one place in the app where that gap is worth spelling out, because this is
+            the screen somebody reads to check what they are allowed to do.
+          */}
+          {unverified && (
+            <Alert severity="info">
+              Shown from this phone's copy — there is no connection to check it against.
+              {verifiedAt ? ` Last confirmed ${describeAge(verifiedAt)}.` : ''} It will update
+              by itself when you have signal.
+            </Alert>
+          )}
         </Stack>
       </Paper>
 
@@ -149,15 +168,12 @@ export function ProfilePage() {
           <Typography variant="body2" color="text.secondary">
             Anything not sent yet stays on this phone. Signing out does not discard it.
           </Typography>
-          <Button
+          <SignOutButton
             variant="outlined"
             color="secondary"
-            onClick={handleSignOut}
             /* 48px: the app's floor for anything meant to be hit with a glove on. */
             sx={{ alignSelf: 'flex-start', minHeight: 48 }}
-          >
-            Sign out
-          </Button>
+          />
         </Stack>
       </Paper>
     </Stack>

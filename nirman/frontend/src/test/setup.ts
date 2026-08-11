@@ -11,6 +11,46 @@ import '@testing-library/jest-dom/vitest';
 import 'fake-indexeddb/auto';
 
 /**
+ * Vitest's jsdom environment builds a full `window` but leaves `localStorage` off it, so code
+ * written for a browser — `localStorage.getItem(...)`, which is how the session layer stores
+ * the refresh token and the cached profile — reads as undefined and fails with a TypeError
+ * some distance from the cause.
+ *
+ * <p>A working implementation rather than a set of stubs, because what the session cache
+ * relies on is precisely that a value written in one call is still there in the next, and a
+ * stub that forgets would let a broken cache pass. jsdom's own is not reachable here: under
+ * vitest `window` and `globalThis` are the same object, so there is nothing to delegate to.</p>
+ */
+if (typeof globalThis.localStorage === 'undefined') {
+  class MemoryStorage implements Storage {
+    private entries = new Map<string, string>();
+
+    get length(): number {
+      return this.entries.size;
+    }
+    key(index: number): string | null {
+      return [...this.entries.keys()][index] ?? null;
+    }
+    getItem(key: string): string | null {
+      return this.entries.get(key) ?? null;
+    }
+    setItem(key: string, value: string): void {
+      // Storage coerces, and a test that stores a number should behave as the browser does.
+      this.entries.set(String(key), String(value));
+    }
+    removeItem(key: string): void {
+      this.entries.delete(key);
+    }
+    clear(): void {
+      this.entries.clear();
+    }
+  }
+
+  const storage = new MemoryStorage();
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage });
+}
+
+/**
  * jsdom has no ResizeObserver, and recharts' ResponsiveContainer constructs one on mount —
  * so any screen with a chart on it renders as an empty div and every assertion against that
  * screen fails for a reason that has nothing to do with the screen.
