@@ -158,9 +158,18 @@ if the tests pass:
   engineer verifies the report, and only once.
 - **A head count is not attendance.** On a site flagged `uses_outsourced_labour`, the day is
   recorded as counts per trade in `site_labour_counts` — no worker, no wage rate, no ledger
-  posting, because the contractor bills for the work. The DPR prints them beside the muster
-  roll and never inside its head count; `dpr_labour.outsourced` is what keeps the two apart
-  once the report is frozen.
+  posting, because the supplier bills for the work. Hours are recorded (per man, nullable,
+  and null is not zero) and stay unpriced: nothing multiplies them by a rate. The DPR prints
+  them beside the muster roll and never inside its head count or its hours —
+  `dpr_labour.outsourced` and `daily_progress_reports.outsourced_man_hours` are what keep the
+  two apart once the report is frozen. The screen calls this **external labour** and no
+  longer asks which contractor supplied it; the column is still stored and still carried
+  through a re-save, waiting on contractor onboarding.
+- **A site is never without a store.** `SiteService.create` gives every new site one, named
+  `site-<site code>` after it, because a store is not a decision anybody was making and an
+  empty store picker strands a lorry at the gate. The Stores screen is for the second store
+  and the third. A store the ledger has touched is refused deletion by `StoreDeletionGuard`
+  and goes inactive instead.
 
 ### Error contract
 

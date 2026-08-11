@@ -95,23 +95,39 @@
 <table th:if="${!dpr.labour().isEmpty()}">
     <tr>
         <th>Trade</th>
-        <th>Contractor</th>
+        <!--
+          Where the men came from. "Direct" is our own muster roll; "External" is a gang
+          counted at the gate, whose hours carry no wage. The two kinds print as one list
+          because that is how the day is read, and the column is what keeps them apart.
+        -->
+        <th>Source</th>
         <th class="num" style="width: 20mm;">Men</th>
         <th class="num" style="width: 26mm;">Regular hrs</th>
         <th class="num" style="width: 26mm;">Overtime hrs</th>
     </tr>
     <tr th:each="line : ${dpr.labour()}">
         <td th:text="${line.skillCategoryName()} ?: 'Unclassified'">Trade</td>
-        <td th:text="${line.labourContractorName()} ?: 'Direct'">Contractor</td>
+        <td th:text="${line.labourContractorName() ?: (line.outsourced() ? 'External' : 'Direct')}">Source</td>
         <td class="num" th:text="${line.headCount()}">0</td>
         <td class="num" th:text="${line.regularHours()}">0</td>
         <td class="num" th:text="${line.overtimeHours()}">0</td>
     </tr>
+    <!--
+      The total is the muster roll's alone, and the external figures sit under it rather
+      than in it. Adding them would report a wage bill spread over men who are not on our
+      payroll, and hours nobody was paid for inside a figure every cost reading divides by.
+    -->
     <tr>
-        <th colspan="2">Total</th>
+        <th colspan="2">Total (muster roll)</th>
         <th class="num" th:text="${dpr.labourPresentCount()}">0</th>
         <th class="num" th:text="${dpr.labourRegularHours()}">0</th>
         <th class="num" th:text="${dpr.labourOvertimeHours()}">0</th>
+    </tr>
+    <tr th:if="${dpr.outsourcedHeadCount() > 0}">
+        <th colspan="2">External labour (counted, unpriced)</th>
+        <th class="num" th:text="${dpr.outsourcedHeadCount()}">0</th>
+        <th class="num" th:text="${dpr.outsourcedManHours()}">0</th>
+        <th class="num">—</th>
     </tr>
 </table>
 <p class="empty" th:if="${dpr.labour().isEmpty()}">No attendance recorded for this day.</p>

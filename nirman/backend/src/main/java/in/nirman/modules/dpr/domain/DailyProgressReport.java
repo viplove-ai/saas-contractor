@@ -103,6 +103,14 @@ public class DailyProgressReport extends BaseEntity {
     @Column(name = "outsourced_head_count", nullable = false)
     private int outsourcedHeadCount;
 
+    /**
+     * The contractor's men-hours, frozen beside the muster roll's rather than inside them.
+     * Unpriced time in {@code labourRegularHours} would corrupt every figure that divides
+     * cost by hours.
+     */
+    @Column(name = "outsourced_man_hours", nullable = false, precision = 10, scale = 2)
+    private BigDecimal outsourcedManHours = BigDecimal.ZERO;
+
     /** Provisional until every underlying row is verified; the report says which. */
     @Column(name = "labour_cost", precision = 18, scale = 2)
     private BigDecimal labourCost;
@@ -218,12 +226,14 @@ public class DailyProgressReport extends BaseEntity {
      * afterwards: a verified report is a document, and a document that changes is not one.</p>
      */
     public void applySnapshot(Integer presentCount, int outsourcedHeadCount,
+                             BigDecimal outsourcedManHours,
                              BigDecimal regularHours,
                              BigDecimal overtimeHours, BigDecimal labourCost,
                              BigDecimal materialReceivedValue, BigDecimal materialConsumedValue,
                              BigDecimal costIncurred) {
         this.labourPresentCount = presentCount;
         this.outsourcedHeadCount = outsourcedHeadCount;
+        this.outsourcedManHours = outsourcedManHours == null ? BigDecimal.ZERO : outsourcedManHours;
         this.labourRegularHours = regularHours;
         this.labourOvertimeHours = overtimeHours;
         this.labourCost = labourCost;
@@ -317,6 +327,10 @@ public class DailyProgressReport extends BaseEntity {
 
     public int getOutsourcedHeadCount() {
         return outsourcedHeadCount;
+    }
+
+    public BigDecimal getOutsourcedManHours() {
+        return outsourcedManHours;
     }
 
     public BigDecimal getLabourRegularHours() {

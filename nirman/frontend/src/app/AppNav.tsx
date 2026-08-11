@@ -43,7 +43,11 @@ const ITEMS: NavItem[] = [
     badge: 'signoff',
   },
   { label: 'Reports', to: '/dashboard/site', match: ['/dashboard'], permission: 'dashboard:site' },
-  { label: 'More', to: '/home', match: ['/profile', '/sync', '/users', '/projects', '/sites'] },
+  {
+    label: 'More',
+    to: '/home',
+    match: ['/profile', '/sync', '/users', '/projects', '/sites', '/stores'],
+  },
 ];
 
 function useNavItems(): NavItem[] {

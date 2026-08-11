@@ -56,6 +56,12 @@ class AdminOnboardingIntegrationTest extends AbstractIntegrationTest {
         jdbc.update("""
                 DELETE FROM user_site_assignments WHERE site_id IN
                     (SELECT id FROM sites WHERE code LIKE ?)""", TEST_SITE_PREFIX + "%");
+        // A site now arrives with its own store, and the store holds the site down. Nothing
+        // was ever received into it — these sites exist for one assertion apiece — so it goes
+        // with the site rather than being kept.
+        jdbc.update("""
+                DELETE FROM stores WHERE site_id IN
+                    (SELECT id FROM sites WHERE code LIKE ?)""", TEST_SITE_PREFIX + "%");
         jdbc.update("DELETE FROM sites WHERE code LIKE ?", TEST_SITE_PREFIX + "%");
     }
 

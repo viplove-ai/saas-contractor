@@ -206,6 +206,66 @@ class SiteLabourCountIntegrationTest extends AbstractIntegrationTest {
         assertThat(prefill.get("labour").get("presentCount").asInt()).isEqualTo(markedPresent());
     }
 
+    /**
+     * Hours are per man, and the man-hours are the product. Eleven masons for eight hours is
+     * what the gate knows; 88 is what the report adds up.
+     */
+    @Test
+    @DisplayName("hours are recorded per man and totalled as man-hours")
+    void hoursAreRecordedPerMan() throws Exception {
+        String token = loginToken("vivek");
+
+        mockMvc.perform(saveCounts(token, """
+                        {"skillCategoryId":"%s","headCount":11,"hours":8},
+                        {"skillCategoryId":"%s","headCount":6,"hours":4.5}
+                        """.formatted(skill("MASON"), skill("HELPER"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalHeadCount").value(17))
+                .andExpect(jsonPath("$.totalManHours").value(115.0));
+
+        JsonNode prefill = objectMapper.readTree(mockMvc.perform(get("/api/v1/dprs/prefill")
+                        .param("siteId", SITE_A).param("date", DAY.toString())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+
+        assertThat(prefill.get("outsourcedLabour").get("manHours").asDouble()).isEqualTo(115.0);
+        // Beside the muster roll, never inside it — unpriced time in the muster's hours would
+        // corrupt every figure that divides cost by them.
+        assertThat(prefill.get("labour").get("regularHours").asDouble())
+                .isEqualTo(musterRegularHours());
+    }
+
+    /**
+     * Null is not zero. A day counted at the gate by somebody who did not note hours has said
+     * nothing about them, and printing that as "they worked no hours" would be the report
+     * inventing a fact.
+     */
+    @Test
+    @DisplayName("a count entered without hours records no hours rather than zero")
+    void hoursAreOptional() throws Exception {
+        mockMvc.perform(saveCounts(loginToken("vivek"), """
+                        {"skillCategoryId":"%s","headCount":11}
+                        """.formatted(skill("MASON"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lines[0].hours").doesNotExist())
+                .andExpect(jsonPath("$.lines[0].manHours").doesNotExist())
+                .andExpect(jsonPath("$.totalManHours").value(0));
+
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM site_labour_counts WHERE site_id = ?::uuid AND hours IS NULL",
+                Integer.class, SITE_A)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("more hours than a day holds is refused")
+    void hoursCannotExceedADay() throws Exception {
+        mockMvc.perform(saveCounts(loginToken("vivek"), """
+                        {"skillCategoryId":"%s","headCount":11,"hours":25}
+                        """.formatted(skill("MASON"))))
+                .andExpect(status().isBadRequest());
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder saveCounts(
@@ -231,6 +291,21 @@ class SiteLabourCountIntegrationTest extends AbstractIntegrationTest {
                   AND status IN ('PRESENT','HALF_DAY')
                 """, Integer.class, SITE_A, DAY);
         return count == null ? 0 : count;
+    }
+
+    /**
+     * The muster's own hours for the day, read from the attendance rows. Compared against
+     * rather than against zero for the reason {@link #markedPresent()} gives — another test
+     * in the suite may have marked somebody here — and read from the table rather than from
+     * the same prefill, or the assertion would be comparing a figure to itself.
+     */
+    private double musterRegularHours() {
+        Double hours = jdbc.queryForObject("""
+                SELECT coalesce(sum(regular_hours), 0) FROM attendance_records
+                WHERE site_id = ?::uuid AND attendance_date = ?
+                  AND workflow_status <> 'CANCELLED'
+                """, Double.class, SITE_A, DAY);
+        return hours == null ? 0d : hours;
     }
 
     private int rowCount() {

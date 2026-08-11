@@ -3,6 +3,7 @@ import { apiClient } from '../../shared/apiClient';
 import type {
   AdminProject,
   AdminSite,
+  AdminStore,
   AdminUser,
   BoqItem,
   ConfirmedBoqLine,
@@ -23,6 +24,8 @@ export const adminKeys = {
   sites: (projectId: string, deleted: boolean) =>
     ['admin', 'sites', projectId, deleted] as const,
   allSites: ['admin', 'sites'] as const,
+  stores: (siteId: string) => ['admin', 'stores', siteId] as const,
+  allStores: ['admin', 'stores'] as const,
   projects: (q: string, status: string, deleted: boolean) =>
     ['admin', 'projects', q, status, deleted] as const,
   allProjects: ['admin', 'projects'] as const,
@@ -297,6 +300,87 @@ export function useRestoreSite() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.allSites });
       void queryClient.invalidateQueries({ queryKey: adminKeys.allUsers });
+    },
+  });
+}
+
+// ------------------------------------------------------------------ stores
+
+/**
+ * Every store the caller can reach, or one site's.
+ *
+ * <p>A new site arrives with its store already made, so this list is never empty for a site
+ * that exists — which is the point of the whole change. What the screen is for is the second
+ * store and the third.</p>
+ */
+export function useStores(siteId = '') {
+  return useQuery({
+    queryKey: adminKeys.stores(siteId),
+    queryFn: async () =>
+      (await apiClient.get<AdminStore[]>('/stores', { params: { siteId: siteId || undefined } }))
+        .data,
+  });
+}
+
+export interface StoreInput {
+  code: string;
+  name: string;
+  location?: string | undefined;
+  defaultStore: boolean;
+}
+
+export function useCreateStore() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ siteId, ...input }: StoreInput & { siteId: string }) =>
+      (
+        await apiClient.post<AdminStore>(`/sites/${siteId}/stores`, {
+          ...input,
+          location: input.location || undefined,
+        })
+      ).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allStores });
+      // The receive, issue and report screens each keep their own copy of a site's stores,
+      // under their own keys — a store added here has to reach all three.
+      void queryClient.invalidateQueries({ queryKey: ['sites'] });
+      void queryClient.invalidateQueries({ queryKey: ['stores'] });
+    },
+  });
+}
+
+export function useUpdateStore() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: StoreInput & { id: string; active: boolean; version: number }) =>
+      (
+        await apiClient.put<AdminStore>(`/stores/${input.id}`, {
+          code: input.code,
+          name: input.name,
+          location: input.location || undefined,
+          defaultStore: input.defaultStore,
+          active: input.active,
+          version: input.version,
+        })
+      ).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allStores });
+      void queryClient.invalidateQueries({ queryKey: ['sites'] });
+      void queryClient.invalidateQueries({ queryKey: ['stores'] });
+    },
+  });
+}
+
+export function useDeleteStore() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient.delete(`/stores/${id}`);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.allStores });
+      void queryClient.invalidateQueries({ queryKey: ['sites'] });
+      void queryClient.invalidateQueries({ queryKey: ['stores'] });
     },
   });
 }

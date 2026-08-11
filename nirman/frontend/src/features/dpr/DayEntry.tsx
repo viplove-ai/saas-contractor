@@ -20,7 +20,6 @@ import {
   useAddFieldMaterial,
   useExpenseCategories,
   useIssueMaterial,
-  useLabourContractors,
   useLabourCounts,
   useMaterials,
   useReceiveMaterial,
@@ -65,29 +64,43 @@ interface DaySectionProps {
 interface CountRow {
   key: string;
   skillCategoryId: string;
+  /**
+   * Carried through untouched. The screen no longer asks which contractor supplied the men —
+   * there is no onboarding for contractors yet, so the picker was a list of one seeded name
+   * or of nothing — but a day entered before that change still names one, and re-saving the
+   * day must not quietly strip it.
+   */
   labourContractorId: string;
   headCount: string;
+  hours: string;
 }
 
 function emptyCount(): CountRow {
-  return { key: crypto.randomUUID(), skillCategoryId: '', labourContractorId: '', headCount: '' };
+  return {
+    key: crypto.randomUUID(),
+    skillCategoryId: '',
+    labourContractorId: '',
+    headCount: '',
+    hours: '',
+  };
 }
 
 /**
- * Head counts per trade, for a site whose work is let to a labour contractor.
+ * Head counts per trade, for a site whose work is let to an outside labour supplier.
  *
  * <p>Only drawn when the site is set up that way — on a site with its own muster roll this
  * box would invite somebody to type the same men twice, once as attendance and once as a
  * count.</p>
  *
- * <p>No hours and no money, and there is nowhere to type either. The contractor bills for
- * the work; a rate typed here would produce a wage figure for men who are not on our
- * payroll.</p>
+ * <p>Hours are per man and optional: eleven masons for eight hours is what the gate knows,
+ * and a day where nobody noted hours has to be able to say so rather than record a zero.
+ * <b>Still no money.</b> There is nowhere to type a rate and nothing here multiplies by one —
+ * these men are not on our payroll, and a wage figure derived from a head count would be a
+ * guess wearing the clothes of a figure.</p>
  */
 export function OutsourcedLabourCard({ siteId, date, locked, onSaved }: DaySectionProps) {
   const counts = useLabourCounts(siteId, date);
   const categories = useSkillCategories();
-  const contractors = useLabourContractors();
   const save = useSaveLabourCounts();
   const [rows, setRows] = useState<CountRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +118,7 @@ export function OutsourcedLabourCard({ siteId, date, locked, onSaved }: DaySecti
         skillCategoryId: line.skillCategoryId,
         labourContractorId: line.labourContractorId ?? '',
         headCount: String(line.headCount),
+        hours: line.hours == null ? '' : String(line.hours),
       })),
     );
   }, [counts.data]);
@@ -115,6 +129,12 @@ export function OutsourcedLabourCard({ siteId, date, locked, onSaved }: DaySecti
 
   const readOnly = locked || counts.data.periodLocked;
   const total = rows.reduce((sum, row) => sum + (Number(row.headCount) || 0), 0);
+  // Only the rows that carry hours. A trade counted without them contributes nothing here
+  // rather than dragging the total down as a zero.
+  const manHours = rows.reduce(
+    (sum, row) => (row.hours === '' ? sum : sum + (Number(row.headCount) || 0) * Number(row.hours)),
+    0,
+  );
 
   async function submit() {
     setError(null);
@@ -125,6 +145,9 @@ export function OutsourcedLabourCard({ siteId, date, locked, onSaved }: DaySecti
         skillCategoryId: row.skillCategoryId,
         labourContractorId: row.labourContractorId || undefined,
         headCount: Number(row.headCount),
+        // Blank is "nobody said", which the server stores as no hours at all. Sending a zero
+        // would put "they worked no hours" on the report in its place.
+        hours: row.hours === '' ? undefined : Number(row.hours),
       }));
     try {
       await save.mutateAsync({ siteId, date, lines });
@@ -137,9 +160,14 @@ export function OutsourcedLabourCard({ siteId, date, locked, onSaved }: DaySecti
 
   return (
     <Card
-      title="Contractor's labour"
-      hint="Men on site today under a labour contractor, counted by trade. No muster roll, no wages — the contractor bills for the work."
-      right={<Chip size="small" label={`${total} on site`} />}
+      title="External labour"
+      hint="Men on site today from outside the muster roll, counted by trade. Hours are per man and optional. No muster roll, no wages — their supplier bills for the work."
+      right={
+        <Stack direction="row" spacing={1}>
+          <Chip size="small" label={`${total} on site`} />
+          {manHours > 0 && <Chip size="small" variant="outlined" label={`${manHours} man-hours`} />}
+        </Stack>
+      }
     >
       {error && <Alert severity="error">{error}</Alert>}
       {readOnly && <Alert severity="info">This month is closed. The counts cannot be changed.</Alert>}
@@ -171,30 +199,6 @@ export function OutsourcedLabourCard({ siteId, date, locked, onSaved }: DaySecti
               ))}
             </TextField>
             <TextField
-              select
-              size="small"
-              label="Contractor"
-              disabled={readOnly}
-              value={row.labourContractorId}
-              onChange={(event) =>
-                setRows((current) =>
-                  current.map((candidate) =>
-                    candidate.key === row.key
-                      ? { ...candidate, labourContractorId: event.target.value }
-                      : candidate,
-                  ),
-                )
-              }
-              sx={{ minWidth: 180 }}
-            >
-              <MenuItem value="">Not named</MenuItem>
-              {(contractors.data ?? []).map((contractor) => (
-                <MenuItem key={contractor.id} value={contractor.id}>
-                  {contractor.name}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
               size="small"
               type="number"
               label="Men"
@@ -211,6 +215,29 @@ export function OutsourcedLabourCard({ siteId, date, locked, onSaved }: DaySecti
               }
               sx={{ maxWidth: 110 }}
               inputProps={{ min: 0 }}
+            />
+            {/*
+              Per man, and it may be left empty. "Eight" here means each of the eleven masons
+              worked eight hours; the man-hours on the card are the product. Left blank, the
+              day records no hours at all rather than a zero — nobody said is not none.
+            */}
+            <TextField
+              size="small"
+              type="number"
+              label="Hours each"
+              disabled={readOnly}
+              value={row.hours}
+              onChange={(event) =>
+                setRows((current) =>
+                  current.map((candidate) =>
+                    candidate.key === row.key
+                      ? { ...candidate, hours: event.target.value }
+                      : candidate,
+                  ),
+                )
+              }
+              sx={{ maxWidth: 130 }}
+              inputProps={{ min: 0, max: 24, step: 0.5 }}
             />
             <IconButton
               aria-label="Remove trade"

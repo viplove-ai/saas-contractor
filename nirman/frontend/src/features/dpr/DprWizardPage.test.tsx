@@ -55,8 +55,8 @@ function prefill(overrides: Partial<DprPrefill> = {}): DprPrefill {
     siteName: 'Kausani Main Block',
     reportDate: '2025-06-10',
     reportExists: false,
-    outsourcedLabour: { enabled: false, headCount: 0, lines: [] },
-  labour: {
+    outsourcedLabour: { enabled: false, headCount: 0, manHours: 0, lines: [] },
+    labour: {
       presentCount: 3,
       absentCount: 0,
       regularHours: 21,

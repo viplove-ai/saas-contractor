@@ -2,14 +2,17 @@ package in.nirman.modules.project.service;
 
 import in.nirman.common.BusinessException;
 import in.nirman.common.SiteDeletionGuard;
+import in.nirman.common.StoreDeletionGuard;
 import in.nirman.modules.audit.AuditService;
 import in.nirman.modules.identity.service.SiteStaffing;
 import in.nirman.modules.project.api.dto.ProjectDtos.CreateSiteRequest;
 import in.nirman.modules.project.api.dto.ProjectDtos.CreateStoreRequest;
 import in.nirman.modules.project.api.dto.ProjectDtos.SiteDirectoryEntry;
 import in.nirman.modules.project.api.dto.ProjectDtos.SiteResponse;
+import in.nirman.modules.project.api.dto.ProjectDtos.StoreDirectoryEntry;
 import in.nirman.modules.project.api.dto.ProjectDtos.StoreResponse;
 import in.nirman.modules.project.api.dto.ProjectDtos.UpdateSiteRequest;
+import in.nirman.modules.project.api.dto.ProjectDtos.UpdateStoreRequest;
 import in.nirman.modules.project.domain.Site;
 import in.nirman.modules.project.domain.Store;
 import in.nirman.modules.project.mapper.ProjectMapper;
@@ -49,6 +52,7 @@ public class SiteService implements SiteLookup {
     private final ProjectRepository projects;
     private final SiteAccessGuard siteAccessGuard;
     private final SiteDeletionGuard deletionGuard;
+    private final StoreDeletionGuard storeDeletionGuard;
     private final SiteStaffing staffing;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
@@ -56,6 +60,7 @@ public class SiteService implements SiteLookup {
 
     public SiteService(SiteRepository sites, StoreRepository stores, ProjectRepository projects,
                        SiteAccessGuard siteAccessGuard, SiteDeletionGuard deletionGuard,
+                       StoreDeletionGuard storeDeletionGuard,
                        SiteStaffing staffing, CurrentUserProvider currentUser,
                        AuditService audit, ProjectMapper mapper) {
         this.sites = sites;
@@ -63,6 +68,7 @@ public class SiteService implements SiteLookup {
         this.projects = projects;
         this.siteAccessGuard = siteAccessGuard;
         this.deletionGuard = deletionGuard;
+        this.storeDeletionGuard = storeDeletionGuard;
         this.staffing = staffing;
         this.currentUser = currentUser;
         this.audit = audit;
@@ -151,11 +157,54 @@ public class SiteService implements SiteLookup {
                 request.startDate(), request.standardShiftHours(), request.monthlyWageDays(),
                 request.usesOutsourcedLabour());
         sites.save(site);
+        createDefaultStore(site);
         staffing.updateSiteAccess(orgId, site.getId(),
                 staffIds(request.siteEngineerId(), request.supervisorId()), Set.of());
         audit.record("SITE", site.getId(), "CREATE", null,
                 Map.of("code", site.getCode(), "name", site.getName()), null);
         return mapper.toResponse(site);
+    }
+
+    /**
+     * Gives a new site the store it is going to need, without asking.
+     *
+     * <p>Nobody adding a site is making a decision about stores — the shed by the gate is
+     * simply there. Leaving it out meant a site could be created on Monday and the first
+     * lorry on Tuesday met an empty store picker on the receive screen, with the fix on a
+     * page the supervisor cannot reach. It is named after the site so the two read as the
+     * same place, and the Stores screen is where an organisation with a cement lockup and a
+     * separate steel yard says so.</p>
+     */
+    private void createDefaultStore(Site site) {
+        String code = uniqueStoreCode(site.getOrgId(), Store.SITE_STORE_PREFIX + site.getCode());
+        Store store = new Store(site.getOrgId(), site.getId(), code,
+                Store.SITE_STORE_PREFIX + site.getName());
+        stores.save(store);
+        audit.record("STORE", store.getId(), "CREATE", null,
+                Map.of("code", store.getCode(), "siteId", site.getId().toString(),
+                        "derivedFrom", "site"), null);
+    }
+
+    /**
+     * The derived code, or the first free variant of it.
+     *
+     * <p>A site code is unique in the organisation, so the derived store code almost always
+     * is too. Almost: somebody may already have typed {@code site-NTL-01} by hand on another
+     * site's store, and a site must not fail to be created over the name of a shed.</p>
+     */
+    private String uniqueStoreCode(UUID orgId, String base) {
+        if (!stores.existsByOrgIdAndCode(orgId, base)) {
+            return base;
+        }
+        for (int suffix = 2; suffix < 100; suffix++) {
+            String candidate = base + "-" + suffix;
+            if (!stores.existsByOrgIdAndCode(orgId, candidate)) {
+                return candidate;
+            }
+        }
+        // A hundred stores sharing one derived name is not a collision, it is a mistake
+        // somewhere else; a random tail keeps the site creation from failing over it.
+        return base + "-" + UUID.randomUUID().toString().substring(0, 6);
     }
 
     @PreAuthorize("hasAuthority('site:write')")
@@ -279,6 +328,36 @@ public class SiteService implements SiteLookup {
         return stores.findBySiteIdOrderByCode(siteId).stream().map(mapper::toResponse).toList();
     }
 
+    /**
+     * Every store the caller can reach, across their sites, with the site named on each.
+     *
+     * <p>The Stores screen's list. Narrowed by assignment exactly like {@link #list} — a
+     * store is a lockup inside a site and inherits the site's fence — and it names the site
+     * on the row because a store called "site-NTL-01" means nothing without it.</p>
+     */
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAuthority('site:read')")
+    public List<StoreDirectoryEntry> listAllStores(UUID siteId) {
+        if (siteId != null) {
+            // One site's stores go through the ordinary fence: an id is not a key to a site.
+            Site site = requireSite(siteId);
+            return stores.findBySiteIdOrderByCode(siteId).stream()
+                    .map(store -> toDirectoryEntry(store, site))
+                    .toList();
+        }
+        List<Site> visible = currentUser.seesAllSites()
+                ? sites.findByOrgIdAndDeletedAtIsNullOrderByCode(currentUser.currentOrgId())
+                : sites.findByIdInAndDeletedAtIsNullOrderByCode(currentUser.assignedSiteIds());
+        Map<UUID, Site> bySiteId = visible.stream()
+                .collect(Collectors.toMap(Site::getId, site -> site));
+        if (bySiteId.isEmpty()) {
+            return List.of();
+        }
+        return stores.findBySiteIdInOrderByCode(bySiteId.keySet()).stream()
+                .map(store -> toDirectoryEntry(store, bySiteId.get(store.getSiteId())))
+                .toList();
+    }
+
     @PreAuthorize("hasAuthority('site:write')")
     public StoreResponse createStore(UUID siteId, CreateStoreRequest request) {
         Site site = requireSite(siteId);
@@ -290,9 +369,88 @@ public class SiteService implements SiteLookup {
         store.setLocation(request.location());
         store.setDefaultStore(request.defaultStore());
         stores.save(store);
+        if (store.isDefaultStore()) {
+            demoteOtherDefaults(store);
+        }
         audit.record("STORE", store.getId(), "CREATE", null,
                 Map.of("code", store.getCode(), "siteId", siteId.toString()), null);
         return mapper.toResponse(store);
+    }
+
+    @PreAuthorize("hasAuthority('site:write')")
+    public StoreResponse updateStore(UUID storeId, UpdateStoreRequest request) {
+        Store store = requireStoreForWrite(storeId);
+        if (!store.getVersion().equals(request.version())) {
+            throw new OptimisticLockingFailureException(
+                    "Store " + storeId + " was changed by someone else");
+        }
+        Map<String, Object> before = Map.of("code", store.getCode(), "name", store.getName(),
+                "defaultStore", store.isDefaultStore(), "active", store.isActive());
+        // Its own code is not a collision — a store that keeps its name is not renaming.
+        stores.findByOrgIdAndCode(store.getOrgId(), request.code())
+                .filter(other -> !other.getId().equals(store.getId()))
+                .ifPresent(other -> {
+                    throw BusinessException.conflict("store.code-taken",
+                            "A store with code '" + request.code() + "' already exists.");
+                });
+        store.setCode(request.code());
+        store.setName(request.name());
+        store.setLocation(request.location());
+        store.setDefaultStore(request.defaultStore());
+        store.setActive(request.active());
+        if (store.isDefaultStore()) {
+            demoteOtherDefaults(store);
+        }
+        audit.record("STORE", store.getId(), "UPDATE", before,
+                Map.of("code", store.getCode(), "name", store.getName(),
+                        "defaultStore", store.isDefaultStore(), "active", store.isActive()), null);
+        return mapper.toResponse(store);
+    }
+
+    /**
+     * Removes a store outright, and only ever a store nothing was recorded against.
+     *
+     * <p>Hard, not soft, and it can afford to be: {@link StoreDeletionGuard} refuses any
+     * store the ledger has touched, so what survives the check is a lockup that never held
+     * anything. A store whose working life is over is made inactive instead — that keeps its
+     * ledger where the balances can still be read and stops new documents naming it.</p>
+     */
+    @PreAuthorize("hasAuthority('site:delete')")
+    public void deleteStore(UUID storeId) {
+        Store store = requireStoreForWrite(storeId);
+        storeDeletionGuard.assertDeletable(storeId);
+        audit.record("STORE", store.getId(), "DELETE",
+                Map.of("code", store.getCode(), "name", store.getName(),
+                        "siteId", store.getSiteId().toString()),
+                null, null);
+        stores.delete(store);
+    }
+
+    /**
+     * One default per site. The flag decides which store the receive and issue screens open
+     * on, so two of them at one site is a coin toss the supervisor has to notice and correct.
+     */
+    private void demoteOtherDefaults(Store chosen) {
+        stores.findBySiteIdOrderByCode(chosen.getSiteId()).stream()
+                .filter(other -> !other.getId().equals(chosen.getId()))
+                .filter(Store::isDefaultStore)
+                .forEach(other -> other.setDefaultStore(false));
+    }
+
+    /** A store is reached through its site's fence, and has no permission of its own. */
+    private Store requireStoreForWrite(UUID storeId) {
+        Store store = stores.findById(storeId)
+                .filter(candidate -> candidate.getOrgId().equals(currentUser.currentOrgId()))
+                .orElseThrow(() -> BusinessException.notFound("Store", storeId));
+        requireSite(store.getSiteId());
+        return store;
+    }
+
+    private StoreDirectoryEntry toDirectoryEntry(Store store, Site site) {
+        return new StoreDirectoryEntry(store.getId(), store.getSiteId(),
+                site == null ? null : site.getCode(), site == null ? null : site.getName(),
+                store.getCode(), store.getName(), store.getLocation(),
+                store.isDefaultStore(), store.isActive(), store.getVersion());
     }
 
     /**

@@ -48,6 +48,28 @@ export interface AdminSite {
   version: number;
 }
 
+/**
+ * A stock location inside a site — the shed by the gate, and every lockup after it.
+ *
+ * <p>Every site is given one when it is created, named after the site, so nobody has to think
+ * about stores before the first lorry arrives. The register is for the sites that need more
+ * than one: a cement store and a separate steel yard are two balances, not one.</p>
+ */
+export interface AdminStore {
+  id: string;
+  siteId: string;
+  /** Carried on the row because "site-NTL-01" means nothing without the site beside it. */
+  siteCode?: string;
+  siteName?: string;
+  code: string;
+  name: string;
+  location?: string;
+  /** Which store the receive and issue screens open on. One per site. */
+  defaultStore: boolean;
+  active: boolean;
+  version: number;
+}
+
 export type ProjectStatus = 'PLANNED' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CLOSED';
 
 /** A contract. Sites hang off it, and every transaction reaches a project through its site. */

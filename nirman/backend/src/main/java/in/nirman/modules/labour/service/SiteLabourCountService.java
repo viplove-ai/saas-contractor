@@ -20,6 +20,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -51,7 +52,9 @@ import java.util.stream.Collectors;
  * <p><b>No money is ever derived from a count.</b> There is no worker, no wage rate and no
  * ledger posting — the contractor bills for the work he did. A head count multiplied by an
  * assumed daily rate would look exactly like a wage figure while being a guess, so this
- * class does not compute one and the DPR does not either.</p>
+ * class does not compute one and the DPR does not either. <b>Hours do not change that.</b>
+ * They are how long the men stood on the site, which is a fact about the day and belongs on
+ * the report; there is still no rate to multiply them by, and nothing here looks for one.</p>
  */
 @Service
 @Transactional
@@ -93,6 +96,8 @@ public class SiteLabourCountService {
         return new DayCountsResponse(siteId, date, site.usesOutsourcedLabour(),
                 isPeriodLocked(siteId, date),
                 lines.stream().mapToInt(CountResponse::headCount).sum(),
+                lines.stream().map(CountResponse::manHours).filter(Objects::nonNull)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add),
                 lines);
     }
 
@@ -128,9 +133,9 @@ public class SiteLabourCountService {
             SiteLabourCount row = existing.remove(key);
             if (row == null) {
                 counts.save(new SiteLabourCount(site.orgId(), siteId, date, line.skillCategoryId(),
-                        line.labourContractorId(), line.headCount(), line.remarks()));
+                        line.labourContractorId(), line.headCount(), line.hours(), line.remarks()));
             } else {
-                row.amend(line.headCount(), line.remarks());
+                row.amend(line.headCount(), line.hours(), line.remarks());
             }
         }
         // Whatever the request did not mention is a trade the supervisor took off the day.
@@ -206,7 +211,7 @@ public class SiteLabourCountService {
                         categoryNames.get(row.getSkillCategoryId()),
                         row.getLabourContractorId(),
                         contractorNames.get(row.getLabourContractorId()),
-                        row.getHeadCount(), row.getRemarks()))
+                        row.getHeadCount(), row.getHours(), row.manHours(), row.getRemarks()))
                 .toList());
         responses.sort(Comparator.comparing((CountResponse r) -> r.skillCategoryName() == null
                         ? "" : r.skillCategoryName())

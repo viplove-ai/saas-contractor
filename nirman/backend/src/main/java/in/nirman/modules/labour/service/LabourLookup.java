@@ -94,24 +94,38 @@ public interface LabourLookup {
     /**
      * Men on site under a labour contractor, counted rather than marked.
      *
-     * <p>Separate from {@link LabourDay} on purpose, and it carries <b>no cost and no
-     * hours</b>. These men have no worker record and no wage rate — the contractor bills for
-     * the work — so any money attached here would be invented. A DPR prints the counts
-     * beside the muster-roll labour and adds nothing of theirs to the day's cost.</p>
+     * <p>Separate from {@link LabourDay} on purpose, and it carries <b>no cost</b>. These men
+     * have no worker record and no wage rate — the contractor bills for the work — so any
+     * money attached here would be invented. A DPR prints the counts beside the muster-roll
+     * labour and adds nothing of theirs to the day's cost.</p>
+     *
+     * <p>Hours it does carry, and they are unpriced for the same reason. They are recorded
+     * where the site knows them and left out where it does not, which is why they are
+     * nullable rather than zero.</p>
+     *
+     * @param manHours the day's man-hours over the trades that recorded hours, or zero if
+     *                 none did
      */
     record OutsourcedDay(
             LocalDate date,
             boolean enabled,
             int headCount,
+            BigDecimal manHours,
             List<OutsourcedGroup> groups) {
     }
 
+    /**
+     * @param hours    hours each man of the trade worked, or null if nobody recorded them
+     * @param manHours {@code hours} times {@code headCount}, or null for the same reason
+     */
     record OutsourcedGroup(
             UUID skillCategoryId,
             String skillCategoryName,
             UUID labourContractorId,
             String labourContractorName,
-            int headCount) {
+            int headCount,
+            BigDecimal hours,
+            BigDecimal manHours) {
     }
 
     /** No permission check: the caller has already passed the one that got it here. */

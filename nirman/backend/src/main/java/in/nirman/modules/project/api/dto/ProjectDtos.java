@@ -188,9 +188,43 @@ public final class ProjectDtos {
     }
 
     public record CreateStoreRequest(
-            @NotBlank @Size(max = 40) @Pattern(regexp = "[A-Za-z0-9._-]+") String code,
-            @NotBlank @Size(max = 150) String name,
+            @NotBlank @Size(max = 60) @Pattern(regexp = "[A-Za-z0-9._-]+") String code,
+            @NotBlank @Size(max = 210) String name,
             @Size(max = 200) String location,
             boolean defaultStore) {
+    }
+
+    /**
+     * A store on the Stores screen, with the site it belongs to spelled out.
+     *
+     * <p>The site's code and name ride along because the screen lists every store the caller
+     * can reach, across sites — resolving each one against the sites register client-side
+     * would leave a store whose site the caller can open but has not loaded showing a dash.</p>
+     */
+    public record StoreDirectoryEntry(
+            UUID id,
+            UUID siteId,
+            String siteCode,
+            String siteName,
+            String code,
+            String name,
+            String location,
+            boolean defaultStore,
+            boolean active,
+            Long version) {
+    }
+
+    /**
+     * The code is editable, unlike a site's. A default store was named by the machine after
+     * its site, and an organisation that keeps a cement lockup and a steel yard has to be
+     * able to say so.
+     */
+    public record UpdateStoreRequest(
+            @NotBlank @Size(max = 60) @Pattern(regexp = "[A-Za-z0-9._-]+") String code,
+            @NotBlank @Size(max = 210) String name,
+            @Size(max = 200) String location,
+            boolean defaultStore,
+            boolean active,
+            @NotNull Long version) {
     }
 }

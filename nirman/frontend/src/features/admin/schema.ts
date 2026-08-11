@@ -145,3 +145,23 @@ export const siteSchema = z.object({
 });
 
 export type SiteForm = z.infer<typeof siteSchema>;
+
+/**
+ * A store. Wider than a site's code and name because the one every site is given is the
+ * site's own, prefixed — so a site sitting at its limit must still fit here.
+ */
+export const storeSchema = z.object({
+  siteId: z.string().min(1, 'Choose a site'),
+  code: z
+    .string()
+    .trim()
+    .min(1, 'Enter a store code')
+    .max(60, 'At most 60 characters')
+    .regex(/^[A-Za-z0-9._-]+$/, 'Letters, digits, dot, underscore and hyphen only'),
+  name: z.string().trim().min(1, 'Enter the store name').max(210, 'At most 210 characters'),
+  location: z.string().trim().max(200, 'At most 200 characters').optional(),
+  defaultStore: z.boolean(),
+  active: z.boolean(),
+});
+
+export type StoreForm = z.infer<typeof storeSchema>;

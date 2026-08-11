@@ -147,11 +147,13 @@ public class DprPrefillService {
     }
 
     static OutsourcedPrefill toOutsourcedPrefill(LabourLookup.OutsourcedDay day) {
-        return new OutsourcedPrefill(day.enabled(), day.headCount(), day.groups().stream()
-                .map(group -> new OutsourcedLine(group.skillCategoryId(),
-                        group.skillCategoryName(), group.labourContractorId(),
-                        group.labourContractorName(), group.headCount()))
-                .toList());
+        return new OutsourcedPrefill(day.enabled(), day.headCount(), day.manHours(),
+                day.groups().stream()
+                        .map(group -> new OutsourcedLine(group.skillCategoryId(),
+                                group.skillCategoryName(), group.labourContractorId(),
+                                group.labourContractorName(), group.headCount(),
+                                group.hours(), group.manHours()))
+                        .toList());
     }
 
     static LabourLine toLabourLine(LabourLookup.LabourGroup group) {

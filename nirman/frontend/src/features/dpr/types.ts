@@ -124,13 +124,15 @@ export interface DprPrefill {
 }
 
 /**
- * The contractor's men, counted rather than marked. Never added into the muster's head
- * count: these men have no hours and no wage behind them.
+ * External labour, counted rather than marked. Never added into the muster's head count:
+ * these men have no wage behind them, and the hours they do carry are unpriced.
  */
 export interface OutsourcedPrefill {
   /** False for a site that keeps its own muster roll — the section is not drawn at all. */
   enabled: boolean;
   headCount: number;
+  /** Man-hours over the trades that recorded hours. Zero when none did. */
+  manHours: number;
   lines: OutsourcedLine[];
 }
 
@@ -140,6 +142,9 @@ export interface OutsourcedLine {
   labourContractorId?: string;
   labourContractorName?: string;
   headCount: number;
+  /** Hours each man worked. Absent when nobody recorded them, which is not zero. */
+  hours?: number;
+  manHours?: number;
 }
 
 /** A material as the report's quick-entry rows need it: what to call it and what it counts in. */
@@ -160,8 +165,18 @@ export const MATERIAL_NOT_LISTED = '__not-listed__';
 
 export interface LabourCountLine {
   skillCategoryId: string;
+  /**
+   * Which labour contractor supplied the men. Still carried by the record and still stored,
+   * but nothing on screen sets it — naming a contractor means nothing until contractors are
+   * onboarded, and a picker over an empty list is a question with no answers.
+   */
   labourContractorId?: string | undefined;
   headCount: number;
+  /**
+   * Hours <b>each</b> man of the trade worked, not the gang's total. Undefined when nobody
+   * recorded them, which is not the same as zero — and no money follows from it either way.
+   */
+  hours?: number | undefined;
   remarks?: string | undefined;
 }
 
@@ -171,10 +186,13 @@ export interface DayCounts {
   enabled: boolean;
   periodLocked: boolean;
   totalHeadCount: number;
+  /** Man-hours over the trades that recorded hours; zero when none did. */
+  totalManHours: number;
   lines: (LabourCountLine & {
     id: string;
     skillCategoryName?: string;
     labourContractorName?: string;
+    manHours?: number;
   })[];
 }
 

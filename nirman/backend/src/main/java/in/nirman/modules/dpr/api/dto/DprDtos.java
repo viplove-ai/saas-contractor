@@ -101,15 +101,24 @@ public final class DprDtos {
     public record OutsourcedPrefill(
             boolean enabled,
             int headCount,
+            /** Man-hours over the trades that recorded hours; zero when none did. */
+            BigDecimal manHours,
             List<OutsourcedLine> lines) {
     }
 
+    /**
+     * @param hours    hours each man of the trade worked, or null if nobody recorded them —
+     *                 which the report prints as nothing, not as zero
+     * @param manHours {@code hours} times {@code headCount}, null for the same reason
+     */
     public record OutsourcedLine(
             UUID skillCategoryId,
             String skillCategoryName,
             UUID labourContractorId,
             String labourContractorName,
-            int headCount) {
+            int headCount,
+            BigDecimal hours,
+            BigDecimal manHours) {
     }
 
     /**
@@ -301,6 +310,8 @@ public final class DprDtos {
             Integer labourPresentCount,
             /** Contractor's men counted at the gate. Beside the present count, never in it. */
             int outsourcedHeadCount,
+            /** Their man-hours, kept out of labourRegularHours for the same reason. */
+            BigDecimal outsourcedManHours,
             BigDecimal labourRegularHours,
             BigDecimal labourOvertimeHours,
             BigDecimal labourCost,

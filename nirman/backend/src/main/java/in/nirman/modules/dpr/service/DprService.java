@@ -396,8 +396,8 @@ public class DprService {
         LabourLookup.LabourDay labour = rollup.labour();
         LabourLookup.OutsourcedDay outsourced = rollup.outsourced();
 
-        report.applySnapshot(labour.presentCount(), outsourced.headCount(), labour.regularHours(),
-                labour.overtimeHours(),
+        report.applySnapshot(labour.presentCount(), outsourced.headCount(), outsourced.manHours(),
+                labour.regularHours(), labour.overtimeHours(),
                 labour.cost(), rollup.material().receivedValue(), rollup.material().consumedValue(),
                 rollup.expense().costIncurred());
 
@@ -408,12 +408,16 @@ public class DprService {
         labour.groups().forEach(group -> labourLines.save(new DprLabour(report.getId(),
                 group.skillCategoryId(), group.labourContractorId(), group.headCount(),
                 group.regularHours(), group.overtimeHours())));
-        // The contractor's gang, on the same table and flagged apart. Hours are zero because
-        // nobody clocked them, not because they stood idle — which is exactly why the flag
-        // has to travel with the row rather than being inferred from the zero.
+        // The contractor's gang, on the same table and flagged apart. Their man-hours go in
+        // the regular column when the site recorded them and zero when it did not — the flag
+        // is what keeps the two kinds of row from being added together, not the hours, which
+        // is why it has to travel with the row rather than being inferred from a zero. There
+        // is still no overtime here: nobody clocked these men, so there is no shift to be
+        // over.
         outsourced.groups().forEach(group -> labourLines.save(new DprLabour(report.getId(),
                 group.skillCategoryId(), group.labourContractorId(), group.headCount(),
-                BigDecimal.ZERO, BigDecimal.ZERO, true)));
+                group.manHours() == null ? BigDecimal.ZERO : group.manHours(),
+                BigDecimal.ZERO, true)));
     }
 
     private void replaceWorkItems(DailyProgressReport report, List<WorkItemInput> lines) {

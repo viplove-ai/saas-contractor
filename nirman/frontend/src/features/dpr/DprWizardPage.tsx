@@ -64,9 +64,13 @@ const LABOUR_COLUMNS: RecordColumn<LabourLine>[] = [
     cell: (line) => line.skillCategoryName ?? 'Unspecified',
   },
   {
-    key: 'contractor',
-    header: 'Contractor',
-    cell: (line) => line.labourContractorName ?? 'Direct',
+    // Where the men came from, which is the one thing that must not be lost when the two
+    // kinds of row print as one list. "Direct" is our own muster; "External" is a gang
+    // counted at the gate, which has a head count and unpriced hours and no wage at all.
+    key: 'source',
+    header: 'Source',
+    cell: (line) =>
+      line.labourContractorName ?? (line.outsourced ? 'External' : 'Direct'),
   },
   { key: 'men', header: 'Men', align: 'right', cell: (line) => line.headCount },
   {
@@ -887,6 +891,25 @@ function PrefillStep({
             {data.labour.unverifiedCount} attendance row(s) behind this are not verified yet, so{' '}
             {formatAmount(data.labour.unverifiedCost)} of the wage cost is provisional.
           </Alert>
+        )}
+        {/*
+          External labour, beside the muster and never inside it. Its own row of figures
+          rather than a share of the ones above: those men have a wage behind their hours and
+          these have none, so a single "45 present" would read as a wage bill spread over
+          people who are not on our payroll.
+        */}
+        {data.outsourcedLabour.enabled && (
+          <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
+            <Figure label="External (counted)" value={String(data.outsourcedLabour.headCount)} />
+            <Figure
+              label="External man-hours"
+              value={
+                data.outsourcedLabour.manHours > 0
+                  ? formatHours(data.outsourcedLabour.manHours)
+                  : 'Not recorded'
+              }
+            />
+          </Stack>
         )}
         {data.labour.lines.length > 0 && (
           <RecordTable

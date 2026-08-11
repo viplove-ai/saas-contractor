@@ -81,11 +81,14 @@ const GROUPS: Group[] = [
   },
   {
     title: 'Set up',
-    hint: 'Who works here and what they work on',
+    hint: 'Who works here, what they work on, and where the material is kept',
     tiles: [
       { title: 'Members', to: '/users', permission: 'user:read' },
       { title: 'Projects', to: '/projects', permission: 'project:write' },
       { title: 'Sites', to: '/sites', permission: 'site:write' },
+      // A site arrives with its own store, so this tile is for the second one and the
+      // third — not a step anybody has to take before the site can be used.
+      { title: 'Stores', to: '/stores', permission: 'site:write' },
     ],
   },
   {

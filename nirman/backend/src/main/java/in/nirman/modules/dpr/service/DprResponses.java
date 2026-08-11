@@ -91,6 +91,7 @@ public class DprResponses {
                 siteName(report.getSiteId()), report.getProjectId(), report.getReportDate(),
                 report.getWeather(), report.getTemperatureC(), report.getWorkingHoursLost(),
                 report.getLabourPresentCount(), report.getOutsourcedHeadCount(),
+                report.getOutsourcedManHours(),
                 report.getLabourRegularHours(),
                 report.getLabourOvertimeHours(), report.getLabourCost(),
                 report.getMaterialReceivedValue(), report.getMaterialConsumedValue(),

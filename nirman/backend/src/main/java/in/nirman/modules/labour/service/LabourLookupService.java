@@ -82,7 +82,7 @@ public class LabourLookupService implements LabourLookup {
         boolean enabled = sites.require(siteId).usesOutsourcedLabour();
         List<SiteLabourCount> rows = labourCounts.findBySiteIdAndCountDate(siteId, date);
         if (rows.isEmpty()) {
-            return new OutsourcedDay(date, enabled, 0, List.of());
+            return new OutsourcedDay(date, enabled, 0, BigDecimal.ZERO, List.of());
         }
         UUID orgId = currentUser.currentOrgId();
         Map<UUID, String> skillNames = skillCategories.findByOrgIdOrderByCode(orgId).stream()
@@ -97,15 +97,22 @@ public class LabourLookupService implements LabourLookup {
                         row.getLabourContractorId(),
                         row.getLabourContractorId() == null
                                 ? null : contractorNames.get(row.getLabourContractorId()),
-                        row.getHeadCount()))
+                        row.getHeadCount(), row.getHours(), row.manHours()))
                 .sorted(Comparator.comparing((OutsourcedGroup g) ->
                                 g.skillCategoryName() == null ? "" : g.skillCategoryName())
                         .thenComparing(g -> g.labourContractorName() == null
                                 ? "" : g.labourContractorName()))
                 .toList();
 
+        // Summed over the trades that recorded hours; a trade that recorded none contributes
+        // nothing rather than dragging the total down as a zero.
+        BigDecimal manHours = groups.stream()
+                .map(OutsourcedGroup::manHours)
+                .filter(java.util.Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         return new OutsourcedDay(date, enabled,
-                groups.stream().mapToInt(OutsourcedGroup::headCount).sum(), groups);
+                groups.stream().mapToInt(OutsourcedGroup::headCount).sum(), manHours, groups);
     }
 
     @Override

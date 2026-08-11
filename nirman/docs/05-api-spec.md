@@ -36,7 +36,18 @@ A reset takes `{temporaryPassword}`, returns 204 and never echoes a password: it
 ### /projects, /sites, /boq-items
 `GET|POST /projects`, `GET|PUT /projects/{id}`, `GET /projects/{id}/summary`.
 `GET|POST /sites` (`?projectId`), `GET|PUT /sites/{id}`, `GET|POST /sites/{id}/stores`.
+`GET /stores` (`?siteId`), `PUT|DELETE /stores/{id}`.
 `GET|POST /boq-items` (`?projectId&siteId`), `GET|PUT /boq-items/{id}`, `POST /boq-items/{id}/progress`.
+
+Creating a site also creates its default store, coded and named `site-<site code>` and
+`site-<site name>`. Nobody is asked for it: a store is the shed by the gate, and a site
+without one meets its first delivery with an empty store picker. `/stores` is the register
+for the sites that keep more than one — `GET` there returns each store with its site's code
+and name, narrowed to the caller's assignments like every other site-scoped read. A store is
+reached through its site's fence and holds no permission of its own (`site:read`,
+`site:write`, `site:delete`). `DELETE` is refused for any store the stock ledger, a receipt,
+an issue, a transfer or a stock count has ever named; a store that is finished with is set
+`active: false`, which keeps its ledger readable and stops new documents naming it.
 
 ### /workers
 `GET|POST /workers` (`?siteId&contractorId&skill&active&q`), `GET|PUT /workers/{id}`,

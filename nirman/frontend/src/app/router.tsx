@@ -124,6 +124,9 @@ export const router = createBrowserRouter([
           screen('sites', async () => ({
             Component: (await import('../features/admin/SitesPage')).SitesPage,
           })),
+          screen('stores', async () => ({
+            Component: (await import('../features/admin/StoresPage')).StoresPage,
+          })),
         ],
       },
     ],

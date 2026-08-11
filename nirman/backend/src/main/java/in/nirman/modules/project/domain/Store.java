@@ -18,10 +18,15 @@ public class Store extends BaseEntity {
     @Column(name = "site_id", nullable = false, updatable = false)
     private UUID siteId;
 
-    @Column(name = "code", nullable = false, length = 40, updatable = false)
+    /**
+     * Unique inside the organisation. Not frozen: a store created with its site is named by
+     * the machine ({@code site-<site code>}), and an organisation that keeps three lockups
+     * per site has to be able to say which is which.
+     */
+    @Column(name = "code", nullable = false, length = 60)
     private String code;
 
-    @Column(name = "name", nullable = false, length = 150)
+    @Column(name = "name", nullable = false, length = 210)
     private String name;
 
     @Column(name = "location", length = 200)
@@ -32,6 +37,15 @@ public class Store extends BaseEntity {
 
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
+
+    /**
+     * What a store created alongside its site is called, before anybody renames it.
+     *
+     * <p>Derived rather than asked for. A site has somewhere to put the cement whether or not
+     * the person adding it thought about stores, and an empty store picker on the receive
+     * screen is a supervisor stuck at the gate with a lorry.</p>
+     */
+    public static final String SITE_STORE_PREFIX = "site-";
 
     protected Store() {
     }
@@ -53,6 +67,10 @@ public class Store extends BaseEntity {
 
     public String getCode() {
         return code;
+    }
+
+    public void setCode(String code) {
+        this.code = code;
     }
 
     public String getName() {
