@@ -12,7 +12,7 @@ import {
 import { useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
-import { isSiteScopedRole, ROLE_LABEL } from '../../shared/roles';
+import { ROLE_LABEL, seesAllSites } from '../../shared/roles';
 import { useAuth } from '../auth/AuthContext';
 import { useAdminSites, useUpdateUserStatus, useUsers } from './api';
 import { ResetPasswordDialog } from './ResetPasswordDialog';
@@ -27,8 +27,14 @@ const ROLE_FILTERS = [
   { code: 'ACCOUNTANT', label: 'Accountants' },
 ];
 
-function isSiteScoped(user: AdminUser): boolean {
-  return user.roles.some(isSiteScopedRole);
+/**
+ * What the Sites cell says. A member holds a set of roles, and the two kinds are not
+ * exclusive — an owner can be ADMIN and supervise a site himself. Visibility follows the
+ * widest role held, exactly as the server's site claim does, so a company-wide role wins
+ * and the postings become a footnote rather than the answer.
+ */
+function siteReach(user: AdminUser): 'ALL' | 'POSTED' {
+  return seesAllSites(user.roles) ? 'ALL' : 'POSTED';
 }
 
 /**
@@ -92,8 +98,8 @@ export function UsersPage() {
       ),
     },
     {
-      key: 'role',
-      header: 'Role',
+      key: 'roles',
+      header: 'Roles',
       cell: (member) =>
         member.roles.map((code) => (
           <Chip key={code} size="small" label={ROLE_LABEL[code] ?? code} sx={{ mr: 0.5 }} />
@@ -102,14 +108,31 @@ export function UsersPage() {
     {
       key: 'sites',
       header: 'Sites',
-      cell: (member) =>
-        /*
-          A blank cell would read as "no access" for an admin, who in fact reaches
-          everything — so the company-wide roles say so in words.
-        */
-        isSiteScoped(member)
-          ? member.siteIds.map(siteLabel).join(', ') || 'None yet'
-          : 'All sites',
+      cell: (member) => (
+        <>
+          {/*
+            A blank cell would read as "no access" for an admin, who in fact reaches
+            everything — so the company-wide roles say so in words.
+          */}
+          {siteReach(member) === 'ALL' && (
+            <Typography variant="body2">
+              All sites
+              {member.siteIds.length > 0 &&
+                ` · posted at ${member.siteIds.map(siteLabel).join(', ')}`}
+            </Typography>
+          )}
+          {/*
+            "None yet" in grey read as a detail. It is the reason a supervisor rings up to
+            say his screens are empty, so it is a warning chip.
+          */}
+          {siteReach(member) === 'POSTED' &&
+            (member.siteIds.length === 0 ? (
+              <Chip size="small" color="warning" variant="outlined" label="Not posted" />
+            ) : (
+              member.siteIds.map(siteLabel).join(', ')
+            ))}
+        </>
+      ),
     },
     {
       key: 'status',

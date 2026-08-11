@@ -1,7 +1,7 @@
 import { ThemeProvider } from '@mui/material/styles';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { theme } from '../app/theme';
 import { RecordTable, type RecordColumn } from './RecordTable';
 
@@ -25,100 +25,95 @@ const COLUMNS: RecordColumn<Row>[] = [
   { key: 'status', header: 'Status', card: 'status', cell: (row) => row.status },
 ];
 
-/**
- * jsdom answers every media query with `false`, which is the desk layout. A phone is simulated
- * by making the query the component asks about — and only that one — match.
- */
-function asPhone() {
-  vi.stubGlobal(
-    'matchMedia',
-    (query: string) =>
-      ({
-        matches: query.includes('max-width'),
-        media: query,
-        onchange: null,
-        addListener: () => {},
-        removeListener: () => {},
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        dispatchEvent: () => false,
-      }) as unknown as MediaQueryList,
-  );
-}
-
 function renderTable(props: Partial<Parameters<typeof RecordTable<Row>>[0]> = {}) {
   return render(
     <ThemeProvider theme={theme}>
-      <RecordTable columns={COLUMNS} rows={ROWS} rowKey={(row) => row.id} {...props} />
+      <RecordTable
+        columns={COLUMNS}
+        rows={ROWS}
+        rowKey={(row) => row.id}
+        ariaLabel="Workers"
+        {...props}
+      />
     </ThemeProvider>,
   );
 }
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+/** The cards. A list, so a screen reader counts the records rather than reading a wall. */
+const cards = () => screen.getByRole('list', { name: 'Workers' });
+const table = () => screen.getByRole('table', { name: 'Workers' });
 
 describe('RecordTable', () => {
-  it('is a table on a desk', () => {
+  it('draws both layouts and lets a breakpoint choose, rather than a hook', () => {
     renderTable();
-    expect(screen.getByRole('table')).toBeInTheDocument();
-    // One heading row and one row per record.
-    expect(screen.getAllByRole('row')).toHaveLength(3);
-    expect(screen.getByRole('columnheader', { name: 'Worker' })).toBeInTheDocument();
+    /*
+      Both are in the DOM at once and a CSS breakpoint hides one. A JS media query would
+      answer wrongly on the first paint and correct itself, which on a phone is a visible
+      flick from a table to a list.
+
+      Which one is *shown* is not asserted here: jsdom applies no layout and answers media
+      queries against a fixed 1024px window, so a computed `display` proves nothing about a
+      375px phone. The breakpoint itself is covered by looking at the app, not by this file.
+    */
+    expect(cards()).toBeInTheDocument();
+    expect(table()).toBeInTheDocument();
+    expect(cards()).not.toContainElement(table());
   });
 
-  it('is a card per record in a hand', () => {
-    asPhone();
+  it('gives each record a card carrying every column the table has', () => {
     renderTable();
-    expect(screen.queryByRole('table')).not.toBeInTheDocument();
-    expect(screen.getByText('Ramesh Kumar')).toBeInTheDocument();
-    expect(screen.getByText('Suresh Yadav')).toBeInTheDocument();
-  });
+    const items = within(cards()).getAllByRole('listitem');
+    expect(items).toHaveLength(2);
 
-  it('keeps every column heading as a field label on the card', () => {
-    asPhone();
-    renderTable();
+    const first = within(items[0]!);
+    expect(first.getByText('Ramesh Kumar')).toBeInTheDocument();
     // The heading a value sits under is what makes ₹625 a rate rather than an amount.
-    expect(screen.getAllByText('Site')).toHaveLength(2);
-    expect(screen.getAllByText('Rate')).toHaveLength(2);
-    expect(screen.getByText('₹625')).toBeInTheDocument();
+    expect(first.getByText('Site')).toBeInTheDocument();
+    expect(first.getByText('KSN-A')).toBeInTheDocument();
+    expect(first.getByText('Rate')).toBeInTheDocument();
+    expect(first.getByText('₹625')).toBeInTheDocument();
+    expect(first.getByText('Working')).toBeInTheDocument();
   });
 
   it('does not label the title or the status — a card has no room for a heading nobody reads', () => {
-    asPhone();
     renderTable();
-    expect(screen.queryByText('Worker')).not.toBeInTheDocument();
-    expect(screen.queryByText('Status')).not.toBeInTheDocument();
-    // The status itself is still there, beside the name.
-    expect(screen.getByText('Working')).toBeInTheDocument();
+    const first = within(within(cards()).getAllByRole('listitem')[0]!);
+    expect(first.queryByText('Worker')).not.toBeInTheDocument();
+    expect(first.queryByText('Status')).not.toBeInTheDocument();
+    // Both are still headings on the table.
+    expect(within(table()).getByRole('columnheader', { name: 'Worker' })).toBeInTheDocument();
+  });
+
+  it('leaves the desk view a plain table', () => {
+    renderTable();
+    // One heading row and one row per record.
+    expect(within(table()).getAllByRole('row')).toHaveLength(3);
+    expect(within(table()).getByRole('columnheader', { name: 'Rate' })).toBeInTheDocument();
   });
 
   it('drops a column marked hidden from the card and keeps it on the table', () => {
     const columns: RecordColumn<Row>[] = [
-      ...COLUMNS.slice(0, 2).map((column) => column),
+      COLUMNS[0]!,
+      COLUMNS[1]!,
       { key: 'rate', header: 'Rate', card: 'hidden', cell: (row: Row) => row.rate },
     ];
-    const { unmount } = renderTable({ columns });
-    expect(screen.getByRole('columnheader', { name: 'Rate' })).toBeInTheDocument();
-    unmount();
-
-    asPhone();
     renderTable({ columns });
-    expect(screen.queryByText('₹625')).not.toBeInTheDocument();
+
+    expect(within(cards()).queryByText('₹625')).not.toBeInTheDocument();
+    expect(within(table()).getByText('₹625')).toBeInTheDocument();
   });
 
   it('opens a record from either layout', async () => {
     const onRowClick = vi.fn();
     const user = userEvent.setup();
-
-    const { unmount } = renderTable({ onRowClick });
-    await user.click(screen.getByText('Ramesh Kumar'));
-    expect(onRowClick).toHaveBeenCalledWith(ROWS[0]);
-    unmount();
-
-    asPhone();
     renderTable({ onRowClick });
-    await user.click(screen.getAllByRole('button')[1]!);
+
+    await user.click(within(table()).getByText('Ramesh Kumar'));
+    expect(onRowClick).toHaveBeenCalledWith(ROWS[0]);
+
+    // The card's tap target is inside the list item, so the item keeps its listitem role.
+    const second = within(within(cards()).getAllByRole('listitem')[1]!);
+    await user.click(second.getByRole('button'));
     expect(onRowClick).toHaveBeenCalledWith(ROWS[1]);
   });
 
@@ -126,7 +121,6 @@ describe('RecordTable', () => {
     const onRowClick = vi.fn();
     const onEdit = vi.fn();
     const user = userEvent.setup();
-    asPhone();
 
     renderTable({
       onRowClick,
@@ -142,20 +136,16 @@ describe('RecordTable', () => {
       ],
     });
 
-    await user.click(screen.getAllByRole('button', { name: 'Edit' })[0]!);
+    await user.click(within(cards()).getAllByRole('button', { name: 'Edit' })[0]!);
     expect(onEdit).toHaveBeenCalledWith('1');
     expect(onRowClick).not.toHaveBeenCalled();
   });
 
-  it('says why the list is empty rather than showing nothing', () => {
+  it('says why the list is empty on both layouts rather than showing nothing', () => {
     const empty = <span>Nobody on your sites yet.</span>;
-
-    const { unmount } = renderTable({ rows: [], empty });
-    expect(within(screen.getByRole('table')).getByText('Nobody on your sites yet.')).toBeInTheDocument();
-    unmount();
-
-    asPhone();
     renderTable({ rows: [], empty });
-    expect(screen.getByText('Nobody on your sites yet.')).toBeInTheDocument();
+
+    expect(within(cards()).getByText('Nobody on your sites yet.')).toBeInTheDocument();
+    expect(within(table()).getByText('Nobody on your sites yet.')).toBeInTheDocument();
   });
 });

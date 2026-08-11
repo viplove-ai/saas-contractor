@@ -287,24 +287,64 @@ class DashboardIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
-    /** He gets his own site instead, which is a different question rather than a smaller one. */
+    /**
+     * Nor the site dashboard, which he used to hold until V13 took {@code dashboard:site}
+     * off the role. Cost per contract line, budget burn and variance are the engineer's and
+     * the accountant's questions; what a supervisor is answerable for is what happened at
+     * site today, and that is his muster and his report. Note it is a 403 rather than an
+     * empty screen — the permission is gone from the role, not merely hidden in the nav.
+     */
     @Test
-    @DisplayName("a supervisor sees the dashboard of the site he is posted to")
-    void aSupervisorSeesHisOwnSite() throws Exception {
+    @DisplayName("a supervisor cannot open the site dashboard either")
+    void theSiteDashboardIsNotForSupervisorsEither() throws Exception {
         mockMvc.perform(get("/api/v1/dashboard/site/" + SITE_A)
                         .param("from", FROM.toString()).param("to", TO.toString())
                         .header("Authorization", "Bearer " + loginToken("vivek")))
+                .andExpect(status().isForbidden());
+    }
+
+    /** An engineer keeps it, on the site he runs. */
+    @Test
+    @DisplayName("an engineer sees the dashboard of the site he is posted to")
+    void anEngineerSeesHisOwnSite() throws Exception {
+        mockMvc.perform(get("/api/v1/dashboard/site/" + SITE_A)
+                        .param("from", FROM.toString()).param("to", TO.toString())
+                        .header("Authorization", "Bearer " + loginToken("uttam")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.siteCode").value("KSN-A"));
     }
 
-    /** Site scope is a fence on the dashboard like everywhere else. */
+    /**
+     * Site scope is a fence on the dashboard like everywhere else, and it needs its own
+     * engineer to prove it: every seeded login that still holds {@code dashboard:site} is
+     * also an administrator, and an administrator has no fence to test.
+     */
     @Test
-    @DisplayName("a supervisor cannot open the dashboard of a site he is not posted to")
+    @DisplayName("an engineer cannot open the dashboard of a site he is not posted to")
     void siteScopeAppliesToTheSiteDashboard() throws Exception {
+        String admin = loginToken("viplove");
+        String username = "scoped.eng." + java.util.UUID.randomUUID().toString().substring(0, 6);
+        MvcResult created = mockMvc.perform(post("/api/v1/users")
+                        .header("Authorization", "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"%s","fullName":"Scoped Engineer",
+                                 "mobile":"+91-9800000777","temporaryPassword":"%s",
+                                 "roleCodes":["ENGINEER"],"siteIds":["%s"]}
+                                """.formatted(username, PASSWORD, SITE_A)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        assertThat(objectMapper.readTree(created.getResponse().getContentAsString())
+                .get("siteIds").toString()).contains(SITE_A);
+
+        String engineer = loginToken(username);
+        mockMvc.perform(get("/api/v1/dashboard/site/" + SITE_A)
+                        .param("from", FROM.toString()).param("to", TO.toString())
+                        .header("Authorization", "Bearer " + engineer))
+                .andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/dashboard/site/" + SITE_B)
                         .param("from", FROM.toString()).param("to", TO.toString())
-                        .header("Authorization", "Bearer " + loginToken("vivek")))
+                        .header("Authorization", "Bearer " + engineer))
                 .andExpect(status().isForbidden());
     }
 

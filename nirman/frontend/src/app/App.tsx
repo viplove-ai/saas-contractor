@@ -4,6 +4,7 @@ import { RouterProvider } from 'react-router-dom';
 import { AuthProvider } from '../features/auth/AuthContext';
 import { SyncProvider } from '../offline/SyncProvider';
 import { InstallPrompt } from '../shared/InstallPrompt';
+import { UpdatePrompt } from '../shared/UpdatePrompt';
 import { createQueryClient } from './queryClient';
 import { router } from './router';
 import { theme } from './theme';
@@ -29,6 +30,11 @@ export function App() {
           is where a first-time visitor lands, and it has no business changing per route.
         */}
         <InstallPrompt />
+        {/*
+          Outside the router for the same reason, and outside AuthProvider too: a waiting
+          version is worth offering whether or not anybody is signed in.
+        */}
+        <UpdatePrompt />
       </ThemeProvider>
     </QueryClientProvider>
   );

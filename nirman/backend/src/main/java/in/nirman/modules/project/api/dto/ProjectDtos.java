@@ -12,6 +12,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -39,7 +40,22 @@ public final class ProjectDtos {
             UUID projectManagerId,
             Project.Status status,
             String description,
+            Instant deletedAt,
+            UUID deletedBy,
+            String deletedReason,
             Long version) {
+    }
+
+    /**
+     * Why a project or a site is being taken off the books.
+     *
+     * <p>The reason is required for the same reason it is required to void an approved
+     * expense: six months on, a row that vanished without an explanation is
+     * indistinguishable from data loss, and the person asking what happened is never the
+     * person who did it.</p>
+     */
+    public record DeleteRequest(
+            @NotBlank @Size(max = 500) String reason) {
     }
 
     public record CreateProjectRequest(
@@ -103,6 +119,11 @@ public final class ProjectDtos {
             LocalDate startDate,
             BigDecimal standardShiftHours,
             int monthlyWageDays,
+            /** Work here is let to labour contractors, so the day is head counts per trade. */
+            boolean usesOutsourcedLabour,
+            Instant deletedAt,
+            UUID deletedBy,
+            String deletedReason,
             Long version) {
     }
 
@@ -132,7 +153,8 @@ public final class ProjectDtos {
             @NotNull @Digits(integer = 2, fraction = 2)
             @jakarta.validation.constraints.DecimalMin(value = "0.5")
             @jakarta.validation.constraints.DecimalMax(value = "24.0") BigDecimal standardShiftHours,
-            @Min(1) @Max(31) int monthlyWageDays) {
+            @Min(1) @Max(31) int monthlyWageDays,
+            boolean usesOutsourcedLabour) {
     }
 
     public record UpdateSiteRequest(
@@ -148,6 +170,7 @@ public final class ProjectDtos {
             @jakarta.validation.constraints.DecimalMin(value = "0.5")
             @jakarta.validation.constraints.DecimalMax(value = "24.0") BigDecimal standardShiftHours,
             @Min(1) @Max(31) int monthlyWageDays,
+            boolean usesOutsourcedLabour,
             @NotNull Long version) {
     }
 

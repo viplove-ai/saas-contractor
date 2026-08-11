@@ -22,6 +22,12 @@ interface NavItem {
   /** Which paths light this item up, beyond an exact match. */
   match: string[];
   permission?: string;
+  /**
+   * Shown when the account holds <em>any</em> of these. Sign-off is one door onto four
+   * different signatures, and an account holding none of them has no business there — a
+   * supervisor's Sign-off tab was a permanent empty list before this.
+   */
+  anyPermission?: string[];
   /** Where the item's own count comes from, if it has one. */
   badge?: 'signoff';
 }
@@ -29,14 +35,24 @@ interface NavItem {
 const ITEMS: NavItem[] = [
   { label: 'Today', to: '/today', match: ['/today', '/home'] },
   { label: 'Registers', to: '/inventory/stock', match: ['/inventory', '/workers'], permission: 'inventory:read' },
-  { label: 'Sign-off', to: '/approvals', match: ['/approvals', '/attendance/verify', '/dprs'], badge: 'signoff' },
+  {
+    label: 'Sign-off',
+    to: '/approvals',
+    match: ['/approvals', '/attendance/verify', '/dprs'],
+    anyPermission: ['attendance:verify', 'dpr:verify', 'expense:approve:l1', 'payment:record'],
+    badge: 'signoff',
+  },
   { label: 'Reports', to: '/dashboard/site', match: ['/dashboard'], permission: 'dashboard:site' },
   { label: 'More', to: '/home', match: ['/profile', '/sync', '/users', '/projects', '/sites'] },
 ];
 
 function useNavItems(): NavItem[] {
   const { hasPermission } = useAuth();
-  return ITEMS.filter((item) => !item.permission || hasPermission(item.permission));
+  return ITEMS.filter(
+    (item) =>
+      (!item.permission || hasPermission(item.permission)) &&
+      (!item.anyPermission || item.anyPermission.some(hasPermission)),
+  );
 }
 
 function isActive(item: NavItem, pathname: string): boolean {

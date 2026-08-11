@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CompanyDashboardPage } from './CompanyDashboardPage';
@@ -182,6 +182,9 @@ describe('CompanyDashboardPage', () => {
     });
     renderPage();
 
-    expect(await screen.findByText('No budget set')).toBeInTheDocument();
+    // Both layouts carry the figure; the desk one is enough to prove it is not "0.0%".
+    await screen.findAllByText('No budget set');
+    const table = within(screen.getByRole('table', { name: 'Projects over the period' }));
+    expect(table.getByText('No budget set')).toBeInTheDocument();
   });
 });

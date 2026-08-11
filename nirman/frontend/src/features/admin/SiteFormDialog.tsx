@@ -6,8 +6,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
+  FormHelperText,
   MenuItem,
   Stack,
+  Switch,
   TextField,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
@@ -71,6 +74,7 @@ export function SiteFormDialog({ open, site, onClose }: Props) {
       status: 'ACTIVE',
       standardShiftHours: DEFAULT_SHIFT_HOURS,
       monthlyWageDays: DEFAULT_WAGE_DAYS,
+      usesOutsourcedLabour: false,
     },
   });
 
@@ -92,6 +96,7 @@ export function SiteFormDialog({ open, site, onClose }: Props) {
             status: site.status,
             standardShiftHours: site.standardShiftHours,
             monthlyWageDays: site.monthlyWageDays,
+            usesOutsourcedLabour: site.usesOutsourcedLabour,
           }
         : {
             projectId: '',
@@ -104,6 +109,7 @@ export function SiteFormDialog({ open, site, onClose }: Props) {
             status: 'ACTIVE',
             standardShiftHours: DEFAULT_SHIFT_HOURS,
             monthlyWageDays: DEFAULT_WAGE_DAYS,
+            usesOutsourcedLabour: false,
           },
     );
   }, [open, site, reset]);
@@ -243,6 +249,29 @@ export function SiteFormDialog({ open, site, onClose }: Props) {
               {...register('monthlyWageDays')}
             />
           </Stack>
+
+          {/*
+            What this switch decides is which question the site's supervisor is asked every
+            evening: "who came in" against a named roster, or "how many came in" per trade.
+            Turning it on does not turn the muster roll off — a site can run both, our own
+            men and a contractor's gang — it adds the counts box to his day.
+          */}
+          <Controller
+            control={control}
+            name="usesOutsourcedLabour"
+            render={({ field }) => (
+              <FormControlLabel
+                control={
+                  <Switch checked={field.value} onChange={(_, next) => field.onChange(next)} />
+                }
+                label="Work here is let to labour contractors"
+              />
+            )}
+          />
+          <FormHelperText sx={{ mt: -1.5 }}>
+            The supervisor records head counts per trade for the day as well as any muster
+            roll. No wages are computed from a count — the contractor bills for the work.
+          </FormHelperText>
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField

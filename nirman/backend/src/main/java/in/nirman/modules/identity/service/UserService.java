@@ -2,6 +2,7 @@ package in.nirman.modules.identity.service;
 
 import in.nirman.common.BusinessException;
 import in.nirman.common.PageResponse;
+import in.nirman.common.SitePostingGuard;
 import in.nirman.modules.audit.AuditService;
 import in.nirman.modules.identity.api.dto.UserDtos.AssignRolesRequest;
 import in.nirman.modules.identity.api.dto.UserDtos.AssignSitesRequest;
@@ -52,6 +53,7 @@ public class UserService {
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
     private final UserMapper mapper;
+    private final SitePostingGuard postings;
 
     public UserService(UserRepository users, RoleRepository roles,
                        PermissionRepository permissions,
@@ -60,7 +62,8 @@ public class UserService {
                        PasswordEncoder passwordEncoder,
                        CurrentUserProvider currentUser,
                        AuditService audit,
-                       UserMapper mapper) {
+                       UserMapper mapper,
+                       SitePostingGuard postings) {
         this.users = users;
         this.roles = roles;
         this.permissions = permissions;
@@ -70,6 +73,7 @@ public class UserService {
         this.currentUser = currentUser;
         this.audit = audit;
         this.mapper = mapper;
+        this.postings = postings;
     }
 
     @Transactional(readOnly = true)
@@ -169,11 +173,26 @@ public class UserService {
         return requireUser(id).getRoles().stream().map(Role::getCode).sorted().toList();
     }
 
+    /**
+     * Replaces the whole set a member holds — they may hold several, and their permissions
+     * are the union. The set is sent complete rather than as a delta, so the caller's view
+     * of who someone is wins outright.
+     *
+     * <p>One refusal: you cannot take {@code role:assign} off yourself. Roles are edited as
+     * a set, so dropping the one that carries it is a single untick away, and it would leave
+     * the account unable to put it back — with nobody else necessarily holding it either.</p>
+     */
     @PreAuthorize("hasAuthority('role:assign')")
     public UserResponse putRoles(UUID id, AssignRolesRequest request) {
         User user = requireUser(id);
         List<String> before = user.getRoles().stream().map(Role::getCode).sorted().toList();
-        user.replaceRoles(resolveRoles(request.roleCodes()));
+        Set<Role> wanted = resolveRoles(request.roleCodes());
+        if (user.getId().equals(currentUser.currentUserIdOrNull()) && !grantsRoleAssign(wanted)) {
+            throw new BusinessException("user.self-role-lockout",
+                    "That would leave you unable to assign roles, including your own. "
+                            + "Ask another administrator to make this change.");
+        }
+        user.replaceRoles(wanted);
         audit.record("USER", user.getId(), "ROLES_CHANGED",
                 Map.of("roles", before), Map.of("roles", request.roleCodes()), null);
         return toResponse(user);
@@ -195,6 +214,12 @@ public class UserService {
      * closure takes effect immediately, not at midnight; see
      * {@link UserSiteAssignment#revoke}. A previously closed assignment for a re-added site
      * is reopened, because the schema keeps one row per user and site.
+     *
+     * <p>What it will not do is withdraw a site from the engineer or supervisor named on it.
+     * The sites register and these assignment rows are two different facts — who runs the
+     * site, and who may open it — and the sync between them runs one way, from the register
+     * to the rows. Letting this screen cut a row the register still implies is the one way
+     * the two can end up contradicting each other; see {@link SitePostingGuard}.</p>
      */
     @PreAuthorize("hasAuthority('user:write')")
     public List<SiteAssignmentResponse> putSites(UUID id, AssignSitesRequest request) {
@@ -202,6 +227,14 @@ public class UserService {
         LocalDate today = LocalDate.now();
         Set<UUID> wanted = new HashSet<>(request.siteIds());
         List<UserSiteAssignment> existing = assignments.findByUserId(id);
+
+        // Checked before anything is written, and over the whole withdrawal at once, so an
+        // admin clearing two sites learns about both in one refusal rather than one per try.
+        postings.assertNotPosted(id, existing.stream()
+                .filter(assignment -> assignment.isActiveOn(today))
+                .map(UserSiteAssignment::getSiteId)
+                .filter(siteId -> !wanted.contains(siteId))
+                .toList());
 
         for (UserSiteAssignment assignment : existing) {
             boolean shouldBeActive = wanted.remove(assignment.getSiteId());
@@ -250,6 +283,13 @@ public class UserService {
             throw BusinessException.notFound("User", id);   // other orgs' users do not exist for you
         }
         return user;
+    }
+
+    /** The union of a set's permissions is what the member ends up holding — see AuthService. */
+    private static boolean grantsRoleAssign(Set<Role> roleSet) {
+        return roleSet.stream()
+                .flatMap(role -> role.getPermissions().stream())
+                .anyMatch(permission -> "role:assign".equals(permission.getCode()));
     }
 
     private Set<Role> resolveRoles(List<String> roleCodes) {

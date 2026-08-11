@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +8,7 @@ import type { Dpr, PageResponse, Site } from './types';
 
 const get = vi.fn();
 const post = vi.fn();
+const del = vi.fn();
 
 vi.mock('../../shared/apiClient', async () => {
   const actual = await vi.importActual<typeof import('../../shared/apiClient')>(
@@ -18,12 +19,13 @@ vi.mock('../../shared/apiClient', async () => {
     apiClient: {
       get: (...args: unknown[]) => get(...args),
       post: (...args: unknown[]) => post(...args),
+      delete: (...args: unknown[]) => del(...args),
     },
   };
 });
 
 /** An engineer signs reports. A supervisor writes them and does not. */
-let permissions = ['dpr:draft', 'dpr:verify'];
+let permissions = ['dpr:draft', 'dpr:verify', 'dpr:delete'];
 
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
@@ -104,13 +106,25 @@ function renderPage() {
   );
 }
 
-function mockGets(detail: Dpr = SUBMITTED) {
+function mockGets(detail: Dpr = SUBMITTED, listed: Dpr[] = [SUBMITTED]) {
   get.mockImplementation((url: string) => {
     if (url === '/sites') return Promise.resolve({ data: SITES });
-    if (url === '/dprs') return Promise.resolve({ data: page([SUBMITTED]) });
+    if (url === '/dprs') return Promise.resolve({ data: page(listed) });
     if (url === '/dprs/d1') return Promise.resolve({ data: detail });
     return Promise.reject(new Error(`unexpected GET ${url}`));
   });
+}
+
+/*
+  The queue draws a table and a card list at once and hides one by breakpoint, so every report
+  number is in the document twice. Scope to the layout under test.
+*/
+const table = () => within(screen.getByRole('table', { name: 'Daily reports' }));
+
+/** Opens a report from the desk layout, which is what these tests drive. */
+async function openReport(user: ReturnType<typeof userEvent.setup>, number: string) {
+  await screen.findAllByText(number);
+  await user.click(table().getByText(number));
 }
 
 describe('DprListPage', () => {
@@ -124,8 +138,9 @@ describe('DprListPage', () => {
   it('lists reports with their status and day cost', async () => {
     renderPage();
 
-    expect(await screen.findByText('DPR-2025-9002')).toBeInTheDocument();
-    expect(screen.getByText('Submitted')).toBeInTheDocument();
+    await screen.findAllByText('DPR-2025-9002');
+    expect(table().getByText('DPR-2025-9002')).toBeInTheDocument();
+    expect(table().getByText('Submitted')).toBeInTheDocument();
   });
 
   /**
@@ -136,10 +151,12 @@ describe('DprListPage', () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
 
-    await user.click(await screen.findByText('DPR-2025-9002'));
+    await openReport(user, 'DPR-2025-9002');
 
     expect(await screen.findByText('Claimed against the contract')).toBeInTheDocument();
-    expect(screen.getByText('B-003')).toBeInTheDocument();
+    // The claimed lines are their own register on the panel, and draw both layouts too.
+    const claimed = within(screen.getByRole('table', { name: 'Claimed against the contract' }));
+    expect(claimed.getByText('B-003')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Verify and claim 1 line(s)' }),
     ).toBeInTheDocument();
@@ -150,7 +167,7 @@ describe('DprListPage', () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
 
-    await user.click(await screen.findByText('DPR-2025-9002'));
+    await openReport(user, 'DPR-2025-9002');
 
     expect(await screen.findByText('Recorded, not claimed')).toBeInTheDocument();
     expect(screen.getByText('Shuttering struck and stacked')).toBeInTheDocument();
@@ -161,7 +178,7 @@ describe('DprListPage', () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
 
-    await user.click(await screen.findByText('DPR-2025-9002'));
+    await openReport(user, 'DPR-2025-9002');
 
     expect(await screen.findByText(/frozen when the report was sent/)).toBeInTheDocument();
   });
@@ -170,7 +187,7 @@ describe('DprListPage', () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
 
-    await user.click(await screen.findByText('DPR-2025-9002'));
+    await openReport(user, 'DPR-2025-9002');
     await user.click(await screen.findByRole('button', { name: 'Verify and claim 1 line(s)' }));
 
     await waitFor(() => expect(post).toHaveBeenCalledOnce());
@@ -183,7 +200,7 @@ describe('DprListPage', () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
 
-    await user.click(await screen.findByText('DPR-2025-9002'));
+    await openReport(user, 'DPR-2025-9002');
     await user.click(await screen.findByRole('button', { name: 'Send back' }));
 
     const confirm = screen.getAllByRole('button', { name: 'Send back' }).at(-1)!;
@@ -208,11 +225,69 @@ describe('DprListPage', () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
 
-    await user.click(await screen.findByText('DPR-2025-9002'));
+    await openReport(user, 'DPR-2025-9002');
     await screen.findByText('Claimed against the contract');
 
     expect(screen.queryByRole('button', { name: /^Verify/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Send back' })).not.toBeInTheDocument();
+  });
+
+  /**
+   * The way back into an unfinished report. Without it the list can only be read, and a draft
+   * started at lunchtime is a draft nobody can finish.
+   */
+  it('offers a way back into a draft and not into a signed report', async () => {
+    const draft = dpr({ id: 'd2', dprNumber: 'DPR-2025-9003', workflowStatus: 'DRAFT' });
+    mockGets(SUBMITTED, [SUBMITTED, draft]);
+    renderPage();
+
+    await screen.findAllByText('DPR-2025-9003');
+    // One per layout, and only against the draft.
+    const links = table().getAllByRole('link', { name: 'Continue' });
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute('href', '/dpr/d2');
+  });
+
+  /**
+   * Deleting is the other answer to an unfinished report, and it is offered in the same place
+   * as the way back into it: either this report is worth finishing, or it should never have
+   * been opened. The reason is required — a document that vanished without one is
+   * indistinguishable from data loss six months later.
+   */
+  it('deletes a draft with a reason, and offers nothing of the kind on a signed report', async () => {
+    permissions = ['dpr:draft', 'dpr:verify', 'dpr:delete'];
+    const draft = dpr({ id: 'd1', dprNumber: 'DPR-2025-9003', workflowStatus: 'DRAFT' });
+    mockGets(draft, [draft]);
+    del.mockResolvedValue({ data: { ...draft } });
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+
+    await openReport(user, 'DPR-2025-9003');
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    // Asked for, not encouraged: the dialog will not close on an empty box.
+    await user.click(screen.getByRole('button', { name: 'Delete report' }));
+    expect(del).not.toHaveBeenCalled();
+
+    await user.type(
+      screen.getByRole('textbox', { name: /Why is it being deleted/ }),
+      'Opened on the wrong site',
+    );
+    await user.click(screen.getByRole('button', { name: 'Delete report' }));
+
+    await waitFor(() => expect(del).toHaveBeenCalledOnce());
+    expect(del.mock.calls[0]![0]).toBe('/dprs/d1');
+    expect(del.mock.calls[0]![1]).toMatchObject({ data: { reason: 'Opened on the wrong site' } });
+  });
+
+  it('does not offer to delete a report that has gone for signature', async () => {
+    permissions = ['dpr:draft', 'dpr:verify', 'dpr:delete'];
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+
+    await openReport(user, 'DPR-2025-9002');
+    await screen.findByRole('button', { name: 'Send back' });
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
   });
 
   /** A verified report reports what it posted, so the claim is visible after the fact. */
@@ -229,7 +304,7 @@ describe('DprListPage', () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
 
-    await user.click(await screen.findByText('DPR-2025-9002'));
+    await openReport(user, 'DPR-2025-9002');
 
     expect(
       await screen.findByText(/1 claim\(s\) posted to the measurement book/),

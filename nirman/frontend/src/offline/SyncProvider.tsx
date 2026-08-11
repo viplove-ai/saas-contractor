@@ -28,12 +28,20 @@ export function useSync(): SyncContextValue {
 /**
  * Runs the queue for as long as the app is open.
  *
- * <p>Three triggers, because each covers a case the others miss. The {@code online} event is
+ * <p>Four triggers, because each covers a case the others miss. The {@code online} event is
  * the one that matters at site and fires the moment the lorry clears the ridge. The timer
  * covers the connection that is nominally up and actually dead, which is the normal state of
- * a phone at the edge of a cell and something the browser never reports. And a drain on
- * mount covers the app being reopened after being killed with records still queued, which is
- * every morning.</p>
+ * a phone at the edge of a cell and something the browser never reports. A drain on mount
+ * covers the app being reopened after being killed with records still queued, which is every
+ * morning.</p>
+ *
+ * <p>And the fourth is the app coming back to the foreground. It exists because
+ * {@code online} is not the reliable event it looks like: the browser fires it on a
+ * <em>transition</em>, and a phone that started up with no route to the server never
+ * transitioned — it has reported itself online the whole time. That device would otherwise
+ * wait out the full timer before trying, and the moment a supervisor takes the phone out of
+ * a pocket is both the likeliest moment for the signal to have returned and the one where
+ * waiting is most visible.</p>
  */
 export function SyncProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -74,8 +82,15 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       void syncNow();
     };
     const goOffline = () => setOnline(false);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        setOnline(true);
+        void syncNow();
+      }
+    };
     window.addEventListener('online', goOnline);
     window.addEventListener('offline', goOffline);
+    document.addEventListener('visibilitychange', onVisible);
     const timer = window.setInterval(() => {
       if (navigator.onLine) void syncNow();
     }, TICK_MS);
@@ -83,6 +98,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     return () => {
       window.removeEventListener('online', goOnline);
       window.removeEventListener('offline', goOffline);
+      document.removeEventListener('visibilitychange', onVisible);
       window.clearInterval(timer);
     };
   }, [syncNow]);

@@ -119,7 +119,10 @@ public class DashboardService {
         InventoryLookup.StockMovement stock = inventory.movement(null, from, to);
         ExpenseLookup.PeriodSpend spend = expenses.period(null, from, to);
 
-        List<Project> live = projects.search(orgId(), null, "", false, List.of(), Pageable.unpaged())
+        // deleted=false: the company dashboard is the live book of work, and a project taken
+        // off the books contributes nothing to it — which is the whole point of taking it off.
+        List<Project> live = projects
+                .search(orgId(), null, "", false, false, List.of(), Pageable.unpaged())
                 .getContent();
         List<ProjectRow> rows = live.stream()
                 .map(project -> projectRow(project, from, to))

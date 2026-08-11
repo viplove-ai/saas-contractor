@@ -41,6 +41,9 @@ export function WorkersPage() {
   const directory = useSiteDirectory();
   const workers = useWorkers(siteId, search);
   const canWrite = hasPermission('worker:write');
+  // A man is taken on *at* a site, so with no posting there is nowhere to put him. Wait for
+  // the answer before deciding that — an empty list while loading is not the same as none.
+  const noPosting = mySites.isSuccess && mySites.data.length === 0;
 
   // One site is the common case for a supervisor; pre-selecting it saves a tap and makes
   // the onboarding dialog's site correct without asking.
@@ -148,12 +151,19 @@ export function WorkersPage() {
             variant="contained"
             color="secondary"
             onClick={() => setOnboarding(true)}
-            disabled={mySites.data?.length === 0}
+            disabled={noPosting}
           >
             Take on a worker
           </Button>
         )}
       </Stack>
+
+      {canWrite && noPosting && (
+        <Alert severity="info">
+          You are not posted to a site yet, so there is nowhere to take a man on. Ask the
+          office to post you to your site, then sign out and in again.
+        </Alert>
+      )}
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
         <TextField
@@ -192,8 +202,9 @@ export function WorkersPage() {
           ariaLabel="Workers"
           empty={
             <Typography color="text.secondary">
-              {mySites.data?.length === 0
-                ? 'You are not posted to a site yet. An administrator assigns you one.'
+              {/* With no posting the banner above has already said why. */}
+              {noPosting
+                ? 'Nobody to show until you are posted to a site.'
                 : 'Nobody on your sites yet. Take on a worker to start marking attendance.'}
             </Typography>
           }

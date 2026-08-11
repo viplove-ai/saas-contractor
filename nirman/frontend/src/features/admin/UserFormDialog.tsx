@@ -2,13 +2,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Alert,
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  FormGroup,
   FormHelperText,
-  MenuItem,
   Stack,
   Switch,
   TextField,
@@ -17,11 +18,11 @@ import {
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { apiErrorDetail } from '../../shared/apiClient';
-import { isSiteScopedRole, ROLE_LABEL } from '../../shared/roles';
+import { hasSiteScopedRole, ROLE_LABEL, seesAllSites } from '../../shared/roles';
 import { useAdminSites, useCreateUser, useRoles, useUpdateUser } from './api';
 import { generatePassword } from './password';
 import { userFormSchema, type UserForm } from './schema';
-import type { AdminUser } from './types';
+import type { AdminSite, AdminUser } from './types';
 
 interface Props {
   open: boolean;
@@ -33,13 +34,17 @@ interface Props {
 /**
  * Onboarding and editing one member.
  *
- * <p>Role is a single choice, not a set. The server takes a list, but a contractor's staff
- * are one thing each — a man is the site engineer or he is the supervisor — and a checkbox
- * grid invites the mistake of granting both.</p>
+ * <p>Role is a set, because on a small contractor's staff one man wears several hats — the
+ * site engineer who also keeps the books, the owner who supervises a site himself. The
+ * server has always stored roles many-to-many and grants the union of their permissions;
+ * this dialog used to force the choice down to one, which quietly stripped the other roles
+ * off anyone who was edited.</p>
  *
- * <p>The site picker appears only for the two site-scoped roles. For an admin or an
- * accountant it would be a lie: their token carries the ALL-sites claim, so postings would
- * change nothing about what they can see.</p>
+ * <p>The site picker appears as soon as one site-scoped role is ticked. If a company-wide
+ * role is ticked as well, the postings no longer decide what they see — the token carries
+ * the ALL-sites claim — so the helper text says so rather than letting the picker imply a
+ * fence that is not there. The postings are still worth keeping: they are what names
+ * someone on a site, and they are what is left if the company-wide role is taken away.</p>
  */
 export function UserFormDialog({ open, user, onClose }: Props) {
   const editing = user !== null;
@@ -65,7 +70,7 @@ export function UserFormDialog({ open, user, onClose }: Props) {
       email: '',
       mobile: '',
       temporaryPassword: '',
-      roleCode: 'SUPERVISOR',
+      roleCodes: ['SUPERVISOR'],
       siteIds: [],
     },
   });
@@ -86,7 +91,9 @@ export function UserFormDialog({ open, user, onClose }: Props) {
             email: user.email ?? '',
             mobile: user.mobile ?? '',
             temporaryPassword: '',
-            roleCode: user.roles[0] ?? 'SUPERVISOR',
+            // Every role held, not the first one: reopening the dialog on a member must not
+            // be a way to lose the hats it does not show.
+            roleCodes: user.roles.length > 0 ? user.roles : ['SUPERVISOR'],
             siteIds: user.siteIds,
           }
         : {
@@ -96,19 +103,30 @@ export function UserFormDialog({ open, user, onClose }: Props) {
             email: '',
             mobile: '',
             temporaryPassword: generatePassword(),
-            roleCode: 'SUPERVISOR',
+            roleCodes: ['SUPERVISOR'],
             siteIds: [],
           },
     );
   }, [open, user, reset]);
 
-  const showSites = isSiteScopedRole(watch('roleCode'));
+  const selectedRoles = watch('roleCodes');
+  const showSites = hasSiteScopedRole(selectedRoles);
+  const companyWide = seesAllSites(selectedRoles);
+
+  /** Sites this member is named on, which the register grants and this screen cannot take. */
+  const posted = (sites.data ?? [])
+    .filter((site) => postOn(site, user?.id) !== null)
+    .map((site) => site.id);
 
   const submit = handleSubmit(async (values) => {
     setServerError(null);
-    // Postings are meaningless for the company-wide roles, and sending them would leave
-    // stale rows behind if someone were promoted from supervisor to admin.
-    const siteIds = isSiteScopedRole(values.roleCode) ? values.siteIds : [];
+    // Postings are meaningless once no site-scoped role is left, and sending them would
+    // leave stale rows behind when someone stops being a supervisor. The sites he is named
+    // on go with the request whatever the switches say — the server refuses to drop them,
+    // and sending a set that omits them would only turn a save into an error message.
+    const siteIds = hasSiteScopedRole(values.roleCodes)
+      ? [...new Set([...values.siteIds, ...posted])]
+      : posted;
     try {
       if (user) {
         await updateUser.mutateAsync({
@@ -117,7 +135,7 @@ export function UserFormDialog({ open, user, onClose }: Props) {
           email: values.email,
           mobile: values.mobile,
           version: user.version,
-          roleCodes: [values.roleCode],
+          roleCodes: values.roleCodes,
           siteIds,
         });
       } else {
@@ -127,7 +145,7 @@ export function UserFormDialog({ open, user, onClose }: Props) {
           email: values.email,
           mobile: values.mobile,
           temporaryPassword: values.temporaryPassword,
-          roleCodes: [values.roleCode],
+          roleCodes: values.roleCodes,
           siteIds,
         });
       }
@@ -211,26 +229,40 @@ export function UserFormDialog({ open, user, onClose }: Props) {
 
           <Controller
             control={control}
-            name="roleCode"
+            name="roleCodes"
             render={({ field }) => (
-              <TextField
-                {...field}
-                select
-                label="Role"
-                error={!!errors.roleCode}
-                helperText={
-                  errors.roleCode?.message ??
-                  (showSites
-                    ? 'Sees and works on assigned sites only.'
-                    : 'Sees the whole company, whatever the site postings say.')
-                }
-              >
-                {(roles.data ?? []).map((role) => (
-                  <MenuItem key={role.code} value={role.code}>
-                    {ROLE_LABEL[role.code] ?? role.name}
-                  </MenuItem>
-                ))}
-              </TextField>
+              <Stack spacing={0.5}>
+                <Typography variant="subtitle2">Roles</Typography>
+                <FormGroup>
+                  {(roles.data ?? []).map((role) => {
+                    const checked = field.value.includes(role.code);
+                    return (
+                      <FormControlLabel
+                        key={role.code}
+                        control={
+                          <Checkbox
+                            checked={checked}
+                            onChange={() =>
+                              field.onChange(
+                                checked
+                                  ? field.value.filter((code) => code !== role.code)
+                                  : [...field.value, role.code],
+                              )
+                            }
+                          />
+                        }
+                        label={ROLE_LABEL[role.code] ?? role.name}
+                      />
+                    );
+                  })}
+                </FormGroup>
+                <FormHelperText error={!!errors.roleCodes}>
+                  {errors.roleCodes?.message ??
+                    (companyWide
+                      ? 'Sees the whole company, whatever the site postings say. What they may do is every permission of every role ticked.'
+                      : 'Sees and works on assigned sites only. What they may do is every permission of every role ticked.')}
+                </FormHelperText>
+              </Stack>
             )}
           />
 
@@ -242,10 +274,21 @@ export function UserFormDialog({ open, user, onClose }: Props) {
                 <Stack spacing={0.5}>
                   <Typography variant="subtitle2">Sites</Typography>
                   {(sites.data ?? []).map((site) => {
-                    const checked = field.value.includes(site.id);
+                    /*
+                      Two different facts meet on this switch. The sites register names one
+                      engineer and one supervisor per site; these postings say who may open
+                      it, and any number of people can. Naming somebody on a site grants them
+                      the site — that sync already runs — but this screen could take the site
+                      back off the very engineer named on it, leaving the register saying he
+                      runs KSN-A and the door shut to him. So a site he is named on is shown
+                      as held rather than as a choice, and the server refuses it too.
+                    */
+                    const post = postOn(site, user?.id);
+                    const checked = field.value.includes(site.id) || post !== null;
                     return (
                       <FormControlLabel
                         key={site.id}
+                        disabled={post !== null}
                         control={
                           <Switch
                             checked={checked}
@@ -258,13 +301,38 @@ export function UserFormDialog({ open, user, onClose }: Props) {
                             }
                           />
                         }
-                        label={`${site.code} — ${site.name}`}
+                        label={
+                          post === null
+                            ? `${site.code} — ${site.name}`
+                            : `${site.code} — ${site.name} · ${post} here, change it on the Sites screen`
+                        }
                       />
                     );
                   })}
                   {sites.data?.length === 0 && (
                     <FormHelperText>
                       No sites yet. Add one on the Sites screen, then post them to it.
+                    </FormHelperText>
+                  )}
+                  {/*
+                    Not an error: an engineer has to exist before the site he runs can be
+                    created, so "no posting yet" is a real intermediate state. It is still
+                    worth saying out loud, because until he is posted he signs in to an empty
+                    app — nothing in any site picker and a dead "Take on a worker" button.
+
+                    Unless he also holds a company-wide role, in which case he sees every
+                    site regardless and the warning would be a lie.
+                  */}
+                  {(sites.data?.length ?? 0) > 0 && field.value.length === 0 && !companyWide && (
+                    <Alert severity="warning" sx={{ mt: 1 }}>
+                      Not posted anywhere yet. They can sign in, but will see no sites and no
+                      workers until you post them here or name them on a site.
+                    </Alert>
+                  )}
+                  {companyWide && (
+                    <FormHelperText>
+                      A company-wide role is ticked too, so they already reach every site.
+                      Postings here only decide which sites they can be named on.
                     </FormHelperText>
                   )}
                 </Stack>
@@ -281,4 +349,23 @@ export function UserFormDialog({ open, user, onClose }: Props) {
       </DialogActions>
     </Dialog>
   );
+}
+
+/**
+ * What this member is called on a site, or null if nothing.
+ *
+ * <p>Read off the sites register rather than asked for separately: the register is already
+ * loaded to draw this list, and it carries both names.</p>
+ */
+function postOn(site: AdminSite, userId: string | undefined): string | null {
+  if (!userId) {
+    return null;
+  }
+  if (site.siteEngineerId === userId) {
+    return 'Site engineer';
+  }
+  if (site.supervisorId === userId) {
+    return 'Supervisor';
+  }
+  return null;
 }

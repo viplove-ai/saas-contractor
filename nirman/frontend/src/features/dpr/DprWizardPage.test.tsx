@@ -1,14 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DprWizardPage } from './DprWizardPage';
-import type { BoqItem, DprPrefill, Site } from './types';
+import type { BoqItem, Dpr, DprPrefill, DprWorkflow, Site } from './types';
 
 const get = vi.fn();
 const post = vi.fn();
 const put = vi.fn();
+const del = vi.fn();
 
 vi.mock('../../shared/apiClient', async () => {
   const actual = await vi.importActual<typeof import('../../shared/apiClient')>(
@@ -20,9 +21,20 @@ vi.mock('../../shared/apiClient', async () => {
       get: (...args: unknown[]) => get(...args),
       post: (...args: unknown[]) => post(...args),
       put: (...args: unknown[]) => put(...args),
+      delete: (...args: unknown[]) => del(...args),
     },
   };
 });
+
+/** A supervisor: he drafts the report and may name a material at the gate. */
+const permissions = ['dpr:draft', 'dpr:delete', 'inventory:receive', 'masterdata:provisional'];
+
+vi.mock('../auth/AuthContext', () => ({
+  useAuth: () => ({
+    user: { id: 'u-sup', permissions },
+    hasPermission: (code: string) => permissions.includes(code),
+  }),
+}));
 
 const SITES: Site[] = [{ id: 'site-a', code: 'KSN-A', name: 'Kausani Main Block' }];
 
@@ -43,7 +55,8 @@ function prefill(overrides: Partial<DprPrefill> = {}): DprPrefill {
     siteName: 'Kausani Main Block',
     reportDate: '2025-06-10',
     reportExists: false,
-    labour: {
+    outsourcedLabour: { enabled: false, headCount: 0, lines: [] },
+  labour: {
       presentCount: 3,
       absentCount: 0,
       regularHours: 21,
@@ -91,6 +104,33 @@ function prefill(overrides: Partial<DprPrefill> = {}): DprPrefill {
   };
 }
 
+/** A draft left half-written: one work line, the day written up, nothing sent. */
+function existingDraft(status: DprWorkflow = 'DRAFT'): Dpr {
+  return {
+    id: 'dpr-existing',
+    dprNumber: 'DPR-2025-0006',
+    siteId: 'site-a',
+    siteName: 'Kausani Main Block',
+    projectId: 'p1',
+    reportDate: '2025-06-10',
+    workflowStatus: status,
+    snapshotFrozen: status !== 'DRAFT',
+    workSummary: 'Brickwork carried up to sill level',
+    version: 3,
+    workItems: [
+      {
+        id: 'wi-1',
+        activity: 'Brickwork on the north wall',
+        sortOrder: 0,
+        measured: false,
+      },
+    ],
+    labour: [],
+    machinery: [],
+    photos: [],
+  };
+}
+
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -102,11 +142,12 @@ function renderPage() {
   );
 }
 
-function mockGets(data: DprPrefill = prefill()) {
+function mockGets(data: DprPrefill = prefill(), report: Dpr = existingDraft()) {
   get.mockImplementation((url: string) => {
     if (url === '/sites') return Promise.resolve({ data: SITES });
     if (url === '/boq-items') return Promise.resolve({ data: BOQ_ITEMS });
     if (url === '/dprs/prefill') return Promise.resolve({ data });
+    if (url === `/dprs/${report.id}`) return Promise.resolve({ data: report });
     return Promise.reject(new Error(`unexpected GET ${url}`));
   });
 }
@@ -131,7 +172,10 @@ describe('DprWizardPage', () => {
     // The figure under its own label, rather than a bare '3' the stepper also renders.
     expect(screen.getByText('Present').nextSibling).toHaveTextContent('3');
     expect(screen.getByText('21.00 h')).toBeInTheDocument();
-    expect(screen.getByText('Mason')).toBeInTheDocument();
+    // The trade breakdown draws a table and a card list at once, so scope to one.
+    expect(
+      within(screen.getByRole('table', { name: 'Labour on site' })).getByText('Mason'),
+    ).toBeInTheDocument();
   });
 
   /**
@@ -183,12 +227,107 @@ describe('DprWizardPage', () => {
     expect(screen.getByRole('spinbutton', { name: 'Quantity' })).toHaveValue(null);
   });
 
-  /** One report per site per day; a second one is not something to offer. */
-  it('refuses to start a second report for a day already covered', async () => {
+  /**
+   * A day already covered by a draft is the common case, not an error: the supervisor started
+   * the report at lunchtime and came back to it. He is asked which of the two things he means,
+   * and nothing moves until he says.
+   */
+  it('offers to carry on with the draft that already covers the day', async () => {
+    const user = userEvent.setup({ delay: null });
     mockGets(prefill({ reportExists: true, existingDprId: 'dpr-existing' }));
     renderPage();
 
-    expect(await screen.findByText(/A report already covers/)).toBeInTheDocument();
+    expect(await screen.findByText(/DPR-2025-0006 already covers this day/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Carry on with it' }));
+
+    // What was in the draft is what he is now editing, rather than a blank form that would
+    // overwrite it with nothing.
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByRole('textbox', { name: 'What was done' })).toHaveValue(
+      'Brickwork on the north wall',
+    );
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('textbox', { name: 'What happened today' })).toHaveValue(
+      'Brickwork carried up to sill level',
+    );
+  });
+
+  /**
+   * Starting again writes over the same report. One report per site per day is the server's
+   * rule, so "fresh" cannot mean a second row — and the PUT rather than a POST is what proves
+   * the screen is not quietly trying for one.
+   */
+  /**
+   * The third answer to a day that already has a report, and the one starting fresh cannot
+   * give: this report should not exist at all. Deleting hands the day back — an emptied
+   * draft would still hold it against the one-per-site-per-day rule.
+   */
+  it('deletes the report that should never have been opened, and frees the day', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockGets(prefill({ reportExists: true, existingDprId: 'dpr-existing' }));
+    del.mockResolvedValue({ data: { id: 'dpr-existing' } });
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Delete it' }));
+    await user.type(
+      screen.getByRole('textbox', { name: /Why is it being deleted/ }),
+      'Wrong site — this was KSN-B',
+    );
+    await user.click(screen.getByRole('button', { name: 'Delete report' }));
+
+    await waitFor(() => expect(del).toHaveBeenCalledOnce());
+    expect(del.mock.calls[0]![0]).toBe('/dprs/dpr-existing');
+    expect(del.mock.calls[0]![1]).toMatchObject({
+      data: { reason: 'Wrong site — this was KSN-B' },
+    });
+    // Nothing was written to the report on the way past: deleting is not a save.
+    expect(put).not.toHaveBeenCalled();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('starts fresh over the same report rather than opening a second one', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockGets(prefill({ reportExists: true, existingDprId: 'dpr-existing' }));
+    put.mockResolvedValue({
+      data: { id: 'dpr-existing', dprNumber: 'DPR-2025-0006', workflowStatus: 'DRAFT', version: 4 },
+    });
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Start fresh' }));
+    // Asked twice, because it is the one button that throws away somebody's typing.
+    await user.click(screen.getByRole('button', { name: 'Yes, clear it and start again' }));
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByRole('textbox', { name: 'What was done' })).toHaveValue('');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.type(
+      screen.getByRole('textbox', { name: 'What happened today' }),
+      'Rain until noon, then curing',
+    );
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() => expect(put).toHaveBeenCalledOnce());
+    expect(post).not.toHaveBeenCalled();
+    expect(put.mock.calls[0]![0]).toBe('/dprs/dpr-existing');
+    expect(put.mock.calls[0]![1]).toMatchObject({
+      workSummary: 'Rain until noon, then curing',
+      workItems: [],
+      version: 3,
+    });
+  });
+
+  /** A signed report is the document that was signed. Neither answer is offered for one. */
+  it('offers neither answer once the day’s report has been sent', async () => {
+    mockGets(
+      prefill({ reportExists: true, existingDprId: 'dpr-existing' }),
+      existingDraft('SUBMITTED'),
+    );
+    renderPage();
+
+    expect(await screen.findByText(/can no longer be edited/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start fresh' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
   });
 

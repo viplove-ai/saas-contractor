@@ -49,6 +49,7 @@ const SITES: AdminSite[] = [
     status: 'ACTIVE',
     standardShiftHours: 7,
     monthlyWageDays: 26,
+    usesOutsourcedLabour: false,
     version: 0,
   },
 ];
@@ -77,10 +78,23 @@ const USERS: PageResponse<AdminUser> = {
       siteIds: ['site-a'],
       version: 3,
     },
+    // Several hats, which is the normal case on a small contractor's staff rather than an
+    // exotic one: the engineer who also keeps the books and is posted to a site.
+    {
+      id: 'u-both',
+      username: 'uttam',
+      fullName: 'Uttam Rana',
+      mobile: '+91-9800000002',
+      active: true,
+      mustChangePassword: false,
+      roles: ['ACCOUNTANT', 'ENGINEER'],
+      siteIds: ['site-a'],
+      version: 5,
+    },
   ],
   page: 0,
   size: 100,
-  totalElements: 2,
+  totalElements: 3,
   totalPages: 1,
   first: true,
   last: true,
@@ -96,6 +110,12 @@ function renderPage() {
     </QueryClientProvider>,
   );
 }
+
+/*
+  Both layouts are in the DOM at once and a breakpoint hides one, so every name is present
+  twice. Scope to the layout under test, the same way the projects register's tests do.
+*/
+const table = () => within(screen.getByRole('table', { name: 'Members' }));
 
 describe('UsersPage', () => {
   beforeEach(() => {
@@ -113,10 +133,11 @@ describe('UsersPage', () => {
 
   it('separates a company-wide role from a site-scoped one', async () => {
     renderPage();
-    const supervisorRow = (await screen.findByText('Vivek Aggarwal')).closest(
+    await screen.findAllByText('Vivek Aggarwal');
+    const supervisorRow = table().getByText('Vivek Aggarwal').closest(
       'tr',
     ) as HTMLElement;
-    const adminRow = screen.getByText('Viplove Chaudhary').closest('tr') as HTMLElement;
+    const adminRow = table().getByText('Viplove Chaudhary').closest('tr') as HTMLElement;
 
     expect(within(supervisorRow).getByText('KSN-A')).toBeInTheDocument();
     // An admin's blank posting list would otherwise read as "no access at all".
@@ -124,15 +145,28 @@ describe('UsersPage', () => {
     expect(within(supervisorRow).getByText('Password not set')).toBeInTheDocument();
   });
 
+  // Visibility follows the widest role held, exactly as the server's site claim does, so a
+  // company-wide role held alongside a site-scoped one must not read as "this site only".
+  it('lists every role held, and says the widest one decides what they see', async () => {
+    renderPage();
+    await screen.findAllByText('Uttam Rana');
+    const bothRow = table().getByText('Uttam Rana').closest('tr') as HTMLElement;
+
+    expect(within(bothRow).getByText('Accountant')).toBeInTheDocument();
+    expect(within(bothRow).getByText('Site engineer')).toBeInTheDocument();
+    expect(within(bothRow).getByText('All sites · posted at KSN-A')).toBeInTheDocument();
+  });
+
   it('onboards a member with a first-time password and one role', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
-    await screen.findByText('Vivek Aggarwal');
+    await screen.findAllByText('Vivek Aggarwal');
 
     await user.click(screen.getByRole('button', { name: 'Onboard a member' }));
     await user.type(screen.getByLabelText('Username'), 'ramesh.k');
     await user.type(screen.getByLabelText('Full name'), 'Ramesh Kumar');
     await user.type(screen.getByLabelText('Mobile'), '+91-9800000123');
+    await user.click(screen.getByRole('checkbox', { name: 'KSN-A — Kausani Main Block' }));
     await user.click(screen.getByRole('button', { name: 'Onboard member' }));
 
     await waitFor(() => expect(post).toHaveBeenCalledOnce());
@@ -148,27 +182,82 @@ describe('UsersPage', () => {
     expect(body.temporaryPassword.length).toBeGreaterThanOrEqual(8);
   });
 
-  it('drops site postings when a member is moved to a company-wide role', async () => {
+  // A supervisor with no posting signs in to an empty app: no site in any picker and a dead
+  // "Take on a worker" button. It is allowed — an engineer exists before the site he runs —
+  // but the admin is told, not left to hear about it from the field.
+  it('warns while a site-scoped member has no posting', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
-    await screen.findByText('Vivek Aggarwal');
+    await screen.findAllByText('Vivek Aggarwal');
 
-    const supervisorRow = screen.getByText('Vivek Aggarwal').closest('tr') as HTMLElement;
+    await user.click(screen.getByRole('button', { name: 'Onboard a member' }));
+    expect(await screen.findByText(/Not posted anywhere yet/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: 'KSN-A — Kausani Main Block' }));
+    await waitFor(() => expect(screen.queryByText(/Not posted anywhere yet/)).toBeNull());
+  });
+
+  it('drops site postings when the last site-scoped role is taken away', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('Vivek Aggarwal');
+
+    const supervisorRow = table().getByText('Vivek Aggarwal').closest('tr') as HTMLElement;
     await user.click(within(supervisorRow).getByRole('button', { name: 'Edit' }));
-    await user.click(await screen.findByRole('combobox', { name: 'Role' }));
-    await user.click(await screen.findByRole('option', { name: 'Accountant' }));
+    await user.click(await screen.findByRole('checkbox', { name: 'Site supervisor' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Accountant' }));
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(put).toHaveBeenCalledWith('/users/u-super/sites', { siteIds: [] }));
     expect(put).toHaveBeenCalledWith('/users/u-super/roles', { roleCodes: ['ACCOUNTANT'] });
   });
 
+  // The dialog used to open on roles[0] and send that one back, so saving an unrelated field
+  // on a member with several hats silently took the others away.
+  it('opens on every role a member holds and sends the whole set back', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('Uttam Rana');
+
+    const bothRow = table().getByText('Uttam Rana').closest('tr') as HTMLElement;
+    await user.click(within(bothRow).getByRole('button', { name: 'Edit' }));
+
+    expect(await screen.findByRole('checkbox', { name: 'Accountant' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Site engineer' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Administrator' })).not.toBeChecked();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Site supervisor' }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() =>
+      expect(put).toHaveBeenCalledWith('/users/u-both/roles', {
+        roleCodes: ['ACCOUNTANT', 'ENGINEER', 'SUPERVISOR'],
+      }),
+    );
+    // Still site-scoped, so the postings survive the edit rather than being cleared.
+    expect(put).toHaveBeenCalledWith('/users/u-both/sites', { siteIds: ['site-a'] });
+  });
+
+  it('refuses to save a member with no role at all', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('Vivek Aggarwal');
+
+    const supervisorRow = table().getByText('Vivek Aggarwal').closest('tr') as HTMLElement;
+    await user.click(within(supervisorRow).getByRole('button', { name: 'Edit' }));
+    await user.click(await screen.findByRole('checkbox', { name: 'Site supervisor' }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByText('Choose at least one role')).toBeInTheDocument();
+    expect(put).not.toHaveBeenCalled();
+  });
+
   it('shows the reset password once, after the reset has gone through', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
-    await screen.findByText('Vivek Aggarwal');
+    await screen.findAllByText('Vivek Aggarwal');
 
-    const supervisorRow = screen.getByText('Vivek Aggarwal').closest('tr') as HTMLElement;
+    const supervisorRow = table().getByText('Vivek Aggarwal').closest('tr') as HTMLElement;
     await user.click(within(supervisorRow).getByRole('button', { name: 'Reset password' }));
 
     const field = (await screen.findByLabelText('New temporary password')) as HTMLInputElement;
@@ -192,8 +281,8 @@ describe('UsersPage', () => {
 
   it('refuses to let an admin disable the account they are signed in with', async () => {
     renderPage();
-    await screen.findByText('Vivek Aggarwal');
-    const adminRow = screen.getByText('Viplove Chaudhary').closest('tr') as HTMLElement;
+    await screen.findAllByText('Vivek Aggarwal');
+    const adminRow = table().getByText('Viplove Chaudhary').closest('tr') as HTMLElement;
     // The signed-in user is u-admin in this fixture; the row is viplove's, id u-admin.
     expect(within(adminRow).getByRole('button', { name: 'Disable' })).toBeDisabled();
   });

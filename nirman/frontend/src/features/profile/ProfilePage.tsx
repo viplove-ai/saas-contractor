@@ -5,8 +5,18 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { useAuth } from '../auth/AuthContext';
-import { ROLE_LABEL } from '../../shared/roles';
+import { SignOutButton } from '../auth/SignOutButton';
+import { roleLabels } from '../../shared/roles';
 import { changePasswordSchema, type ChangePasswordForm } from './schema';
+
+/** "2 days ago", for a timestamp whose exact minute nobody needs. */
+function describeAge(iso: string): string {
+  const hours = Math.floor((Date.now() - Date.parse(iso)) / 3_600_000);
+  if (!Number.isFinite(hours) || hours < 1) return 'less than an hour ago';
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
 
 /**
  * The member's own account: who the system thinks they are, and the one thing they can
@@ -18,7 +28,7 @@ import { changePasswordSchema, type ChangePasswordForm } from './schema';
  * wrong with the screen they asked for.</p>
  */
 export function ProfilePage() {
-  const { user, changePassword } = useAuth();
+  const { user, changePassword, unverified, verifiedAt } = useAuth();
   const navigate = useNavigate();
   const [serverError, setServerError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -60,8 +70,8 @@ export function ProfilePage() {
         <Stack spacing={1.5}>
           <Row label="Username" value={user?.username ?? '—'} />
           <Row
-            label="Role"
-            value={(user?.roles ?? []).map((code) => ROLE_LABEL[code] ?? code).join(', ') || '—'}
+            label={(user?.roles.length ?? 0) > 1 ? 'Roles' : 'Role'}
+            value={roleLabels(user?.roles ?? []).join(', ') || '—'}
           />
           <Row label="Email" value={user?.email || 'Not set'} />
           <Row label="Mobile" value={user?.mobile || 'Not set'} />
@@ -76,8 +86,22 @@ export function ProfilePage() {
             )}
           </Stack>
           <Typography variant="body2" color="text.secondary">
-            Your name, role and site postings are set by an administrator.
+            Your name, roles and site postings are set by an administrator.
           </Typography>
+          {/*
+            Only when it is true, and phrased as the age of the answer rather than as a
+            fault. What is on this screen while offline is the last thing the server said,
+            and a role or a site posting changed since then has not reached the phone — this
+            is the one place in the app where that gap is worth spelling out, because this is
+            the screen somebody reads to check what they are allowed to do.
+          */}
+          {unverified && (
+            <Alert severity="info">
+              Shown from this phone's copy — there is no connection to check it against.
+              {verifiedAt ? ` Last confirmed ${describeAge(verifiedAt)}.` : ''} It will update
+              by itself when you have signal.
+            </Alert>
+          )}
         </Stack>
       </Paper>
 
@@ -130,6 +154,27 @@ export function ProfilePage() {
             </Button>
           </Stack>
         </form>
+      </Paper>
+
+      {/*
+        The only sign-out a phone has. RootLayout's is in a footer that is `md` and up, so
+        without this one a supervisor on site cannot hand the phone to the next shift. Last
+        on the page for the same reason it is last in the rail: leaving is not what anybody
+        opened the screen to do.
+      */}
+      <Paper elevation={0} sx={{ p: 3, border: 1, borderColor: 'divider' }}>
+        <Stack spacing={1.5}>
+          <Typography variant="h3">Sign out</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Anything not sent yet stays on this phone. Signing out does not discard it.
+          </Typography>
+          <SignOutButton
+            variant="outlined"
+            color="secondary"
+            /* 48px: the app's floor for anything meant to be hit with a glove on. */
+            sx={{ alignSelf: 'flex-start', minHeight: 48 }}
+          />
+        </Stack>
       </Paper>
     </Stack>
   );

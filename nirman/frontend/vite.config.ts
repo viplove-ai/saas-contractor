@@ -29,16 +29,58 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        // API responses are never cached: stale stock or attendance is worse than no data.
         navigateFallbackDenylist: [/^\/api/],
+        /*
+          Read caching is an allow-list, and everything not named here stays uncached: a
+          stale figure is worse than a missing one, because a missing one is obviously
+          missing. Two things earn a place on the list.
+
+          Reference data — who the workers are, what the materials are called, which sites
+          exist — changes on the scale of weeks and is what every entry screen needs to
+          render at all. A day-old copy of it is not a wrong answer, it is the same answer.
+
+          The attendance roster is the one operational read that joins them, because marking
+          the muster is the thing this app exists to do with no signal, and a roster that
+          only lives in memory is gone the moment the supervisor closes the app. Nothing is
+          decided from the cached copy: the wage rate on it is advisory until the server
+          freezes the real one at verification, and a period that has closed since it was
+          fetched is caught when the record is sent and comes back to the sync screen as a
+          question. What the cached roster supplies is the list of names to tick.
+
+          Order matters — workbox takes the first route that matches — so the reads that
+          must never be served stale are shadowed above the pattern that would catch them.
+        */
         runtimeCaching: [
           {
-            urlPattern: /\/api\/v1\/(materials|workers|sites|units)/,
+            // Money owed, on the same prefix as the vendor list below it.
+            urlPattern: /\/api\/v1\/vendors\/balances/,
+            handler: 'NetworkOnly',
+          },
+          {
+            urlPattern: /\/api\/v1\/attendance\/roster(\?|$)/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'roster',
+              networkTimeoutSeconds: 5,
+              // A week: long enough for a posting with no coverage, short enough that a
+              // roster nobody has refreshed since last month is not offered as today's.
+              expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+          {
+            urlPattern:
+              /\/api\/v1\/(materials|workers|units|sites|vendors|roles|boq-items|skill-categories|expense-categories|labour-contractors)(\/|\?|$)/,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'reference-data',
               networkTimeoutSeconds: 5,
-              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 },
+              // Thirty days, up from one. A day was enough for a phone that reconnects each
+              // evening and useless for the case this app is built for — the second morning
+              // in a row with no signal, when the day-old copy has just expired and the
+              // roster screen has nothing to draw.
+              expiration: { maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [200] },
             },
           },
         ],

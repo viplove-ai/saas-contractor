@@ -20,6 +20,8 @@ interface Tile {
   title: string;
   to?: string;
   permission?: string;
+  /** Shown when the account holds any one of these — see AppNav for why Sign-off needs it. */
+  anyPermission?: string[];
   phase?: string;
 }
 
@@ -47,7 +49,17 @@ const GROUPS: Group[] = [
     tiles: [
       { title: 'Verify attendance', to: '/attendance/verify', permission: 'attendance:verify' },
       { title: 'Verify reports', to: '/dprs', permission: 'dpr:verify' },
-      { title: 'Approvals and payments', to: '/approvals', permission: 'expense:read' },
+      /*
+        Gated on being able to approve or pay, not on being able to read an expense. A
+        supervisor reads expenses — his own, which he entered — and approves none, so
+        'expense:read' put a screen of other people's bills on his index that answered
+        every one of them with "you cannot act on this".
+      */
+      {
+        title: 'Approvals and payments',
+        to: '/approvals',
+        anyPermission: ['expense:approve:l1', 'expense:approve:l2', 'payment:record'],
+      },
     ],
   },
   {
@@ -91,7 +103,11 @@ export function HomePage() {
 
   const groups = GROUPS.map((group) => ({
     ...group,
-    tiles: group.tiles.filter((tile) => !tile.permission || hasPermission(tile.permission)),
+    tiles: group.tiles.filter(
+      (tile) =>
+        (!tile.permission || hasPermission(tile.permission)) &&
+        (!tile.anyPermission || tile.anyPermission.some(hasPermission)),
+    ),
   })).filter((group) => group.tiles.length > 0);
 
   return (

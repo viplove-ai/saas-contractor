@@ -13,6 +13,15 @@ import { TodayPage } from './TodayPage';
 let roster: Roster;
 let dashboard: SiteDashboard | undefined;
 let verificationRows: number;
+/** What the signed-in account may do. A supervisor holds neither of the two below. */
+let permissions: string[];
+
+vi.mock('../auth/AuthContext', () => ({
+  useAuth: () => ({
+    user: { id: 'u-1', fullName: 'Vivek Bisht', permissions },
+    hasPermission: (code: string) => permissions.includes(code),
+  }),
+}));
 
 vi.mock('../attendance/api', () => ({
   useSites: () => ({
@@ -131,6 +140,8 @@ describe('TodayPage', () => {
     roster = rosterOf(entry('1', false), entry('2', false), entry('3', false));
     dashboard = dashboardWith({});
     verificationRows = 0;
+    // The engineer's set by default: the existing cases are about the sign-off band.
+    permissions = ['dashboard:site', 'attendance:verify', 'dpr:verify'];
   });
 
   /**
@@ -182,5 +193,41 @@ describe('TodayPage', () => {
     expect(screen.getByText('1 daily report(s) to verify')).toBeVisible();
     expect(screen.queryByText(/bill\(s\) need approval/)).not.toBeInTheDocument();
     expect(screen.queryByText(/still a draft/)).not.toBeInTheDocument();
+  });
+
+  /**
+   * The supervisor's version of the screen. He signs nothing off and sees no dashboard, so
+   * both bands would be permanently empty furniture — and what is left is his actual day:
+   * the muster at the top, the report at the bottom, entry in between.
+   */
+  describe('for a supervisor', () => {
+    beforeEach(() => {
+      permissions = ['attendance:create', 'dpr:draft', 'inventory:receive', 'expense:create'];
+      dashboard = undefined;
+    });
+
+    it('leaves out the sign-off band he can do nothing with', () => {
+      renderToday();
+
+      expect(screen.queryByText(/WAITING ON YOU/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/SITE, MONTH TO DATE/)).not.toBeInTheDocument();
+    });
+
+    it('puts the day\u2019s report on the screen as the end of his day', () => {
+      renderToday();
+
+      expect(screen.getByRole('heading', { name: 'Today\u2019s report' })).toBeVisible();
+      expect(screen.getByRole('link', { name: "Write today's report" })).toHaveAttribute(
+        'href',
+        '/dpr/new',
+      );
+    });
+
+    it('still opens on the muster, which is the start of it', () => {
+      renderToday();
+
+      expect(screen.getByRole('heading', { name: 'Muster for today' })).toBeVisible();
+      expect(screen.getByRole('link', { name: 'Mark attendance' })).toBeVisible();
+    });
   });
 });

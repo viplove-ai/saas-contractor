@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -136,6 +136,12 @@ function renderPage() {
   );
 }
 
+/*
+  The schedule draws a table and a card list at once and hides one by breakpoint, so every
+  item number is in the document twice. Scope to the desk layout.
+*/
+const schedule = () => within(screen.getByRole('table', { name: 'Schedule of quantities' }));
+
 describe('ProjectDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -161,27 +167,29 @@ describe('ProjectDetailPage', () => {
     expect(screen.getByText('DSR 2023, cost index 29%')).toBeInTheDocument();
     expect(screen.getByText('23/07/2026, 15:30')).toBeInTheDocument();
 
-    expect(await screen.findByText('C/1.1.1')).toBeInTheDocument();
-    expect(screen.getByText('Vitrified tiles, size 600x600 mm')).toBeInTheDocument();
+    await screen.findAllByText('C/1.1.1');
+    expect(schedule().getByText('C/1.1.1')).toBeInTheDocument();
+    expect(schedule().getByText('Vitrified tiles, size 600x600 mm')).toBeInTheDocument();
     // The unit is resolved from master data rather than shown as a uuid.
-    expect(screen.getByText('155 SQM')).toBeInTheDocument();
+    expect(schedule().getByText('155 SQM')).toBeInTheDocument();
   });
 
   it('marks a reconciliation line as one', async () => {
     renderPage();
-    expect(await screen.findByText('UNALLOCATED')).toBeInTheDocument();
-    expect(screen.getByText('reconciliation')).toBeInTheDocument();
+    await screen.findAllByText('UNALLOCATED');
+    expect(schedule().getByText('UNALLOCATED')).toBeInTheDocument();
+    expect(schedule().getByText('reconciliation')).toBeInTheDocument();
     expect(screen.getByText(/₹12,000.00 unallocated/)).toBeInTheDocument();
   });
 
   it('filters the schedule without refetching it', async () => {
     renderPage();
-    await screen.findByText('C/1.1.1');
+    await screen.findAllByText('C/1.1.1');
 
     await userEvent.type(screen.getByLabelText('Find an item'), 'plaster');
 
     await waitFor(() => expect(screen.queryByText('C/1.1.1')).not.toBeInTheDocument());
-    expect(screen.getByText('C/2.1')).toBeInTheDocument();
+    expect(schedule().getByText('C/2.1')).toBeInTheDocument();
     expect(screen.getByText(/1 of 3 lines/)).toBeInTheDocument();
     expect(get.mock.calls.filter(([url]) => url === '/boq-items')).toHaveLength(1);
   });

@@ -34,7 +34,18 @@ export interface Material {
   minStockLevel: number;
   gstPercent: number;
   active: boolean;
+  /** Named at the gate rather than set up by the office, and nobody has vetted it yet. */
+  provisional: boolean;
 }
+
+/**
+ * The value the material picker carries for "not in the list".
+ *
+ * <p>A sentinel rather than an empty string, because an unanswered picker and a picker
+ * answered with "none of these" are different states and only the second one asks for a
+ * name.</p>
+ */
+export const MATERIAL_NOT_LISTED = '__not-listed__';
 
 export interface Store {
   id: string;
@@ -195,10 +206,13 @@ export interface Site {
 /** One line being composed on the receive or issue screen, before it is sent. */
 export interface LineDraft {
   key: string;
+  /** A material id, or {@link MATERIAL_NOT_LISTED} while {@link LineDraft.newName} is being typed. */
   materialId: string;
   unitId: string;
   quantity: string;
   /** Receipts only. Issues are valued by the server at the store's average. */
   rate?: string;
   boqItemId?: string | undefined;
+  /** What the storekeeper called it, when the catalogue has no name for it. */
+  newName?: string | undefined;
 }

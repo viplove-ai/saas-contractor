@@ -23,7 +23,15 @@
     // invisible. vite/client declares import.meta.env (used by shared/apiClient.ts) and node
     // declares process/__dirname/node:path (used by vite.config.ts and playwright.config.ts).
     // Without them `tsc -b` fails and so does `npm run build`.
-    "types": ["vitest/globals", "vite/client", "vite-plugin-pwa/client", "node"]
+    // vite-plugin-pwa/react declares the virtual:pwa-register/react module behind
+    // shared/UpdatePrompt.tsx; the /client entry alone does not.
+    "types": [
+      "vitest/globals",
+      "vite/client",
+      "vite-plugin-pwa/client",
+      "vite-plugin-pwa/react",
+      "node"
+    ]
   },
   "include": ["src", "vite.config.ts", "playwright.config.ts", "e2e"]
 }

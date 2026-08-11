@@ -59,6 +59,7 @@ const SITES: AdminSite[] = [
     status: 'ACTIVE',
     standardShiftHours: 7,
     monthlyWageDays: 26,
+    usesOutsourcedLabour: false,
     version: 0,
   },
 ];
@@ -90,6 +91,13 @@ function renderPage(projects: AdminProject[] = PROJECTS) {
   );
 }
 
+/**
+ * Both views are rendered and CSS decides which one a screen sees, so jsdom — which does not
+ * resolve the breakpoint — holds both at once. Every query has to say which it means.
+ */
+const table = () => within(screen.getByRole('table'));
+const cards = () => within(screen.getByRole('list', { name: 'Projects' }));
+
 describe('ProjectsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -99,17 +107,42 @@ describe('ProjectsPage', () => {
 
   it('shows which projects have no site to record anything against', async () => {
     renderPage();
-    const withSite = (await screen.findByText('KSN01')).closest('tr') as HTMLElement;
-    const withoutSite = screen.getByText('BAG02').closest('tr') as HTMLElement;
+    await screen.findAllByText('KSN01');
+    const withSite = table().getByText('KSN01').closest('tr') as HTMLElement;
+    const withoutSite = table().getByText('BAG02').closest('tr') as HTMLElement;
 
     expect(within(withSite).getByText('1')).toBeInTheDocument();
     expect(within(withoutSite).getByText('None yet')).toBeInTheDocument();
   });
 
+  it('says the same thing on a phone, where the table would scroll off the screen', async () => {
+    renderPage();
+    await screen.findAllByText('KSN01');
+
+    const withSite = cards().getByText('KSN01').closest('li') as HTMLElement;
+    const withoutSite = cards().getByText('BAG02').closest('li') as HTMLElement;
+
+    // The two facts the table put in columns nobody could reach on a phone.
+    expect(within(withSite).getByText('1 site')).toBeInTheDocument();
+    expect(within(withSite).getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    expect(within(withoutSite).getByText('No sites yet')).toBeInTheDocument();
+  });
+
+  it('edits from a card, not just from a row', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('KSN01');
+
+    const card = cards().getByText('KSN01').closest('li') as HTMLElement;
+    await user.click(within(card).getByRole('button', { name: 'Edit' }));
+
+    expect(await screen.findByLabelText('Project code')).toBeDisabled();
+  });
+
   it('adds a project from a code and a name alone', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
-    await screen.findByText('KSN01');
+    await screen.findAllByText('KSN01');
 
     await user.click(screen.getByRole('button', { name: 'Add a project' }));
     // Adding now opens on a choice: start from the tender PDF, or type it in.
@@ -132,7 +165,7 @@ describe('ProjectsPage', () => {
   it('rejects an amount that is not a number before sending it', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
-    await screen.findByText('KSN01');
+    await screen.findAllByText('KSN01');
 
     await user.click(screen.getByRole('button', { name: 'Add a project' }));
     // Adding now opens on a choice: start from the tender PDF, or type it in.
@@ -149,7 +182,8 @@ describe('ProjectsPage', () => {
   it('sends the version and the code-free body when editing', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
-    const row = (await screen.findByText('KSN01')).closest('tr') as HTMLElement;
+    await screen.findAllByText('KSN01');
+    const row = table().getByText('KSN01').closest('tr') as HTMLElement;
     await user.click(within(row).getByRole('button', { name: 'Edit' }));
 
     expect(await screen.findByLabelText('Project code')).toBeDisabled();
@@ -169,6 +203,39 @@ describe('ProjectsPage', () => {
 
   it('points at the next step when there are no projects at all', async () => {
     renderPage([]);
-    expect(await screen.findByText(/Add the contract you are working under/)).toBeInTheDocument();
+    // Once in each view; both must point at the same next step.
+    expect(await screen.findAllByText(/Add the contract you are working under/)).toHaveLength(2);
+  });
+
+  // The filters are the server's answer, not a cut of what is already on screen: a closed
+  // contract from four years ago need never be loaded to be excluded.
+  it('asks the server for the search text and the status', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('KSN01');
+
+    await user.type(screen.getByLabelText('Search by code, name or client'), 'bag');
+    await waitFor(() =>
+      expect(get).toHaveBeenCalledWith('/projects', {
+        params: { q: 'bag', status: undefined, size: 100 },
+      }),
+    );
+
+    await user.click(screen.getByRole('combobox', { name: 'Status' }));
+    await user.click(await screen.findByRole('option', { name: 'On hold' }));
+    await waitFor(() =>
+      expect(get).toHaveBeenCalledWith('/projects', {
+        params: { q: 'bag', status: 'ON_HOLD', size: 100 },
+      }),
+    );
+  });
+
+  it('does not tell someone with twelve projects to add their first', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage([]);
+    await user.type(screen.getByLabelText('Search by code, name or client'), 'zzz');
+
+    expect(await screen.findAllByText(/No project matches that/)).toHaveLength(2);
+    expect(screen.queryByText(/Add the contract you are working under/)).toBeNull();
   });
 });

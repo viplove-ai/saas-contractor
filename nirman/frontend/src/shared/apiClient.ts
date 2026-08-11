@@ -1,5 +1,11 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
-import { API_BASE_URL, refreshSession, tokenStorage } from './session';
+import {
+  API_BASE_URL,
+  clearCachedSession,
+  isNetworkFailure,
+  refreshSession,
+  tokenStorage,
+} from './session';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -8,7 +14,6 @@ export const apiClient = axios.create({
 });
 
 let accessToken: string | null = null;
-let refreshInFlight: Promise<string> | null = null;
 
 export function setAccessToken(token: string | null): void {
   accessToken = token;
@@ -26,7 +31,14 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
  * A 401 triggers exactly one refresh attempt, shared by every request that raced into the
  * failure. Without the shared promise, a dashboard firing eight queries at once would
  * rotate the refresh token eight times — and the second rotation of the same token reads
- * as theft to the server, which then revokes the whole family.
+ * as theft to the server, which then revokes the whole family. The promise now lives in
+ * {@link refreshSession} itself, so the session revalidation on reconnect shares it too.
+ *
+ * <p>How the refresh fails decides whether the session survives. A refusal from the server
+ * is final and the device is signed out on the spot. A refresh that got no answer at all is
+ * a phone with no signal, and it must leave the stored token exactly where it is: the
+ * request that provoked this is retried later by the queue, and throwing the credential
+ * away here would strand every record already waiting on the device.</p>
  */
 apiClient.interceptors.response.use(
   (response) => response,
@@ -36,19 +48,21 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
     original._retried = true;
-    refreshInFlight ??= refreshSession()
-      .then((session) => session.accessToken)
-      .finally(() => {
-        refreshInFlight = null;
-      });
     try {
-      const token = await refreshInFlight;
-      setAccessToken(token);
+      const session = await refreshSession();
+      setAccessToken(session.accessToken);
       return apiClient(original);
     } catch (refreshError) {
+      if (isNetworkFailure(refreshError)) {
+        // The network failure is the truer answer than the 401 that provoked it: it is what
+        // tells the queue to stop the pass rather than work down the list collecting the
+        // same timeout once per record.
+        return Promise.reject(refreshError);
+      }
       setAccessToken(null);
       tokenStorage.clear();
-      window.location.assign('/login');
+      clearCachedSession();
+      window.location.assign('/login?reason=rejected');
       return Promise.reject(refreshError);
     }
   },

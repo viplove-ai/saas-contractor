@@ -1,36 +1,115 @@
 import { apiClient, setAccessToken } from '../../shared/apiClient';
+import { clearApiCaches } from '../../offline/apiCache';
 import {
+  clearCachedSession,
+  isCacheExpired,
+  isNetworkFailure,
+  readCachedSession,
   refreshSession,
   tokenStorage,
+  writeCachedSession,
   type SessionUser,
   type TokenResponse,
 } from '../../shared/session';
 
 export async function login(username: string, password: string): Promise<SessionUser> {
+  const previous = readCachedSession();
   const { data } = await apiClient.post<TokenResponse>('/auth/login', { username, password });
   setAccessToken(data.accessToken);
   tokenStorage.setRefreshToken(data.refreshToken);
+  writeCachedSession(data.user);
+  // Only when the handset changes hands. Clearing on every sign-in would throw away the
+  // reference data of somebody who simply signed out and back in, and they may be about to
+  // walk out of coverage with it.
+  if (previous && previous.user.id !== data.user.id) {
+    await clearApiCaches();
+  }
   return data.user;
 }
 
 /**
- * Restores a session after a page load or PWA restart: the stored refresh token buys a
- * fresh access token and the profile in one call. Returns null when there is no stored
- * token or the server no longer honours it — the caller shows the login screen.
+ * How a session was restored on start-up, or why it was not.
+ *
+ * <p>Three outcomes rather than a nullable user, because the caller has to do three
+ * different things. VERIFIED is the ordinary case. CACHED means the app is open on a
+ * profile the server has not confirmed yet and must say so and check again on reconnect.
+ * SIGNED_OUT carries a reason, because "sign in again" with no explanation is what makes a
+ * supervisor believe the app has lost their work.</p>
  */
-export async function restoreSession(): Promise<SessionUser | null> {
+export type SessionRestore =
+  | { state: 'VERIFIED'; user: SessionUser }
+  | { state: 'CACHED'; user: SessionUser; verifiedAt: string }
+  | { state: 'SIGNED_OUT'; reason: SignedOutReason };
+
+export type SignedOutReason =
+  /** Nothing stored — a first visit, or a deliberate sign-out. */
+  | 'NONE'
+  /** The server refused the stored token: revoked, expired, or the password was changed. */
+  | 'REJECTED'
+  /** Offline too long for the cached profile to still be honoured. */
+  | 'OFFLINE_TOO_LONG';
+
+/**
+ * Restores a session after a page load or PWA restart.
+ *
+ * <p>With signal, the stored refresh token buys a fresh access token and the current profile
+ * in one call — which is also how a permission granted or a site unassigned since yesterday
+ * reaches the device.</p>
+ *
+ * <p>With no signal, the app opens anyway on the last profile the server confirmed. The
+ * refresh token is deliberately <b>kept</b> in that case. Clearing it was the bug this
+ * replaces: a phone opened in a valley threw away the one credential that would have let it
+ * sync when it came back out, so a supervisor who could not sign in also could not send the
+ * work already sitting on the device.</p>
+ */
+export async function restoreSession(): Promise<SessionRestore> {
+  const cached = readCachedSession();
   if (!tokenStorage.getRefreshToken()) {
-    return null;
+    clearCachedSession();
+    return { state: 'SIGNED_OUT', reason: 'NONE' };
   }
   try {
     const session = await refreshSession();
     setAccessToken(session.accessToken);
-    return session.user;
-  } catch {
-    tokenStorage.clear();
-    setAccessToken(null);
-    return null;
+    return { state: 'VERIFIED', user: session.user };
+  } catch (error) {
+    if (isNetworkFailure(error)) {
+      if (cached && !isCacheExpired(cached)) {
+        return { state: 'CACHED', user: cached.user, verifiedAt: cached.verifiedAt };
+      }
+      /*
+        Out of grace, or never signed in on this device. The tokens go, because a phone that
+        cannot reach the server and has nothing recent to show for itself is exactly the one
+        that should stop opening site data. Queued records are left alone — they belong to
+        the device, not the session, and the sync screen still names them.
+      */
+      forgetSession();
+      return {
+        state: 'SIGNED_OUT',
+        reason: cached ? 'OFFLINE_TOO_LONG' : 'NONE',
+      };
+    }
+    // The server answered and said no. That is the one case where the stored token is worth
+    // nothing and keeping it would only produce the same refusal on every reconnect.
+    forgetSession();
+    return { state: 'SIGNED_OUT', reason: 'REJECTED' };
   }
+}
+
+/**
+ * Drops every trace of the session on this device: tokens, the cached profile, and the read
+ * caches behind them.
+ *
+ * <p>The offline queue is deliberately left alone. Those records are the device's, not the
+ * session's — a supervisor whose session was revoked overnight still marked yesterday's
+ * muster, and it is still owed to the server. The sync screen keeps naming it, and it goes
+ * out under whoever signs in next with the right to send it.</p>
+ */
+export function forgetSession(): void {
+  tokenStorage.clear();
+  clearCachedSession();
+  setAccessToken(null);
+  void clearApiCaches();
 }
 
 /** Revokes the refresh family server-side; local state is cleared even if that call fails. */
@@ -43,8 +122,7 @@ export async function logout(): Promise<void> {
   } catch {
     // Signing out while offline still signs out locally; the family expires server-side.
   } finally {
-    tokenStorage.clear();
-    setAccessToken(null);
+    forgetSession();
   }
 }
 

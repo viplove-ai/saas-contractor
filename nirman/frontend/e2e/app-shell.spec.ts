@@ -13,7 +13,9 @@ test('an anonymous visit lands on the sign-in screen', async ({ page }) => {
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Good morning.' })).toBeVisible();
   await expect(page.getByLabel('Username')).toBeVisible();
-  await expect(page.getByLabel('Password')).toBeVisible();
+  // Exact, or the "Show password" toggle beside the box matches this as well and the
+  // locator resolves to two elements.
+  await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
 });
 
 test('a deep link is guarded and redirects to sign-in', async ({ page }) => {

@@ -7,7 +7,7 @@ import {
 } from './db';
 import { uploadAttachment } from './uploads';
 import { syncHandlers } from './handlers';
-import { classifyFailure, nextAttemptAt, OUTCOME_STATUS } from './retry';
+import { classifyFailure, nextAttemptAt, OUTCOME_STATUS, type SendFailure } from './retry';
 
 /** What one pass over the queue did. */
 export interface DrainSummary {
@@ -31,6 +31,20 @@ const KEEP_SYNCED_MS = 6 * 60 * 60_000;
 
 /** A record the queue has given up retrying on its own, after this many tries. */
 const MAX_ATTEMPTS = 8;
+
+/**
+ * Whether a failed send counts against the give-up budget.
+ *
+ * <p>Getting no answer does not. The budget exists for a server that keeps saying something
+ * unhelpful, and eight of those is enough to stop asking; silence is not the server saying
+ * anything at all. The case this protects is the one the sync provider already describes —
+ * a connection the browser reports as up and which is actually dead, at the edge of a cell —
+ * where a phone left in a pocket all day would otherwise come back with every record marked
+ * "given up" and needing a person to press Retry on each one.</p>
+ */
+function countsAgainstBudget(kind: SendFailure['kind']): boolean {
+  return kind !== 'OFFLINE' && kind !== 'CONFLICT';
+}
 
 export interface QueueInput {
   clientId: string;
@@ -141,7 +155,7 @@ async function sendOne(draft: DraftRecord, now: number): Promise<DraftOutcome> {
   } catch (error) {
     const failure = classifyFailure(error);
     const attempts = draft.attempts + 1;
-    const exhausted = failure.kind !== 'CONFLICT' && attempts >= MAX_ATTEMPTS;
+    const exhausted = countsAgainstBudget(failure.kind) && attempts >= MAX_ATTEMPTS;
     const status: SyncStatus = exhausted ? 'FAILED' : OUTCOME_STATUS[failure.kind];
     await offlineDb.drafts.update(draft.clientId, {
       status,
@@ -186,7 +200,7 @@ async function drainUploads(now: number): Promise<number> {
     } catch (error) {
       const failure = classifyFailure(error);
       const attempts = upload.attempts + 1;
-      const exhausted = attempts >= MAX_ATTEMPTS;
+      const exhausted = countsAgainstBudget(failure.kind) && attempts >= MAX_ATTEMPTS;
       await offlineDb.uploads.update(upload.uploadId, {
         status: exhausted ? 'FAILED' : OUTCOME_STATUS[failure.kind],
         attempts,

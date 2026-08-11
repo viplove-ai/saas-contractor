@@ -1,6 +1,7 @@
 package in.nirman.modules.masterdata.api;
 
 import in.nirman.common.PageResponse;
+import in.nirman.modules.masterdata.api.dto.MasterDataDtos.AddFieldMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.ConversionResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateLabourContractorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateMaterialRequest;
@@ -176,6 +177,18 @@ public class MasterDataController {
     public ResponseEntity<MaterialResponse> createMaterial(
             @Valid @RequestBody CreateMaterialRequest request) {
         MaterialResponse created = service.createMaterial(request);
+        return ResponseEntity.created(URI.create("/api/v1/materials/" + created.id())).body(created);
+    }
+
+    @PostMapping("/materials/field")
+    @Operation(summary = "Name a material at the gate while booking a delivery",
+            description = "For the storekeeper, not the office: a name and a unit, nothing else. "
+                    + "The row is marked provisional. A material already carrying the same name "
+                    + "is returned rather than duplicated, because two rows would split its stock "
+                    + "into two balances.")
+    public ResponseEntity<MaterialResponse> addFieldMaterial(
+            @Valid @RequestBody AddFieldMaterialRequest request) {
+        MaterialResponse created = service.addFieldMaterial(request);
         return ResponseEntity.created(URI.create("/api/v1/materials/" + created.id())).body(created);
     }
 

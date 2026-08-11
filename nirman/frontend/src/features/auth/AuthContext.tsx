@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -15,12 +16,22 @@ import {
   login as apiLogin,
   logout as apiLogout,
   restoreSession,
+  type SignedOutReason,
 } from './api';
 
 interface AuthContextValue {
   user: SessionUser | null;
   /** True until the stored session has been checked; guards render nothing sooner. */
   initialising: boolean;
+  /**
+   * True while the app is running on a profile the server has not confirmed since start-up.
+   * Screens use it to explain why figures are missing, never to decide what is allowed.
+   */
+  unverified: boolean;
+  /** When the server last confirmed this session, for the "working offline since" line. */
+  verifiedAt: string | null;
+  /** Why the last session ended, for the sign-in screen to explain. */
+  signedOutReason: SignedOutReason;
   signIn: (username: string, password: string) => Promise<SessionUser>;
   signOut: () => Promise<void>;
   /** Changes the signed-in user's own password and keeps them signed in. */
@@ -30,37 +41,96 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/** How often an unconfirmed session asks the server again. Matches the sync queue's tick. */
+const RECHECK_MS = 60_000;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [initialising, setInitialising] = useState(true);
+  const [unverified, setUnverified] = useState(false);
+  const [verifiedAt, setVerifiedAt] = useState<string | null>(null);
+  const [signedOutReason, setSignedOutReason] = useState<SignedOutReason>('NONE');
+  // Guards against two revalidations overlapping when the browser flaps between states.
+  const checking = useRef(false);
+
+  /**
+   * Reads the stored session and settles the three states above.
+   *
+   * <p>Shared by the mount and by the reconnect below, because they want the same thing:
+   * the server's current answer if it can be had, and last night's if it cannot.</p>
+   */
+  const check = useCallback(async () => {
+    if (checking.current) return;
+    checking.current = true;
+    try {
+      const restored = await restoreSession();
+      if (restored.state === 'SIGNED_OUT') {
+        setUser(null);
+        setUnverified(false);
+        setVerifiedAt(null);
+        setSignedOutReason(restored.reason);
+        return;
+      }
+      setUser(restored.user);
+      setUnverified(restored.state === 'CACHED');
+      setVerifiedAt(restored.state === 'CACHED' ? restored.verifiedAt : new Date().toISOString());
+      setSignedOutReason('NONE');
+    } finally {
+      checking.current = false;
+    }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    restoreSession()
-      .then((restored) => {
-        if (!cancelled) {
-          setUser(restored);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setInitialising(false);
-        }
-      });
-    return () => {
-      cancelled = true;
+    void check().finally(() => setInitialising(false));
+  }, [check]);
+
+  /**
+   * Re-checks the session once the phone can reach the server again.
+   *
+   * <p>This closes the loop on an offline start: the app opened on a cached profile, and it
+   * keeps asking the server whether that profile is still true. A role changed, a site
+   * unassigned or the whole session revoked while the device was out of contact all land
+   * here, rather than being discovered one refused request at a time.</p>
+   *
+   * <p>Three ways in, and the timer is not redundant. The {@code online} event fires only on
+   * a transition, and the device that most needs re-checking never transitioned — it started
+   * up already claiming to be online, with nothing at the other end. Coming back to the
+   * foreground catches the phone leaving a pocket. The timer catches everything else, and
+   * only runs while there is something to catch.</p>
+   */
+  useEffect(() => {
+    if (!unverified) {
+      return;
+    }
+    const recheck = () => void check();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') recheck();
     };
-  }, []);
+    window.addEventListener('online', recheck);
+    document.addEventListener('visibilitychange', onVisible);
+    const timer = window.setInterval(recheck, RECHECK_MS);
+    return () => {
+      window.removeEventListener('online', recheck);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearInterval(timer);
+    };
+  }, [check, unverified]);
 
   const signIn = useCallback(async (username: string, password: string) => {
     const signedIn = await apiLogin(username, password);
     setUser(signedIn);
+    setUnverified(false);
+    setVerifiedAt(new Date().toISOString());
+    setSignedOutReason('NONE');
     return signedIn;
   }, []);
 
   const signOut = useCallback(async () => {
     await apiLogout();
     setUser(null);
+    setUnverified(false);
+    setVerifiedAt(null);
+    setSignedOutReason('NONE');
   }, []);
 
   const changePassword = useCallback(
@@ -70,6 +140,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       const refreshed = await apiChangePassword(user.username, currentPassword, newPassword);
       setUser(refreshed);
+      setUnverified(false);
+      setVerifiedAt(new Date().toISOString());
       return refreshed;
     },
     [user],
@@ -79,12 +151,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       initialising,
+      unverified,
+      verifiedAt,
+      signedOutReason,
       signIn,
       signOut,
       changePassword,
       hasPermission: (code: string) => user?.permissions.includes(code) ?? false,
     }),
-    [user, initialising, signIn, signOut, changePassword],
+    [user, initialising, unverified, verifiedAt, signedOutReason, signIn, signOut, changePassword],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -108,9 +183,13 @@ export const CHANGE_PASSWORD_PATH = '/profile';
  * they set their own. A first-time password is handed over by phone or on paper and is
  * therefore known to at least two people; letting it keep working while its owner marks
  * attendance would put someone else's name on that attendance.</p>
+ *
+ * <p>One exception, and it is the whole point of the offline session: a user restored from
+ * the cache is a signed-in user. The check that used to send them here — a network call that
+ * cannot succeed — now happens the moment there is signal to make it with.</p>
  */
 export function RequireAuth() {
-  const { user, initialising } = useAuth();
+  const { user, initialising, signedOutReason } = useAuth();
   const location = useLocation();
 
   if (initialising) {
@@ -121,7 +200,13 @@ export function RequireAuth() {
     );
   }
   if (!user) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ from: location.pathname, reason: signedOutReason }}
+      />
+    );
   }
   if (user.mustChangePassword && location.pathname !== CHANGE_PASSWORD_PATH) {
     return <Navigate to={CHANGE_PASSWORD_PATH} replace />;
