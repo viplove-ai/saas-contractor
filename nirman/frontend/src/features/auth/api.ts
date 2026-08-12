@@ -11,6 +11,7 @@ import {
   type SessionUser,
   type TokenResponse,
 } from '../../shared/session';
+import { forgetSelectedSite } from '../../shared/siteSelection';
 
 export async function login(username: string, password: string): Promise<SessionUser> {
   const previous = readCachedSession();
@@ -108,6 +109,10 @@ export async function restoreSession(): Promise<SessionRestore> {
 export function forgetSession(): void {
   tokenStorage.clear();
   clearCachedSession();
+  // The site the last person was standing at, for the same reason the read caches go: a
+  // site handset changes hands, and the next supervisor's first screen should not open on
+  // somebody else's block.
+  forgetSelectedSite();
   setAccessToken(null);
   void clearApiCaches();
 }

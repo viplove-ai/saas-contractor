@@ -9,10 +9,11 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount } from '../../shared/formatters';
 import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
+import { useSelectedSite } from '../../shared/siteSelection';
 import { useAuth } from '../auth/AuthContext';
 import { useMySites, useSiteDirectory, useWorkers } from './api';
 import { OnboardWorkerDialog } from './OnboardWorkerDialog';
@@ -32,26 +33,19 @@ import { WAGE_TYPE_LABEL, type Worker } from './types';
  */
 export function WorkersPage() {
   const { hasPermission } = useAuth();
-  const [siteId, setSiteId] = useState('');
   const [search, setSearch] = useState('');
   const [onboarding, setOnboarding] = useState(false);
   const [transferring, setTransferring] = useState<Worker | null>(null);
 
   const mySites = useMySites();
+  // The site the rest of the app is on, and "all my sites" still available beside it.
+  const [siteId, setSiteId] = useSelectedSite(mySites.data, { allowAll: true });
   const directory = useSiteDirectory();
   const workers = useWorkers(siteId, search);
   const canWrite = hasPermission('worker:write');
   // A man is taken on *at* a site, so with no posting there is nowhere to put him. Wait for
   // the answer before deciding that — an empty list while loading is not the same as none.
   const noPosting = mySites.isSuccess && mySites.data.length === 0;
-
-  // One site is the common case for a supervisor; pre-selecting it saves a tap and makes
-  // the onboarding dialog's site correct without asking.
-  useEffect(() => {
-    if (!siteId && mySites.data?.length === 1) {
-      setSiteId(mySites.data[0]!.id);
-    }
-  }, [mySites.data, siteId]);
 
   const siteLabel = (id: string | undefined): string => {
     if (!id) {

@@ -14,6 +14,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatHours, formatQuantity } from '../../shared/formatters';
 import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
+import { useSelectedSite } from '../../shared/siteSelection';
 import { monthToDate, useSiteDashboard, useSites } from './api';
 import { CostTrendChart } from './CostTrendChart';
 import { MaterialPositionCard } from './MaterialPositionCard';
@@ -83,15 +84,28 @@ export function SiteDashboardPage() {
   const [to, setTo] = useState(initial.to);
 
   const sites = useSites();
+  const [selectedSiteId, chooseSite] = useSelectedSite(sites.data);
   const dashboard = useSiteDashboard(routeSiteId, from, to);
 
-  // Landing on /dashboard/site with no site picks the first one the caller can see, rather
-  // than showing an empty screen and asking them to choose from a list of one.
+  /*
+    The site lives in the path here, because this screen is one people send each other a link
+    to. So the two have to be kept in step: landing on /dashboard/site with no site goes to
+    the one the rest of the app is on, and arriving on a link makes that site the app's.
+  */
   useEffect(() => {
-    if (!routeSiteId && sites.data?.length) {
-      navigate(`/dashboard/site/${sites.data[0]!.id}`, { replace: true });
+    if (!routeSiteId && selectedSiteId) {
+      navigate(`/dashboard/site/${selectedSiteId}`, { replace: true });
     }
-  }, [routeSiteId, sites.data, navigate]);
+  }, [routeSiteId, selectedSiteId, navigate]);
+
+  // Only a site the account actually reaches. A link to somebody else's block would
+  // otherwise be remembered, refused by the guard, and replaced on the next screen anyway.
+  const routeSiteIsReachable = (sites.data ?? []).some((site) => site.id === routeSiteId);
+  useEffect(() => {
+    if (routeSiteId && routeSiteIsReachable && routeSiteId !== selectedSiteId) {
+      chooseSite(routeSiteId);
+    }
+  }, [routeSiteId, routeSiteIsReachable, selectedSiteId, chooseSite]);
 
   return (
     <Stack spacing={2}>

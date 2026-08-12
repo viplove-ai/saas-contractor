@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
+import { useSelectedSite } from '../../shared/siteSelection';
 import { monthToDate, useDataQuality, useSites } from './api';
 import { PeriodPicker } from './PeriodPicker';
 import type { QualityFinding } from './types';
@@ -27,11 +28,11 @@ import type { QualityFinding } from './types';
  */
 export function DataQualityPage() {
   const initial = monthToDate();
-  const [siteId, setSiteId] = useState('');
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
 
   const sites = useSites();
+  const [siteId, setSiteId] = useSelectedSite(sites.data, { allowAll: true });
   const quality = useDataQuality(siteId || undefined, from, to);
 
   return (

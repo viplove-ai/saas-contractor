@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { useAuth } from '../auth/AuthContext';
 import { formatHours } from '../../shared/formatters';
+import { useSelectedSite } from '../../shared/siteSelection';
 import { StatusChip } from '../../shared/StatusChip';
 import { useCorrectAttendance, useSites, useVerificationQueue, useVerifyAttendance } from './api';
 import { CorrectAttendanceDialog } from './CorrectAttendanceDialog';
@@ -58,7 +59,6 @@ function daysAgo(days: number): string {
  */
 export function VerifyAttendancePage() {
   const { hasPermission } = useAuth();
-  const [siteId, setSiteId] = useState<string>('');
   const [from, setFrom] = useState(daysAgo(DEFAULT_WINDOW_DAYS));
   const [to, setTo] = useState(isoDate(new Date()));
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -67,15 +67,10 @@ export function VerifyAttendancePage() {
   const [correcting, setCorrecting] = useState<AttendanceListRow | null>(null);
 
   const sites = useSites();
+  const [siteId, setSiteId] = useSelectedSite(sites.data);
   const queue = useVerificationQueue(siteId || undefined, from, to, viewing);
   const verify = useVerifyAttendance();
   const correct = useCorrectAttendance();
-
-  useEffect(() => {
-    if (!siteId && sites.data?.length) {
-      setSiteId(sites.data[0]!.id);
-    }
-  }, [sites.data, siteId]);
 
   // A selection belongs to one site, window and list; changing any must not carry ids over.
   useEffect(() => {

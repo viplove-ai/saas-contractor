@@ -10,13 +10,14 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatQuantity } from '../../shared/formatters';
+import { useSelectedSite } from '../../shared/siteSelection';
 import { figure, inkEdge, marginNote } from '../../app/sketch';
 import { tokens } from '../../app/theme';
 import { StatusChip } from '../../shared/StatusChip';
+import { useSites } from '../attendance/api';
 import { useToday } from './api';
 
 /**
@@ -33,15 +34,15 @@ import { useToday } from './api';
  * the muster is unmarked. A screen where everything is loud is a screen where nothing is.</p>
  */
 export function TodayPage() {
-  const [siteId, setSiteId] = useState('');
+  /*
+    Shared with every other screen that asks for a site, rather than this screen's own: an
+    engineer who picks Kausani here is telling the app where he is, and the muster, the store
+    and the expense form all open on it from there. The list comes from the same cached query
+    `useToday` reads, so asking for it here costs nothing.
+  */
+  const sites = useSites();
+  const [siteId, setSiteId] = useSelectedSite(sites.data);
   const t = useToday(siteId || undefined);
-
-  // Most supervisors have exactly one site; nobody should choose from a list of one.
-  useEffect(() => {
-    if (!siteId && t.sites.data?.length) {
-      setSiteId(t.sites.data[0]!.id);
-    }
-  }, [t.sites.data, siteId]);
 
   const dash = t.dashboard.data;
 

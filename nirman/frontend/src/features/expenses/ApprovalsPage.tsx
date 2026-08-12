@@ -10,9 +10,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount } from '../../shared/formatters';
+import { useSelectedSite } from '../../shared/siteSelection';
 import { StatusChip } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -41,11 +42,11 @@ function today(): string {
  */
 export function ApprovalsPage() {
   const { hasPermission } = useAuth();
-  const [siteId, setSiteId] = useState('');
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [payAmount, setPayAmount] = useState<Record<string, string>>({});
 
   const sites = useSites();
+  const [siteId, setSiteId] = useSelectedSite(sites.data);
   const pending = usePendingApprovals('EXPENSE');
   const submitted = useExpenses(siteId || undefined, 'SUBMITTED');
   const l1 = useExpenses(siteId || undefined, 'L1_APPROVED');
@@ -55,12 +56,6 @@ export function ApprovalsPage() {
 
   const canDecide = hasPermission('expense:approve:l1');
   const canPay = hasPermission('payment:record');
-
-  useEffect(() => {
-    if (!siteId && sites.data?.length) {
-      setSiteId(sites.data[0]!.id);
-    }
-  }, [sites.data, siteId]);
 
   /** Everything with a level still waiting, whichever level that is. */
   const waiting = [...(submitted.data?.content ?? []), ...(l1.data?.content ?? [])];

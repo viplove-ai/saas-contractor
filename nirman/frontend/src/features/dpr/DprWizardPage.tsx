@@ -23,6 +23,7 @@ import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatHours, formatQuantity } from '../../shared/formatters';
 import { DeleteRecordDialog } from '../../shared/DeleteRecordDialog';
 import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
+import { useSelectedSite } from '../../shared/siteSelection';
 import { StatusChip } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -158,7 +159,6 @@ function emptyWorkLine(): WorkLine {
 export function DprWizardPage() {
   // Opened as /dpr/:id when the supervisor picked a particular draft to come back to.
   const { id: routeDprId } = useParams<{ id: string }>();
-  const [siteId, setSiteId] = useState('');
   const [reportDate, setReportDate] = useState(today());
   const [step, setStep] = useState(0);
 
@@ -188,6 +188,7 @@ export function DprWizardPage() {
   const { hasPermission } = useAuth();
   const canDelete = hasPermission('dpr:delete');
   const sites = useSites();
+  const [siteId, setSiteId] = useSelectedSite(sites.data);
   const prefill = usePrefill(siteId || undefined, reportDate);
   const boqItems = useBoqItems(siteId || undefined);
   const attachPhoto = useAttachDprPhoto();
@@ -289,12 +290,6 @@ export function DprWizardPage() {
     setStep(0);
   }
 
-  useEffect(() => {
-    if (!siteId && sites.data?.length) {
-      setSiteId(sites.data[0]!.id);
-    }
-  }, [sites.data, siteId]);
-
   // A new day is a new report. Anything typed against the old one would otherwise be filed
   // under a date it did not happen on, so the form empties with the date rather than carrying
   // yesterday's narrative into today's.
@@ -324,7 +319,9 @@ export function DprWizardPage() {
     setSiteId(report.siteId);
     setReportDate(report.reportDate);
     setRouteApplied(true);
-  }, [existing.data, routeDprId, routeApplied]);
+    // setSiteId is the shared site chooser and stable, but it is a real dependency now that
+    // it is not a plain setState — naming it keeps that visible rather than assumed.
+  }, [existing.data, routeDprId, routeApplied, setSiteId]);
 
   const existingReport = saved || !covered ? null : (existing.data ?? null);
   /** A report covers the day and it is past editing — a dead end, and it says so. */
@@ -594,7 +591,13 @@ export function DprWizardPage() {
           <MaterialCard siteId={siteId} date={reportDate} mode="RECEIVED" onSaved={refreshDay} />
           <MaterialCard siteId={siteId} date={reportDate} mode="USED" onSaved={refreshDay} />
           <ExpenseCard siteId={siteId} date={reportDate} onSaved={refreshDay} />
-          <PhotoCard files={photos} onChange={setPhotos} uploaded={saved?.photos.length ?? 0} />
+          <PhotoCard
+            files={photos}
+            onChange={setPhotos}
+            uploaded={saved?.photos.length ?? 0}
+            siteCode={sites.data?.find((site) => site.id === siteId)?.code}
+            reportDate={reportDate}
+          />
           {photoError && <Alert severity="warning">{photoError}</Alert>}
         </>
       )}

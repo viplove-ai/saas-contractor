@@ -1,5 +1,6 @@
 import { MenuItem, Stack, TextField } from '@mui/material';
 import { useEffect } from 'react';
+import { useSelectedSite } from '../../shared/siteSelection';
 import { useSites, useStores } from './api';
 
 interface Props {
@@ -18,6 +19,11 @@ interface Props {
  * <p>Both pickers default themselves. Most supervisors reach exactly one site with exactly
  * one store, and making them choose from a list of one before they can type anything is a
  * tap spent on nothing.</p>
+ *
+ * <p>The site is the app-wide one rather than this screen's, so a storekeeper who chose
+ * Kausani on the day screen books the lorry into Kausani's store — and the three screens
+ * that carry this picker agree with each other as he moves between them. The parent still
+ * owns the id it puts on the document; it is told, not asked.</p>
  */
 export function StorePicker({
   siteId,
@@ -30,12 +36,16 @@ export function StorePicker({
 }: Props) {
   const sites = useSites();
   const stores = useStores(siteId || undefined);
+  const [selectedSiteId, chooseSite] = useSelectedSite(sites.data);
 
+  // A store belongs to one site, so a site that moves takes the store with it — including
+  // the move that happens on mount, when the parent starts with no site at all.
   useEffect(() => {
-    if (!siteId && sites.data?.length) {
-      onSiteChange(sites.data[0]!.id);
+    if (selectedSiteId && selectedSiteId !== siteId) {
+      onSiteChange(selectedSiteId);
+      onStoreChange('');
     }
-  }, [sites.data, siteId, onSiteChange]);
+  }, [selectedSiteId, siteId, onSiteChange, onStoreChange]);
 
   useEffect(() => {
     if (!storeId && stores.data?.length) {
@@ -50,10 +60,7 @@ export function StorePicker({
         select
         label="Site"
         value={siteId}
-        onChange={(e) => {
-          onSiteChange(e.target.value);
-          onStoreChange('');
-        }}
+        onChange={(e) => chooseSite(e.target.value)}
         sx={{ minWidth: 200 }}
       >
         {(sites.data ?? []).map((site) => (

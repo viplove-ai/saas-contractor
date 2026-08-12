@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { inkEdge } from '../../app/sketch';
 import { apiErrorDetail } from '../../shared/apiClient';
+import { useSelectedSite } from '../../shared/siteSelection';
 import { StatusChip, type RecordStatus } from '../../shared/StatusChip';
 import { useRoster, useSaveAttendance, useSites, useSubmitAttendance } from './api';
 import { WorkerHoursDrawer } from './WorkerHoursDrawer';
@@ -51,24 +52,18 @@ type Draft = MarkDraft & { id: string };
  */
 export function MarkAttendancePage() {
   const [date, setDate] = useState(today());
-  const [siteId, setSiteId] = useState<string>('');
   const [drafts, setDrafts] = useState<Map<string, Draft>>(new Map());
   const [openWorker, setOpenWorker] = useState<RosterEntry | null>(null);
 
   const sites = useSites();
+  // The site the day screen was on, not whichever one sorts first.
+  const [siteId, setSiteId] = useSelectedSite(sites.data);
   const roster = useRoster(siteId || undefined, date);
   const site = sites.data?.find((candidate) => candidate.id === siteId);
   // Named now rather than when the queue is read: by then this screen is gone and the sync
   // list would be showing a row of uuids.
   const save = useSaveAttendance(siteId, date, site ? `${site.code} ${site.name}` : 'site');
   const submit = useSubmitAttendance(siteId, date);
-
-  // Default to the first site the user can reach; most supervisors have exactly one.
-  useEffect(() => {
-    if (!siteId && sites.data?.length) {
-      setSiteId(sites.data[0]!.id);
-    }
-  }, [sites.data, siteId]);
 
   // Unsaved marks belong to one site and day; changing either must not carry them over.
   useEffect(() => {

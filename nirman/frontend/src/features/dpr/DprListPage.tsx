@@ -25,6 +25,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatHours, formatQuantity } from '../../shared/formatters';
 import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
+import { useSelectedSite } from '../../shared/siteSelection';
 import { StatusChip, type RecordStatus } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
 import { DeleteRecordDialog } from '../../shared/DeleteRecordDialog';
@@ -81,13 +82,15 @@ export function DprListPage() {
   // Arrived at from "Resume" on the day's screen, which knows it wants the drafts. The filter
   // stays the screen's own from then on — the link sets it, it does not own it.
   const [params] = useSearchParams();
-  const [siteId, setSiteId] = useState('');
   const [status, setStatus] = useState<DprWorkflow | ''>(
     () => (params.get('status') as DprWorkflow | null) ?? '',
   );
   const [openId, setOpenId] = useState<string | null>(null);
 
   const sites = useSites();
+  // Opens on the site the rest of the app is on, and still widens to every site — a register
+  // read across sites for a minute is not a change of where anybody is working.
+  const [siteId, setSiteId] = useSelectedSite(sites.data, { allowAll: true });
   const reports = useDprs(siteId || undefined, status);
   const canVerify = hasPermission('dpr:verify');
   const canDelete = hasPermission('dpr:delete');
