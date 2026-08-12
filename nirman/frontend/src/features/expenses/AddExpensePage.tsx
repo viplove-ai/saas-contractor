@@ -89,6 +89,10 @@ export function AddExpensePage() {
 
   const site = sites.data?.find((candidate) => candidate.id === siteId);
   const booked = create.data;
+  // Sending a row from the list below must not change what the banner says about the draft
+  // just booked, so the ids have to match and not merely the mutation having succeeded once.
+  const justSent =
+    submit.isSuccess && booked?.outcome === 'SENT' && submit.data?.id === booked.expense.id;
 
   /**
    * Books the expense, opening a head first if he had to name the kind himself.
@@ -296,9 +300,33 @@ export function AddExpensePage() {
       {create.isError && !candidates && (
         <Alert severity="error">{apiErrorDetail(create.error)}</Alert>
       )}
+      {/*
+        The draft that was just booked, with the send beside it.
+
+        Booking and sending stay separate acts — a wrong figure caught before it goes costs a
+        correction on screen rather than an approval chased back — but "when you are ready" is
+        usually now, and the row it means is the one that has just scrolled out of sight under
+        the recent list. The same button on the same expense, where the person is looking.
+      */}
       {booked?.outcome === 'SENT' && (
-        <Alert severity="success">
-          Saved {booked.expense.expenseNumber} as a draft. Send it when you are ready.
+        <Alert
+          severity="success"
+          action={
+            justSent ? undefined : (
+              <Button
+                color="inherit"
+                disabled={submit.isPending}
+                onClick={() => submit.mutate(booked.expense.id)}
+                sx={{ minHeight: 48 }}
+              >
+                {submit.isPending ? 'Sending…' : 'Send for approval'}
+              </Button>
+            )
+          }
+        >
+          {justSent
+            ? `${booked.expense.expenseNumber} has gone for approval.`
+            : `Saved ${booked.expense.expenseNumber} as a draft. Send it now, or leave it and send it from the list below.`}
         </Alert>
       )}
       {booked?.outcome === 'QUEUED' && (

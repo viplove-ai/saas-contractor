@@ -2,6 +2,7 @@ import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
 import { Alert, Button, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { compressPhoto, PHOTO_MAX_EDGE_PX } from '../../offline/uploads';
+import { PhotoThumb } from '../../shared/PhotoThumb';
 
 /**
  * The bill photograph.
@@ -16,6 +17,12 @@ import { compressPhoto, PHOTO_MAX_EDGE_PX } from '../../offline/uploads';
  * <p>{@code capture="environment"} opens the rear camera directly on a phone and is ignored
  * on a desk browser, where the same control is a file picker — which is what an accountant
  * scanning a stack of bills wants anyway.</p>
+ *
+ * <p>What was picked is shown as a picture, the same as the day's photographs on the report.
+ * A file name is not evidence: the thumb over the lens, the challan photographed instead of
+ * the bill, the second page where the first was wanted — all of them look identical as
+ * {@code IMG_20260812_104533.jpg}, and all of them are obvious as a picture. Caught here it
+ * costs another photograph; caught by an approver it costs the expense a round trip.</p>
  */
 export function BillPhotoField({
   file,
@@ -34,6 +41,25 @@ export function BillPhotoField({
       setSaved(null);
       setError(null);
     }
+  }, [file]);
+
+  /**
+   * The object URL behind the thumbnail, made once per file and revoked when it changes.
+   *
+   * <p>In state rather than derived in the render body: a URL minted there is a new URL on
+   * every keystroke elsewhere on the form, which restarts the decode each time and leaks
+   * each of the ones it replaced. A bill can also be a PDF, which no {@code img} will draw,
+   * so only a picture gets a URL and the rest keep the name line they always had.</p>
+   */
+  const [preview, setPreview] = useState<string | null>(null);
+  useEffect(() => {
+    if (!file || !file.type.startsWith('image/')) {
+      setPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
   }, [file]);
 
   const pick = async (picked: File | undefined) => {
@@ -80,6 +106,12 @@ export function BillPhotoField({
           </Button>
         )}
       </Stack>
+
+      {/*
+        Full width on a tap, because the question the thumbnail cannot answer is whether the
+        figures on the bill can actually be read — which is the whole reason it is attached.
+      */}
+      {file && preview && <PhotoThumb src={preview} name={file.name} />}
 
       {file && saved && (
         <Typography variant="body2" color="text.secondary">

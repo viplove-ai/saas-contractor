@@ -261,6 +261,33 @@ describe('AddExpensePage', () => {
     expect(post.mock.calls[0]![0]).toBe('/expenses/e9/submit');
   });
 
+  /*
+    "Send it when you are ready" is usually now, and the row it meant had scrolled out of
+    sight under the recent list. The same act, on the same expense, where the person is
+    looking — booking and sending stay two presses, which is the part that matters.
+  */
+  it('sends the draft it has just booked, from the banner that says it saved', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findByRole('combobox', { name: 'Site' });
+
+    await user.click(screen.getByRole('combobox', { name: 'What kind' }));
+    await user.click(await screen.findByRole('option', { name: 'Site Expenses' }));
+    await user.type(screen.getByRole('textbox', { name: 'What was it for' }), 'Cartage');
+    await user.type(screen.getByRole('spinbutton', { name: 'Amount before tax' }), '4000');
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+
+    expect(await screen.findByText(/Saved EXP-2025-0001 as a draft/)).toBeInTheDocument();
+    post.mockResolvedValueOnce({ data: { id: 'e1', workflowStatus: 'SUBMITTED' } });
+    await user.click(screen.getByRole('button', { name: 'Send for approval' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    expect(post.mock.calls[1]![0]).toBe('/expenses/e1/submit');
+    // And it stops offering to send the same one twice.
+    expect(await screen.findByText(/EXP-2025-0001 has gone for approval/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send for approval' })).not.toBeInTheDocument();
+  });
+
   /** An approved row is nobody's to send again. */
   it('does not offer to send an expense that is already approved', async () => {
     mockGets({
