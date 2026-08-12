@@ -80,6 +80,12 @@ public class Worker extends BaseEntity {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    @Column(name = "deleted_by")
+    private UUID deletedBy;
+
+    @Column(name = "deleted_reason", length = 500)
+    private String deletedReason;
+
     protected Worker() {
     }
 
@@ -212,5 +218,35 @@ public class Worker extends BaseEntity {
 
     public Instant getDeletedAt() {
         return deletedAt;
+    }
+
+    public UUID getDeletedBy() {
+        return deletedBy;
+    }
+
+    public String getDeletedReason() {
+        return deletedReason;
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
+
+    /**
+     * Takes the man off every list, keeping the row and why it went.
+     *
+     * <p>Not the same act as {@link #setActive(boolean)}, and the difference is the point: a
+     * worker marked inactive left the job, and his months still carry wages and count towards
+     * what the site cost. A deleted worker never worked here at all — he is the duplicate, the
+     * name typed into the wrong site, the row that should not exist. Only such a row is
+     * allowed here; {@code WorkerService} refuses one carrying any history.</p>
+     */
+    public void delete(Instant at, UUID by, String reason) {
+        this.deletedAt = at;
+        this.deletedBy = by;
+        this.deletedReason = reason;
+        // He is nobody's man now: leaving him active would keep him in every count that asks
+        // for live workers without filtering the deletion out.
+        this.active = false;
     }
 }

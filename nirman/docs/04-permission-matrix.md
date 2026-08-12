@@ -4,6 +4,8 @@ Permissions are rows in `permissions`, granted to roles in `role_permissions`. N
 
 Legend: **Y** = allowed. **A** = allowed only for assigned sites. **O** = only own records. **—** = denied.
 
+² `worker:write` and `worker:delete` are the two halves of correcting the roll, and they part company at the supervisor. He holds `worker:write` (V6) because he is the one standing at the gate: he takes a man on, and a name or a number he typed wrongly is his own to fix. He does not hold `worker:delete` — removing a name is not a field decision, and the duplicate is spotted at the muster roll by the engineer who verifies it. Deletion is refused outright for any worker carrying attendance, an advance or a ledger posting; such a man is marked **Left**, which keeps his figures. Site scoping applies to both, so an engineer only reaches the men posted to his own sites.
+
 ¹ `attendance:correct` is what separates the two kinds of edit. A row that is draft, rejected or **submitted** is still the supervisor's to change under `attendance:create` — nothing is frozen or paid until verification, so a submitted row waiting in the queue is still only a claim. Once it is **verified** the wage is pinned and posted, so changing it needs `attendance:correct`, a stated reason, and it posts the difference to the worker's ledger as an `ADJUSTMENT`. A **locked** month is closed to both.
 
 | Permission code | Admin | Engineer | Supervisor | Accountant |
@@ -17,7 +19,8 @@ Legend: **Y** = allowed. **A** = allowed only for assigned sites. **O** = only o
 | `masterdata:read` | Y | Y | Y | Y |
 | `masterdata:write` | Y | — | — | — |
 | `worker:read` | Y | A | A | — |
-| `worker:write` | Y | A | — | — |
+| `worker:write` | Y | A | A | — |²
+| `worker:delete` | Y | A | — | — |²
 | `wage:read` | Y | A | — | Y |
 | `wage:write` | Y | — | — | — |
 | `attendance:create` | Y | A | A | — |

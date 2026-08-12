@@ -25,6 +25,14 @@ export interface Worker {
   joiningDate?: string;
   exitDate?: string;
   aadhaarLast4?: string;
+  /*
+    Never shown on this screen, and here because of it: the update call replaces every
+    particular it is given, so anything the edit form does not carry back would be wiped by
+    the act of correcting a man's mobile number.
+  */
+  bankAccountNo?: string;
+  bankIfsc?: string;
+  bankName?: string;
   active: boolean;
   /** Null until the office sets one; a man with no rate cannot be paid. */
   currentWageRate?: WageRate;

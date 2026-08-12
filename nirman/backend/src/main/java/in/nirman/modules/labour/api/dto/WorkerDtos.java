@@ -99,6 +99,15 @@ public final class WorkerDtos {
             @NotNull Long version) {
     }
 
+    /**
+     * Why a worker is being taken off the books. Required, and stored on the row: a name that
+     * disappeared with no explanation is indistinguishable from data loss six months later,
+     * and the person asking is never the person who did it.
+     */
+    public record DeleteWorkerRequest(
+            @NotBlank @Size(max = 500) String reason) {
+    }
+
     // ------------------------------------------------------------------ wage rates
 
     public record WageRateResponse(

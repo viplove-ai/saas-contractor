@@ -11,11 +11,13 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
+import { DeleteRecordDialog } from '../../shared/DeleteRecordDialog';
 import { formatAmount } from '../../shared/formatters';
 import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
 import { useSelectedSite } from '../../shared/siteSelection';
 import { useAuth } from '../auth/AuthContext';
-import { useMySites, useSiteDirectory, useWorkers } from './api';
+import { useDeleteWorker, useMySites, useSiteDirectory, useWorkers } from './api';
+import { EditWorkerDialog } from './EditWorkerDialog';
 import { OnboardWorkerDialog } from './OnboardWorkerDialog';
 import { TransferWorkerDialog } from './TransferWorkerDialog';
 import { WAGE_TYPE_LABEL, type Worker } from './types';
@@ -36,13 +38,19 @@ export function WorkersPage() {
   const [search, setSearch] = useState('');
   const [onboarding, setOnboarding] = useState(false);
   const [transferring, setTransferring] = useState<Worker | null>(null);
+  const [editing, setEditing] = useState<Worker | null>(null);
+  const [deleting, setDeleting] = useState<Worker | null>(null);
 
   const mySites = useMySites();
   // The site the rest of the app is on, and "all my sites" still available beside it.
   const [siteId, setSiteId] = useSelectedSite(mySites.data, { allowAll: true });
   const directory = useSiteDirectory();
   const workers = useWorkers(siteId, search);
+  const removeWorker = useDeleteWorker();
   const canWrite = hasPermission('worker:write');
+  // The engineer and the office, never the supervisor: he corrects what he typed, but taking
+  // a name off the roll is not a decision made at a gate.
+  const canDelete = hasPermission('worker:delete');
   // A man is taken on *at* a site, so with no posting there is nowhere to put him. Wait for
   // the answer before deciding that — an empty list while loading is not the same as none.
   const noPosting = mySites.isSuccess && mySites.data.length === 0;
@@ -105,7 +113,7 @@ export function WorkersPage() {
         />
       ),
     },
-    ...(canWrite
+    ...(canWrite || canDelete
       ? [
           {
             key: 'actions',
@@ -113,13 +121,27 @@ export function WorkersPage() {
             align: 'right' as const,
             card: 'actions' as const,
             cell: (worker: Worker) => (
-              <Button
-                size="small"
-                onClick={() => setTransferring(worker)}
-                disabled={!worker.currentSiteId}
-              >
-                Transfer
-              </Button>
+              <Stack direction="row" spacing={1} justifyContent="flex-end">
+                {canWrite && (
+                  <>
+                    <Button size="small" onClick={() => setEditing(worker)}>
+                      Edit
+                    </Button>
+                    <Button
+                      size="small"
+                      onClick={() => setTransferring(worker)}
+                      disabled={!worker.currentSiteId}
+                    >
+                      Transfer
+                    </Button>
+                  </>
+                )}
+                {canDelete && (
+                  <Button size="small" color="error" onClick={() => setDeleting(worker)}>
+                    Delete
+                  </Button>
+                )}
+              </Stack>
             ),
           },
         ]
@@ -210,7 +232,25 @@ export function WorkersPage() {
         defaultSiteId={siteId}
         onClose={() => setOnboarding(false)}
       />
+      <EditWorkerDialog worker={editing} onClose={() => setEditing(null)} />
       <TransferWorkerDialog worker={transferring} onClose={() => setTransferring(null)} />
+      <DeleteRecordDialog
+        open={deleting !== null}
+        kind="worker"
+        label={`${deleting?.fullName ?? ''} (${deleting?.workerCode ?? ''})`}
+        /*
+          Not the register's own story, so it is spelled out. There is no deleted list for
+          workers and no restore, because what survives the server's check is a row nobody
+          ever used — and the honest answer to "can I put him back" is that you take him on
+          again, which is one screen away. Saying an administrator can restore him would be
+          a lie, and this dialog says so by default.
+        */
+        description="This is for a man who should not be on the roll at all — the same worker entered twice, or a name typed into the wrong site. A man who worked here and has gone is marked Left instead, which keeps his days and his wages. Deleting him takes him off every list for good; take him on again if he turns up."
+        onConfirm={(reason) =>
+          removeWorker.mutateAsync({ workerId: deleting?.id ?? '', reason })
+        }
+        onClose={() => setDeleting(null)}
+      />
     </Stack>
   );
 }

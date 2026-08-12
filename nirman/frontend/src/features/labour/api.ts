@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../shared/apiClient';
 import type {
   Allocation,
+  EmploymentType,
   PageResponse,
   SiteDirectoryEntry,
   SkillCategory,
+  WageType,
   Worker,
 } from './types';
 
@@ -92,6 +94,64 @@ export function useOnboardWorker() {
       ).data,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: labourKeys.allWorkers });
+    },
+  });
+}
+
+/**
+ * Correcting a worker. Every particular the server holds travels back, changed or not: the
+ * update call replaces the row rather than patching it, so a field left out is a field
+ * cleared. The dialog reads the unchanged ones straight off the worker it was opened on.
+ */
+export interface UpdateWorkerInput {
+  id: string;
+  fullName: string;
+  mobile?: string | undefined;
+  skillCategoryId?: string | undefined;
+  employmentType: EmploymentType;
+  labourSupplierId?: string | undefined;
+  wageType: WageType;
+  joiningDate?: string | undefined;
+  exitDate?: string | undefined;
+  aadhaarLast4?: string | undefined;
+  bankAccountNo?: string | undefined;
+  bankIfsc?: string | undefined;
+  bankName?: string | undefined;
+  active: boolean;
+  /** The version read with the row. A stale one is a 409, not a silent overwrite. */
+  version: number;
+}
+
+export function useUpdateWorker() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...body }: UpdateWorkerInput) =>
+      (await apiClient.put<Worker>(`/workers/${id}`, body)).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: labourKeys.allWorkers });
+      // His name is on the roster the marking screen draws, and it is cached offline.
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'roster'] });
+    },
+  });
+}
+
+/**
+ * Takes a man off the books. The server refuses one who has been marked, paid or advanced
+ * anything and says what is holding him, which is the answer that changes the engineer's
+ * mind — so the refusal is shown in the dialog rather than swallowed.
+ */
+export function useDeleteWorker() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { workerId: string; reason: string }) =>
+      (
+        await apiClient.delete<Worker>(`/workers/${input.workerId}`, {
+          data: { reason: input.reason },
+        })
+      ).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: labourKeys.allWorkers });
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'roster'] });
     },
   });
 }

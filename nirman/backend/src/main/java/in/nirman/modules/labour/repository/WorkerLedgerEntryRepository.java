@@ -11,6 +11,9 @@ import java.util.UUID;
 
 public interface WorkerLedgerEntryRepository extends JpaRepository<WorkerLedgerEntry, UUID> {
 
+    /** What this man's account has posted, counted before he can be deleted. */
+    long countByWorkerId(UUID workerId);
+
     /**
      * The idempotency check behind "verifying twice must not pay twice". Backed by
      * {@code uq_wle_attendance_posting}, so a race that slips past this check still fails

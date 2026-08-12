@@ -15,7 +15,10 @@ import in.nirman.modules.labour.domain.WageRate;
 import in.nirman.modules.labour.domain.WageType;
 import in.nirman.modules.labour.domain.Worker;
 import in.nirman.modules.labour.domain.WorkerSiteAllocation;
+import in.nirman.modules.labour.repository.AttendanceRecordRepository;
 import in.nirman.modules.labour.repository.WageRateRepository;
+import in.nirman.modules.labour.repository.WorkerAdvanceRepository;
+import in.nirman.modules.labour.repository.WorkerLedgerEntryRepository;
 import in.nirman.modules.labour.repository.WorkerRepository;
 import in.nirman.modules.labour.repository.WorkerSiteAllocationRepository;
 import in.nirman.modules.project.service.SiteLookup;
@@ -29,7 +32,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +61,12 @@ public class WorkerService {
     private final WorkerRepository workers;
     private final WageRateRepository wageRates;
     private final WorkerSiteAllocationRepository allocations;
+    // Read only, and only ever counted: what has been recorded against a man is what decides
+    // whether he can be deleted. All three are this module's own tables, so no *Lookup is
+    // needed — the boundary rule is about reaching into another module, not into this one.
+    private final AttendanceRecordRepository attendance;
+    private final WorkerAdvanceRepository workerAdvances;
+    private final WorkerLedgerEntryRepository ledger;
     private final SiteLookup sites;
     private final SiteAccessGuard siteAccessGuard;
     private final CurrentUserProvider currentUser;
@@ -63,12 +74,18 @@ public class WorkerService {
     private final DocumentNumberService documentNumbers;
 
     public WorkerService(WorkerRepository workers, WageRateRepository wageRates,
-                         WorkerSiteAllocationRepository allocations, SiteLookup sites,
+                         WorkerSiteAllocationRepository allocations,
+                         AttendanceRecordRepository attendance,
+                         WorkerAdvanceRepository workerAdvances,
+                         WorkerLedgerEntryRepository ledger, SiteLookup sites,
                          SiteAccessGuard siteAccessGuard, CurrentUserProvider currentUser,
                          AuditService audit, DocumentNumberService documentNumbers) {
         this.workers = workers;
         this.wageRates = wageRates;
         this.allocations = allocations;
+        this.attendance = attendance;
+        this.workerAdvances = workerAdvances;
+        this.ledger = ledger;
         this.sites = sites;
         this.siteAccessGuard = siteAccessGuard;
         this.currentUser = currentUser;
@@ -190,6 +207,74 @@ public class WorkerService {
                 Map.of("fullName", worker.getFullName(), "wageType", worker.getWageType().name(),
                         "active", worker.isActive()), null);
         return toResponse(worker);
+    }
+
+    /**
+     * Takes a man off the books, which is not the same as ending his employment.
+     *
+     * <p>Deletion here is for a row that should not exist — the same man entered twice at the
+     * gate under two numbers, a name typed into the wrong site. A man who actually worked and
+     * has gone is marked <em>Left</em>, and stays visible on purpose: his months carry wages
+     * that have already been reported, and hiding him would quietly change what the site cost.
+     * {@link #assertDeletable} is what keeps the two apart, and it names what is holding him so
+     * the answer is actionable rather than a flat refusal.</p>
+     *
+     * <p>His pay history and his postings stay where they are. They are the scaffolding of a
+     * worker rather than records against him, they are unreachable once he is deleted, and
+     * removing them would be the one part of this act that could not be undone by hand.</p>
+     */
+    @PreAuthorize("hasAuthority('worker:delete')")
+    public WorkerResponse delete(UUID id, String reason) {
+        // Also the IDOR fence: an engineer deletes on his own sites, not on an id he guessed.
+        Worker worker = requireWorker(id);
+        assertDeletable(worker);
+        Instant at = Instant.now();
+        worker.delete(at, currentUser.currentUserIdOrNull(), reason);
+        audit.record("WORKER", id, "DELETE",
+                Map.of("workerCode", worker.getWorkerCode(), "fullName", worker.getFullName()),
+                Map.of("deletedAt", at.toString(), "reason", reason), reason);
+        return toResponse(worker);
+    }
+
+    /**
+     * Refuses a worker anything has been recorded against, in the words the refusal will be
+     * read in.
+     *
+     * <p>Ordered by how much it matters: attendance first, because that is what freezes a wage
+     * rate into last month's labour cost. Advances and ledger postings follow — a man who has
+     * been paid has a balance, and a balance for a worker nobody can open is a figure that can
+     * never be settled.</p>
+     */
+    private void assertDeletable(Worker worker) {
+        List<String> found = new ArrayList<>();
+        long days = attendance.countByWorkerId(worker.getId());
+        if (days > 0) {
+            found.add(days + (days == 1 ? " attendance record" : " attendance records"));
+        }
+        long advances = workerAdvances.countByWorkerId(worker.getId());
+        if (advances > 0) {
+            found.add(advances + (advances == 1 ? " advance" : " advances"));
+        }
+        long postings = ledger.countByWorkerId(worker.getId());
+        if (postings > 0) {
+            found.add(postings + (postings == 1 ? " ledger entry" : " ledger entries"));
+        }
+        if (found.isEmpty()) {
+            return;
+        }
+        throw new BusinessException("worker.has-records",
+                "This worker has " + join(found) + " recorded against him. A man who has worked "
+                        + "cannot be taken off the books — mark him Left instead, which stops him "
+                        + "appearing on the roll and keeps his figures.");
+    }
+
+    /** "3 attendance records and 1 advance", not "3 attendance records, 1 advance". */
+    private static String join(List<String> parts) {
+        if (parts.size() == 1) {
+            return parts.get(0);
+        }
+        return String.join(", ", parts.subList(0, parts.size() - 1))
+                + " and " + parts.get(parts.size() - 1);
     }
 
     // ------------------------------------------------------------------ wage rates

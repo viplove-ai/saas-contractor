@@ -4,6 +4,7 @@ import in.nirman.common.PageResponse;
 import in.nirman.modules.labour.api.dto.WorkerDtos.AllocateRequest;
 import in.nirman.modules.labour.api.dto.WorkerDtos.AllocationResponse;
 import in.nirman.modules.labour.api.dto.WorkerDtos.CreateWorkerRequest;
+import in.nirman.modules.labour.api.dto.WorkerDtos.DeleteWorkerRequest;
 import in.nirman.modules.labour.api.dto.WorkerDtos.ReviseWageRequest;
 import in.nirman.modules.labour.api.dto.WorkerDtos.UpdateWorkerRequest;
 import in.nirman.modules.labour.api.dto.WorkerDtos.WageRateResponse;
@@ -15,6 +16,7 @@ import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -65,9 +67,17 @@ public class WorkerController {
     }
 
     @PutMapping("/{id}")
+    @Operation(summary = "Correct a worker's particulars. Pay is not here — that is a revision.")
     public WorkerResponse update(@PathVariable UUID id,
                                  @Valid @RequestBody UpdateWorkerRequest request) {
         return workerService.update(id, request);
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Delete a worker. Refused if anything has been recorded against him.")
+    public WorkerResponse delete(@PathVariable UUID id,
+                                 @Valid @RequestBody DeleteWorkerRequest request) {
+        return workerService.delete(id, request.reason());
     }
 
     @GetMapping("/{id}/wage-rates")

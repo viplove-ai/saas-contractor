@@ -17,6 +17,13 @@ import java.util.UUID;
 public interface AttendanceRecordRepository extends JpaRepository<AttendanceRecord, UUID> {
 
     /**
+     * Whether this man has ever been on a muster roll — the first question asked before he can
+     * be deleted. Cancelled rows count: somebody stood at a gate and marked him, which is not
+     * what a row entered by mistake looks like.
+     */
+    long countByWorkerId(UUID workerId);
+
+    /**
      * The live row for a worker on a day, if any. Cancelled rows are excluded to match
      * {@code uq_attendance_worker_site_date}, so a mistaken entry can be cancelled and
      * re-entered without deleting history.

@@ -16,6 +16,9 @@ public interface WorkerAdvanceRepository extends JpaRepository<WorkerAdvance, UU
 
     Optional<WorkerAdvance> findByIdAndOrgId(UUID id, UUID orgId);
 
+    /** Money handed to this man, counted before he can be deleted. */
+    long countByWorkerId(UUID workerId);
+
     /**
      * {@code siteIds} is the caller's scope, separate from the {@code siteId} filter: one is
      * what they asked for, the other is what they may have, and an unfiltered request must
