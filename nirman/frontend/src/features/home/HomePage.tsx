@@ -84,6 +84,9 @@ const GROUPS: Group[] = [
     hint: 'Who works here, what they work on, and where the material is kept',
     tiles: [
       { title: 'Members', to: '/users', permission: 'user:read' },
+      // Members administers logins; Staff administers people. Different permission, because
+      // an office manager may one day need the second without the first.
+      { title: 'Staff records', to: '/staff', permission: 'staff:read' },
       { title: 'Projects', to: '/projects', permission: 'project:write' },
       { title: 'Sites', to: '/sites', permission: 'site:write' },
       // A site arrives with its own store, so this tile is for the second one and the
