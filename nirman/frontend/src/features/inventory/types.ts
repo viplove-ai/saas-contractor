@@ -192,6 +192,45 @@ export interface Issue {
   lines: IssueLineResponse[];
 }
 
+/**
+ * A machine standing at a site.
+ *
+ * <p>Not stock, and deliberately a separate register: stock is consumed and a mixer is held,
+ * so a ledger posting would report the mixer as used up by the slab it poured. What it shares
+ * with stock is a store, because "somewhere at the site" is not an answer.</p>
+ */
+/** Only what a picker needs: the register itself lives in the vendors feature. */
+export interface Vendor {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export type EquipmentOwnership = 'OWNED' | 'HIRED';
+export type EquipmentCondition = 'WORKING' | 'IDLE' | 'UNDER_REPAIR';
+export type EquipmentStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
+
+export interface Equipment {
+  id: string;
+  siteId: string;
+  storeId: string;
+  storeName?: string;
+  name: string;
+  assetCode?: string;
+  quantity: number;
+  ownership: EquipmentOwnership;
+  condition: EquipmentCondition;
+  supplierId?: string;
+  supplierName?: string;
+  remarks?: string;
+  /** PENDING until the office accepts it. Anybody at the site may enter a machine. */
+  status: EquipmentStatus;
+  decidedAt?: string;
+  decisionRemarks?: string;
+  createdAt: string;
+  version: number;
+}
+
 /** The backend's uniform pagination envelope. */
 export interface PageResponse<T> {
   content: T[];

@@ -8,6 +8,8 @@ import {
   Paper,
   Stack,
   Switch,
+  Tab,
+  Tabs,
   Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
@@ -16,6 +18,7 @@ import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatQuantity } from '../../shared/formatters';
 import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
 import { useLedger, useStock } from './api';
+import { EquipmentPanel } from './EquipmentPanel';
 import { StorePicker } from './StorePicker';
 import type { LedgerRow, StockRow, TxnType } from './types';
 
@@ -51,6 +54,7 @@ export function StockPage() {
   const [asOf, setAsOf] = useState(today());
   const [lowOnly, setLowOnly] = useState(false);
   const [openRow, setOpenRow] = useState<StockRow | null>(null);
+  const [tab, setTab] = useState<'MATERIAL' | 'EQUIPMENT'>('MATERIAL');
 
   const stock = useStock(storeId || undefined, lowOnly);
 
@@ -122,6 +126,25 @@ export function StockPage() {
         dateLabel="As at"
       />
 
+      {/*
+        Two registers at one store, kept apart because they are two kinds of fact. Material
+        is consumed and the ledger says what is left; plant is held, and the same mixer is
+        here in March and in June. One list carrying both would have to answer "how much is
+        left" about a machine.
+      */}
+      <Tabs
+        value={tab}
+        onChange={(_event, next: 'MATERIAL' | 'EQUIPMENT') => setTab(next)}
+        aria-label="What is at this store"
+      >
+        <Tab value="MATERIAL" label="Material" />
+        <Tab value="EQUIPMENT" label="Equipment" />
+      </Tabs>
+
+      {tab === 'EQUIPMENT' && <EquipmentPanel storeId={storeId} />}
+
+      {tab === 'MATERIAL' && (
+        <>
       <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
         <FormControlLabel
           control={
@@ -152,6 +175,8 @@ export function StockPage() {
           onRowClick={setOpenRow}
           ariaLabel="Stock"
         />
+      )}
+        </>
       )}
 
       <Drawer

@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../shared/apiClient';
 import type {
   BoqItem,
+  Equipment,
+  EquipmentCondition,
+  EquipmentOwnership,
   Issue,
   LedgerRow,
   Material,
@@ -11,6 +14,7 @@ import type {
   StockPosition,
   Store,
   Unit,
+  Vendor,
 } from './types';
 
 export const inventoryKeys = {
@@ -29,6 +33,9 @@ export const inventoryKeys = {
   allReceipts: ['inventory', 'receipts'] as const,
   issues: (storeId: string, status: string) => ['inventory', 'issues', storeId, status] as const,
   allIssues: ['inventory', 'issues'] as const,
+  equipment: (storeId: string) => ['inventory', 'equipment', storeId] as const,
+  allEquipment: ['inventory', 'equipment'] as const,
+  vendors: ['vendors'] as const,
 };
 
 /** Reference data changes about once a quarter; refetching it per screen is waste. */
@@ -242,6 +249,107 @@ export function useIssues(storeId: string | undefined, status: string) {
         })
       ).data,
     enabled: Boolean(storeId),
+  });
+}
+
+// ---------------------------------------------------------------- equipment
+
+/**
+ * The suppliers, for saying who a hired machine came from. Its own copy rather than the
+ * expense module's: features do not import one another, and the query key is shared so the
+ * two screens still hit the cache once between them.
+ */
+export function useVendors() {
+  return useQuery({
+    queryKey: inventoryKeys.vendors,
+    queryFn: async () =>
+      (await apiClient.get<PageResponse<Vendor>>('/vendors', { params: { size: 200 } })).data
+        .content,
+    staleTime: REFERENCE_STALE_TIME,
+  });
+}
+
+/**
+ * The plant standing at one store, pending entries included.
+ *
+ * <p>Pending rows are in the list rather than hidden until somebody accepts them: the man who
+ * entered the mixer needs to see that he did, or he enters it again on Thursday.</p>
+ */
+export function useEquipment(storeId: string | undefined) {
+  return useQuery({
+    queryKey: inventoryKeys.equipment(storeId ?? ''),
+    queryFn: async () =>
+      (await apiClient.get<Equipment[]>('/inventory/equipment', { params: { storeId } })).data,
+    enabled: Boolean(storeId),
+  });
+}
+
+export interface EquipmentInput {
+  id: string;
+  storeId: string;
+  name: string;
+  assetCode?: string | undefined;
+  quantity: number;
+  ownership: EquipmentOwnership;
+  condition: EquipmentCondition;
+  supplierId?: string | undefined;
+  remarks?: string | undefined;
+}
+
+/**
+ * Enters a machine. The id is generated on the device, so an entry typed in a yard with no
+ * signal and sent three times is one machine.
+ */
+export function useAddEquipment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: EquipmentInput) =>
+      (await apiClient.post<Equipment>('/inventory/equipment', input)).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inventoryKeys.allEquipment });
+    },
+  });
+}
+
+/** The office accepting a machine onto the register, or saying it is not there. */
+export function useDecideEquipment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; action: 'ACCEPT' | 'REJECT'; remarks?: string }) =>
+      (
+        await apiClient.post<Equipment>(`/inventory/equipment/${input.id}/decision`, {
+          action: input.action,
+          remarks: input.remarks || undefined,
+        })
+      ).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inventoryKeys.allEquipment });
+    },
+  });
+}
+
+export function useUpdateEquipment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: EquipmentInput & { version: number }) => {
+      const { id, ...body } = input;
+      return (await apiClient.put<Equipment>(`/inventory/equipment/${id}`, body)).data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inventoryKeys.allEquipment });
+    },
+  });
+}
+
+export function useDeleteEquipment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient.delete(`/inventory/equipment/${id}`);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inventoryKeys.allEquipment });
+    },
   });
 }
 
