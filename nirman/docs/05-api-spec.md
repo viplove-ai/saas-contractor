@@ -69,6 +69,24 @@ an issue, a transfer or a stock count has ever named; a store that is finished w
 
 ### /materials, /inventory
 `GET|POST /materials`, `GET|PUT /materials/{id}`, `GET|POST /materials/{id}/conversions`, `GET /units`.
+`POST /materials/field` names a material at the gate from a name and a unit
+(`masterdata:provisional`); the row is marked provisional and a name the organisation already
+holds comes back rather than being duplicated.
+
+### /vendors, /expense-categories
+`GET|POST /vendors` (`?type&active&q`), `GET|PUT /vendors/{id}` — `vendor:write`, not
+`masterdata:write`, because onboarding a dealer is the accountant's work.
+
+**Nobody types a supplier code.** `code` on the POST is optional and every screen leaves it
+out; the server derives one from what he supplies and what he is called — `MAT-SHIVSHAKTI`,
+`TRN-KUMAONCARRIERS` — appending `-2` for a second firm of the same name and falling back to
+the `VEN-<year>-<n>` counter for a name with nothing usable in it. A code that *is* sent is
+kept, for an organisation migrating a register whose codes already mean something.
+
+`GET|POST /expense-categories` is the office's taxonomy. `POST /expense-categories/field`
+takes a name alone (`masterdata:provisional:head`) and is what the "Other" answer on the
+add-expense screen posts: the head is marked provisional with neither cost flag set, and a
+name already on file comes back rather than becoming a second line of the same report.
 
 | Method | Path | Notes |
 |---|---|---|
@@ -93,6 +111,10 @@ an issue, a transfer or a stock count has ever named; a store that is finished w
 | POST | `/inventory/adjustments` | admin only, signed, reason mandatory |
 | GET | `/inventory/stock` | `?storeId&siteId&materialId&lowOnly` current qty, avg rate, value, in transit |
 | GET | `/inventory/ledger` | `?storeId&materialId&from&to` append-only movement, oldest first |
+| GET|POST | `/inventory/equipment` | plant held at a store — **not stock**, nothing here touches the ledger. `?siteId&storeId&status`. POST is idempotent on the client id and needs `equipment:create`; the row is PENDING unless the caller may accept it |
+| GET | `/inventory/equipment/{id}` | |
+| POST | `/inventory/equipment/{id}/decision` | `{action:ACCEPT\|REJECT,remarks}` — `equipment:approve`, admin only |
+| PUT|DELETE | `/inventory/equipment/{id}` | `equipment:write`, admin only. DELETE is soft |
 
 ### /material-estimates
 `GET|POST /material-estimates` (`?projectId&materialId&level`) — a repeat for the same scope

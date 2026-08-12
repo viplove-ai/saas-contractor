@@ -165,6 +165,19 @@ if the tests pass:
   two apart once the report is frozen. The screen calls this **external labour** and no
   longer asks which contractor supplied it; the column is still stored and still carried
   through a re-save, waiting on contractor onboarding.
+- **Plant is held, not consumed.** A mixer is at the site in March and in June, so
+  `site_equipment` is its own register and no equipment row ever reaches
+  `stock_transactions` — a posting would report the mixer as used up by the slab it poured
+  and leave the store's balance claiming there is nothing to pour with. Anybody posted to the
+  site may enter a machine (`equipment:create`) and only an administrator accepts it
+  (`equipment:approve`), corrects it or removes it (`equipment:write`); an administrator's own
+  entry arrives accepted, because a queue of his own rows is one he learns to click through.
+- **The field may name a thing, never value it.** A material off a challan
+  (`POST /materials/field`) and an expense head off a bill (`POST /expense-categories/field`)
+  both create real rows marked `provisional`, both refuse everything that carries a number or
+  a consequence — rate, HSN, the two expense cost flags — and both answer a name the
+  organisation already holds with the row it already holds, because two rows for one thing
+  split one figure into two that never add up.
 - **A site is never without a store.** `SiteService.create` gives every new site one, named
   `site-<site code>` after it, because a store is not a decision anybody was making and an
   empty store picker strands a lorry at the gate. The Stores screen is for the second store
@@ -186,6 +199,15 @@ form and the offline draft, routes, and components used only by that feature.
 `shared/apiClient.ts` — a 401 triggers exactly **one** refresh attempt shared by every request
 that raced into the failure. The shared promise is load-bearing: rotating the refresh token
 twice reads as theft to the server and revokes the whole family.
+
+`shared/siteSelection.ts` — **the selected site is app-wide, not per screen.** Every screen
+with a site picker calls `useSelectedSite(sites)` and gets back the `[value, onChange]` pair a
+`useState` used to give it; the choice is shared through one store, persisted in
+`localStorage`, and dropped by `forgetSession` because a site handset changes hands. Screens
+that can also show every site pass `{ allowAll: true }`, and choosing "every site" there is
+local — widening a register for a minute is not a statement about where somebody is working.
+The id is a convenience and never an authorisation: every request carrying it is scoped by
+`SiteAccessGuard` on the way through.
 
 `offline/` — Dexie queue, `saveOrQueue.ts` is the entry point for any mutation that must
 survive no signal. A record that has gone out is marked as gone out and is not resent. A
@@ -252,6 +274,11 @@ gate does not wait for the office. `POST /materials/field` lets somebody holding
 `materials.provisional` until an administrator edits it, and a name the org already holds comes
 back as the material it already holds rather than as a second row — two rows for one cement
 would split its stock into two balances, neither of them the amount in the shed.
+
+`V24` and `V25` are the same argument in two places: the field has to be able to say a thing
+exists without being able to price it. `V24` adds `expense_categories.provisional` and
+`masterdata:provisional:head` (V15's twin, one screen along); `V25` adds `site_equipment` and
+its four permissions.
 
 Hibernate is `ddl-auto: validate`. Flyway owns the schema; an entity that drifts from a
 migration fails at startup.
