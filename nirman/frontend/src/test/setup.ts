@@ -51,6 +51,19 @@ if (typeof globalThis.localStorage === 'undefined') {
 }
 
 /**
+ * jsdom implements neither half of the object-URL API, and the daily report's photograph card
+ * makes one per thumbnail the moment a file is picked. Without these, any screen carrying that
+ * card throws inside an effect and takes the whole screen's test file down with it — a long way
+ * from the cause.
+ *
+ * <p>Stubs rather than a real implementation: nothing under test reads the bytes back out, and
+ * a jsdom `<img>` never fetches the URL anyway. What the tests assert is that a thumbnail was
+ * rendered for each file and that clicking one opens it.</p>
+ */
+URL.createObjectURL ??= () => 'blob:test';
+URL.revokeObjectURL ??= () => {};
+
+/**
  * jsdom has no ResizeObserver, and recharts' ResponsiveContainer constructs one on mount —
  * so any screen with a chart on it renders as an empty div and every assertion against that
  * screen fails for a reason that has nothing to do with the screen.

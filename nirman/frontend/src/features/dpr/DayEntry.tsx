@@ -2,8 +2,13 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import {
   Alert,
+  Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControlLabel,
   IconButton,
   MenuItem,
@@ -840,11 +845,32 @@ export function PhotoCard({
   files,
   onChange,
   uploaded,
+  siteCode,
+  reportDate,
 }: {
   files: File[];
   onChange: (files: File[]) => void;
   uploaded: number;
+  /** The site the day belongs to, which is half of what a photograph has to be named after. */
+  siteCode: string | undefined;
+  reportDate: string;
 }) {
+  const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
+
+  /**
+   * Object URLs for the thumbnails, made once per set of files and revoked when it changes.
+   *
+   * <p>Kept in state rather than derived on every render: a URL minted inside the render
+   * body is a new URL each time, which restarts the decode of every thumbnail on each
+   * keystroke elsewhere on the page and leaks each of the ones it replaced.</p>
+   */
+  const [thumbnails, setThumbnails] = useState<string[]>([]);
+  useEffect(() => {
+    const urls = files.map((file) => URL.createObjectURL(file));
+    setThumbnails(urls);
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, [files]);
+
   return (
     <Card
       title="Photographs"
@@ -861,27 +887,112 @@ export function PhotoCard({
           onChange={(event) => {
             const picked = Array.from(event.target.files ?? []);
             if (picked.length > 0) {
-              onChange([...files, ...picked]);
+              onChange([
+                ...files,
+                ...picked.map((file, at) =>
+                  renamed(file, siteCode, reportDate, uploaded + files.length + at + 1),
+                ),
+              ]);
             }
             event.target.value = '';
           }}
         />
       </Button>
 
+      {/*
+        Thumbnails rather than a row of file names. IMG_20260812_104533.jpg is what the camera
+        called it and says nothing about which wall it is; the picture says it at a glance, and
+        the wrong one picked off a phone gallery is caught here rather than on a report the
+        office is reading a week later.
+      */}
       {files.length > 0 && (
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+        <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
           {files.map((file, index) => (
-            <Chip
-              key={`${file.name}-${index}`}
-              label={file.name}
-              onDelete={() => onChange(files.filter((_, at) => at !== index))}
-              variant="outlined"
-            />
+            <Stack key={`${file.name}-${index}`} spacing={0.5} sx={{ width: 108 }}>
+              <Box sx={{ position: 'relative' }}>
+                <Box
+                  component="img"
+                  src={thumbnails[index]}
+                  alt={file.name}
+                  onClick={() =>
+                    thumbnails[index] &&
+                    setPreview({ url: thumbnails[index]!, name: file.name })
+                  }
+                  sx={{
+                    width: 108,
+                    height: 108,
+                    objectFit: 'cover',
+                    borderRadius: 1,
+                    border: 1,
+                    borderColor: 'divider',
+                    cursor: 'pointer',
+                    display: 'block',
+                  }}
+                />
+                <IconButton
+                  aria-label={`Remove ${file.name}`}
+                  onClick={() => onChange(files.filter((_, at) => at !== index))}
+                  size="small"
+                  sx={{
+                    position: 'absolute',
+                    top: 2,
+                    right: 2,
+                    bgcolor: 'background.paper',
+                    border: 1,
+                    borderColor: 'divider',
+                    '&:hover': { bgcolor: 'background.paper' },
+                  }}
+                >
+                  <DeleteOutlineIcon fontSize="small" />
+                </IconButton>
+              </Box>
+              <Typography variant="caption" color="text.secondary" noWrap title={file.name}>
+                {file.name}
+              </Typography>
+            </Stack>
           ))}
         </Stack>
       )}
+
+      <Dialog open={Boolean(preview)} onClose={() => setPreview(null)} fullWidth maxWidth="md">
+        <DialogTitle sx={{ fontSize: '1rem' }}>{preview?.name}</DialogTitle>
+        <DialogContent>
+          {preview && (
+            <Box
+              component="img"
+              src={preview.url}
+              alt={preview.name}
+              sx={{ width: '100%', height: 'auto', display: 'block' }}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPreview(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
+}
+
+/**
+ * The photograph, renamed after the site and the day it belongs to.
+ *
+ * <p>A phone calls it {@code IMG_20260812_104533.jpg} — or {@code image.jpg}, four times over
+ * — and that name is what the office sees against the report and what lands in the bucket.
+ * {@code KSN-A-2026-08-12-3.jpg} says which site, which day and which of the day's pictures
+ * it is, without anybody having to open it.</p>
+ *
+ * <p>Renamed at the moment it is picked rather than at upload, so the name under the
+ * thumbnail is the name that goes up. The extension is kept from the original; compression
+ * changes it to jpg later if it re-encodes.</p>
+ */
+function renamed(file: File, siteCode: string | undefined, reportDate: string, index: number): File {
+  const extension = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.') + 1) : 'jpg';
+  const site = (siteCode ?? 'SITE').replace(/[^A-Za-z0-9-]+/g, '');
+  const name = `${site}-${reportDate}-${index}.${extension.toLowerCase()}`;
+  // A new File rather than a mutation: File.name is read-only, and everything downstream —
+  // the compressor, the upload queue, the attachment row — reads it from here.
+  return new File([file], name, { type: file.type, lastModified: file.lastModified });
 }
 
 // ------------------------------------------------------------------ shared frame
