@@ -437,10 +437,22 @@ public class ExpenseService {
         }
     }
 
+    /**
+     * The org's expense policy, or the default one if nobody has written a row yet.
+     *
+     * <p>This used to throw, and the effect was that an organisation whose settings row had
+     * never been inserted could not book an expense at all — the draft save is the first thing
+     * that reads the row, and it reads it only to ask whether duplicate checking is on, so the
+     * author was told "expense settings have not been configured" about a setting no screen in
+     * the app creates. The row exists nowhere but the dev seed, which the prod profile never
+     * loads. Both fields read here have a default declared twice already (the column defaults
+     * in V1 and the field initialisers on the entity), so returning them is the same answer an
+     * inserted row would have given. V28 backfills the row for organisations that lack it;
+     * this is what keeps a future organisation from meeting the same wall on its first
+     * expense.</p>
+     */
     private ExpenseSettings settings() {
-        return settings.findByOrgId(orgId())
-                .orElseThrow(() -> new BusinessException("expense.settings-missing",
-                        "Expense settings have not been configured for this organisation."));
+        return settings.findByOrgId(orgId()).orElseGet(() -> new ExpenseSettings(orgId()));
     }
 
     private Expense require(UUID id) {

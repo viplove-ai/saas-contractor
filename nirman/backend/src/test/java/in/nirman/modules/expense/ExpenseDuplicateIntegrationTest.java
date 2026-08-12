@@ -203,6 +203,34 @@ class ExpenseDuplicateIntegrationTest extends AbstractIntegrationTest {
         assertThat(rows).isEqualTo(1);
     }
 
+    /**
+     * The duplicate check is the first thing a draft save reads the settings row for, and an
+     * organisation that has no row must still be able to book an expense.
+     *
+     * <p>The row is inserted nowhere but the dev seed, which the prod profile never loads, and
+     * no screen in the app creates one — so a deployed organisation had none and was told, on
+     * its first expense, that "expense settings have not been configured". V28 backfills the
+     * row; this covers the other half, which is that the absence of one is not an error in the
+     * first place. The default is the same threshold the column and the entity both declare.</p>
+     */
+    @Test
+    @DisplayName("an organisation with no settings row still books an expense, on the defaults")
+    void missingSettingsRowFallsBackToTheDefaults() throws Exception {
+        String uttam = loginToken("uttam");
+        jdbc.update("DELETE FROM expense_settings WHERE org_id = ?::uuid", orgId());
+        try {
+            create(uttam, "SS/904", "8500", LocalDate.now(), vendorId(), false, null)
+                    .andExpect(status().isCreated());
+
+            // Still the default policy, not a check silently switched off: the same bill again
+            // collides exactly as it would have with a row on file.
+            create(uttam, "SS/904", "8500", LocalDate.now(), vendorId(), false, null)
+                    .andExpect(status().isConflict());
+        } finally {
+            jdbc.update("INSERT INTO expense_settings (org_id) VALUES (?::uuid)", orgId());
+        }
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private ResultActions create(String token, String billNumber, String amount, LocalDate date,
@@ -235,6 +263,11 @@ class ExpenseDuplicateIntegrationTest extends AbstractIntegrationTest {
     private String number(MvcResult result) throws Exception {
         return objectMapper.readTree(result.getResponse().getContentAsString())
                 .get("expenseNumber").asText();
+    }
+
+    private String orgId() {
+        return jdbc.queryForObject("SELECT org_id FROM vendors WHERE code = ?", String.class,
+                VENDOR_SHRI_JI);
     }
 
     private String vendorId() {

@@ -147,8 +147,8 @@ public class ExpenseLookupService implements ExpenseLookup {
     @Override
     public int missingEvidenceCount(UUID siteId, LocalDate from, LocalDate to) {
         BigDecimal threshold = settings.findByOrgId(orgId())
-                .map(ExpenseSettings::getBillRequiredAbove)
-                .orElse(BigDecimal.ZERO);
+                .orElseGet(() -> new ExpenseSettings(orgId()))
+                .getBillRequiredAbove();
         return (int) expenses.findForPeriod(orgId(), siteId, from, to).stream()
                 .filter(expense -> expense.getTotalAmount().compareTo(threshold) > 0)
                 .filter(expense -> !hasBillNumber(expense.getBillNumber()))
