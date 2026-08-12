@@ -3,6 +3,7 @@ package in.nirman.modules.inventory.api;
 import in.nirman.modules.inventory.api.dto.EquipmentDtos.CreateEquipmentRequest;
 import in.nirman.modules.inventory.api.dto.EquipmentDtos.DecideEquipmentRequest;
 import in.nirman.modules.inventory.api.dto.EquipmentDtos.EquipmentResponse;
+import in.nirman.modules.inventory.api.dto.EquipmentDtos.SetEquipmentPhotoRequest;
 import in.nirman.modules.inventory.api.dto.EquipmentDtos.UpdateEquipmentRequest;
 import in.nirman.modules.inventory.domain.SiteEquipment;
 import in.nirman.modules.inventory.service.SiteEquipmentService;
@@ -81,6 +82,17 @@ public class EquipmentController {
     public EquipmentResponse update(@PathVariable UUID id,
                                     @Valid @RequestBody UpdateEquipmentRequest request) {
         return equipment.update(id, request);
+    }
+
+    @PutMapping("/{id}/photo")
+    @Operation(summary = "Put the picture of the machine on the entry, or take it off",
+            description = "Upload the file to /attachments first, then send its id here. The "
+                    + "office may at any time; the man who entered the machine may while the "
+                    + "entry is still waiting to be decided — the photograph usually arrives "
+                    + "on a later day than the entry. A null attachmentId removes it.")
+    public EquipmentResponse setPhoto(@PathVariable UUID id,
+                                      @Valid @RequestBody SetEquipmentPhotoRequest request) {
+        return equipment.setPhoto(id, request.attachmentId());
     }
 
     @DeleteMapping("/{id}")

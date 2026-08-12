@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { compressPhoto } from '../../offline/uploads';
 import { apiClient } from '../../shared/apiClient';
 import type {
   BoqItem,
@@ -35,6 +36,8 @@ export const inventoryKeys = {
   allIssues: ['inventory', 'issues'] as const,
   equipment: (storeId: string) => ['inventory', 'equipment', storeId] as const,
   allEquipment: ['inventory', 'equipment'] as const,
+  /** One signed link per attachment, shared by every thumbnail drawn from it. */
+  attachmentUrl: (attachmentId: string) => ['attachments', attachmentId, 'url'] as const,
   vendors: ['vendors'] as const,
 };
 
@@ -338,6 +341,79 @@ export function useUpdateEquipment() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: inventoryKeys.allEquipment });
     },
+  });
+}
+
+/**
+ * The picture of a machine, in two calls: the file into storage, then its id onto the entry.
+ *
+ * <p>That order on purpose, and the same one the DPR's photographs take. An attachment with
+ * no owner is a stray file somebody can clean up; a register row pointing at an attachment
+ * that does not exist is a broken picture on the office's screen.</p>
+ *
+ * <p>No offline queue behind this one. The register itself is an online screen — entering a
+ * machine posts straight to the server — and a photograph that queued while its row did not
+ * would be a file waiting for an owner that may never be created.</p>
+ */
+export function useSetEquipmentPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { equipmentId: string; siteId: string; file: File }) => {
+      const photo = await compressPhoto(input.file);
+      const form = new FormData();
+      form.append('file', photo.blob, photo.fileName);
+      const uploaded = await apiClient.post<{ id: string }>('/attachments', form, {
+        params: { ownerEntityType: 'SITE_EQUIPMENT', kind: 'PHOTO', siteId: input.siteId },
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return (
+        await apiClient.put<Equipment>(`/inventory/equipment/${input.equipmentId}/photo`, {
+          attachmentId: uploaded.data.id,
+        })
+      ).data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inventoryKeys.allEquipment });
+    },
+  });
+}
+
+/** Takes the picture off the entry. The file stays in storage; the row stops pointing at it. */
+export function useRemoveEquipmentPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (equipmentId: string) =>
+      (
+        await apiClient.put<Equipment>(`/inventory/equipment/${equipmentId}/photo`, {
+          attachmentId: null,
+        })
+      ).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inventoryKeys.allEquipment });
+    },
+  });
+}
+
+/**
+ * A short-lived signed link to a stored file, asked for when a thumbnail is about to be drawn.
+ *
+ * <p>Not carried on the register's own rows: the server re-checks the caller's site access
+ * every time it signs one, and signing forty links for a register nobody scrolls through
+ * would be forty checks for one picture somebody looks at.</p>
+ *
+ * <p>Cached for half the link's own life. The URL dies after ten minutes and a dead one draws
+ * a broken image, so it is refetched well before that — but not on every re-render, which on
+ * a site phone would be a request per keystroke elsewhere on the screen.</p>
+ */
+export function useAttachmentUrl(attachmentId: string | undefined) {
+  return useQuery({
+    queryKey: inventoryKeys.attachmentUrl(attachmentId ?? ''),
+    queryFn: async () =>
+      (await apiClient.get<{ url: string; fileName: string }>(`/attachments/${attachmentId}/url`))
+        .data,
+    enabled: Boolean(attachmentId),
+    staleTime: 5 * 60_000,
+    gcTime: 5 * 60_000,
   });
 }
 

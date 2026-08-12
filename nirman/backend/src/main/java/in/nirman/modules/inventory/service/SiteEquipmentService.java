@@ -1,6 +1,7 @@
 package in.nirman.modules.inventory.service;
 
 import in.nirman.common.BusinessException;
+import in.nirman.modules.attachment.service.AttachmentLookup;
 import in.nirman.modules.audit.AuditService;
 import in.nirman.modules.inventory.api.dto.EquipmentDtos.CreateEquipmentRequest;
 import in.nirman.modules.inventory.api.dto.EquipmentDtos.DecideEquipmentRequest;
@@ -53,16 +54,19 @@ public class SiteEquipmentService {
     private final SiteEquipmentRepository equipment;
     private final SiteLookup sites;
     private final VendorLookup vendors;
+    private final AttachmentLookup attachments;
     private final SiteAccessGuard siteAccessGuard;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
 
     public SiteEquipmentService(SiteEquipmentRepository equipment, SiteLookup sites,
-                                VendorLookup vendors, SiteAccessGuard siteAccessGuard,
+                                VendorLookup vendors, AttachmentLookup attachments,
+                                SiteAccessGuard siteAccessGuard,
                                 CurrentUserProvider currentUser, AuditService audit) {
         this.equipment = equipment;
         this.sites = sites;
         this.vendors = vendors;
+        this.attachments = attachments;
         this.siteAccessGuard = siteAccessGuard;
         this.currentUser = currentUser;
         this.audit = audit;
@@ -211,6 +215,78 @@ public class SiteEquipmentService {
     }
 
     /**
+     * The photograph of the machine, put on or taken off.
+     *
+     * <p>Its own act, and the only one on this register that both the field and the office
+     * may perform. <b>The man who entered the machine may photograph it while the office has
+     * not yet decided</b> — he is standing next to it, and the picture is the evidence the
+     * office is short of when it reads "concrete mixer, no number on it" typed from a yard
+     * forty kilometres away. The moment the entry is accepted or rejected it is the office's
+     * row like every other field on it, because a decided entry that can still be changed by
+     * the man who made it makes the decision mean nothing.</p>
+     *
+     * <p>That rule is also why the picture is not part of {@code create}: it arrives on a
+     * different day from the entry. The mixer is written down at the gate in the rain and
+     * photographed on Thursday, and a register that could not accept it on Thursday would be
+     * one where nobody bothers on Thursday either.</p>
+     *
+     * <p>No version check. The photograph does not race the office's corrections — it is one
+     * field written by one person, and the alternative is a supervisor whose picture is
+     * refused because somebody in the office fixed a spelling while he was in the yard.</p>
+     */
+    @PreAuthorize("hasAnyAuthority('equipment:create', 'equipment:write')")
+    public EquipmentResponse setPhoto(UUID id, UUID attachmentId) {
+        SiteEquipment machine = require(id);
+        siteAccessGuard.assertCanAccess(machine.getSiteId());
+        assertMayPhotograph(machine);
+
+        if (attachmentId == null) {
+            machine.setPhotoAttachmentId(null);
+        } else {
+            AttachmentLookup.FileInfo file = attachments.require(attachmentId);
+            if (!file.image()) {
+                throw new BusinessException("equipment.photo-not-an-image",
+                        "A machine is identified by a picture of it. " + file.fileName()
+                                + " is not one.");
+            }
+            // Claimed, so that nothing can delete the file out from under the register: an
+            // unclaimed upload is a draft anybody who made it may still discard.
+            attachments.claimFor(attachmentId, machine.getId());
+            machine.setPhotoAttachmentId(attachmentId);
+        }
+
+        audit.record("SITE_EQUIPMENT", id, attachmentId == null ? "PHOTO_REMOVE" : "PHOTO", null,
+                Map.of("name", machine.getName(),
+                        "photoAttachmentId", String.valueOf(attachmentId)), null);
+        return toResponses(List.of(machine)).get(0);
+    }
+
+    /**
+     * Who may put the picture on this row.
+     *
+     * <p>The office, always. The man who entered it, until somebody has decided about it —
+     * after which changing what the entry shows is a correction, and corrections are
+     * {@code equipment:write} by the argument on {@link #update}.</p>
+     */
+    private void assertMayPhotograph(SiteEquipment machine) {
+        if (currentUser.hasPermission("equipment:write")) {
+            return;
+        }
+        if (machine.getStatus() != SiteEquipment.Status.PENDING) {
+            throw BusinessException.forbidden(
+                    "The office has already decided about this entry, so changing its "
+                            + "photograph is theirs now. Ask them, or enter the machine again "
+                            + "if it is a different one.");
+        }
+        UUID me = currentUser.currentUserIdOrNull();
+        if (me == null || !me.equals(machine.getCreatedBy())) {
+            throw BusinessException.forbidden(
+                    "This entry is somebody else's. You can photograph the machines you "
+                            + "entered yourself while the office has not decided about them.");
+        }
+    }
+
+    /**
      * Takes a machine off the register. Soft, like every other register here: a row deleted
      * in June must not take its own history out of March with it.
      */
@@ -283,9 +359,9 @@ public class SiteEquipmentService {
                         // supplier, and Map.of() answers a null key with a NullPointerException.
                         machine.getSupplierId() == null
                                 ? null : supplierNames.get(machine.getSupplierId()),
-                        machine.getRemarks(),
+                        machine.getRemarks(), machine.getPhotoAttachmentId(),
                         machine.getStatus(), machine.getDecidedAt(), machine.getDecisionRemarks(),
-                        machine.getCreatedAt(), machine.getVersion()))
+                        machine.getCreatedAt(), machine.getCreatedBy(), machine.getVersion()))
                 .toList();
     }
 

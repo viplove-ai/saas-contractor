@@ -23,6 +23,10 @@ public final class EquipmentDtos {
      *                     plant as the register and everything else as a question.
      * @param supplierName resolved here rather than left as an id, because a hired machine
      *                     is read as "whose is it" and nobody knows a vendor by uuid.
+     * @param photoAttachmentId the picture of the machine, or null. Left as an id rather than
+     *                     a URL: a download link is signed, short-lived and re-checked against
+     *                     the caller's sites when it is asked for, so baking one into every
+     *                     row of a register would issue forty links nobody opens.
      */
     public record EquipmentResponse(
             UUID id,
@@ -37,10 +41,18 @@ public final class EquipmentDtos {
             UUID supplierId,
             String supplierName,
             String remarks,
+            UUID photoAttachmentId,
             Status status,
             Instant decidedAt,
             String decisionRemarks,
             Instant createdAt,
+            /**
+             * Who entered it. Carried because one act on this row belongs to that person and
+             * to nobody else at the site: photographing the machine while the office has not
+             * yet decided. A screen that cannot tell whose row it is would have to offer the
+             * camera on every row and let the server refuse most of them.
+             */
+            UUID createdBy,
             Long version) {
     }
 
@@ -82,6 +94,21 @@ public final class EquipmentDtos {
             UUID supplierId,
             @Size(max = 1000) String remarks,
             @NotNull Long version) {
+    }
+
+    /**
+     * The photograph of the machine, put on or taken off.
+     *
+     * <p>Its own request rather than a field on the other two, and deliberately so. The
+     * picture arrives on a different day from the entry — the mixer is written down at the
+     * gate in the rain and photographed on Thursday — and folding it into the correction
+     * request would mean the office clearing a photograph every time it fixed a spelling,
+     * because that request replaces every field it carries.</p>
+     *
+     * <p>A null {@code attachmentId} removes the picture, which is the same act as replacing
+     * it and needs no second endpoint.</p>
+     */
+    public record SetEquipmentPhotoRequest(UUID attachmentId) {
     }
 
     /** Accepting the machine onto the register, or saying it is not there. */

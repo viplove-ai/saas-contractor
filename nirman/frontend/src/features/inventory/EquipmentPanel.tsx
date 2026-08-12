@@ -12,8 +12,9 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
+import { PhotoThumb } from '../../shared/PhotoThumb';
 import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -21,9 +22,12 @@ import {
   useDecideEquipment,
   useDeleteEquipment,
   useEquipment,
+  useRemoveEquipmentPhoto,
+  useSetEquipmentPhoto,
   useUpdateEquipment,
   useVendors,
 } from './api';
+import { MachinePhoto, PickPhotoButton } from './MachinePhoto';
 import type {
   Equipment,
   EquipmentCondition,
@@ -80,32 +84,61 @@ function emptyDraft(): Draft {
  * new entry waits, visibly, and says who it is waiting on.</p>
  */
 export function EquipmentPanel({ storeId }: { storeId: string }) {
-  const { hasPermission } = useAuth();
+  const { user, hasPermission } = useAuth();
   const equipment = useEquipment(storeId || undefined);
   const vendors = useVendors();
   const add = useAddEquipment();
   const update = useUpdateEquipment();
   const decide = useDecideEquipment();
   const remove = useDeleteEquipment();
+  const setPhoto = useSetEquipmentPhoto();
+  const removePhoto = useRemoveEquipmentPhoto();
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Equipment | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
+  /** Picked before the machine exists, so it can only be sent once the row has an id. */
+  const [newPhoto, setNewPhoto] = useState<File | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const canAdd = hasPermission('equipment:create');
   const canDecide = hasPermission('equipment:approve');
   const canWrite = hasPermission('equipment:write');
 
+  /**
+   * Who may put the picture on this row, which the server decides and this only mirrors.
+   *
+   * <p>The office, always. The man who entered it, until somebody has decided about it — he
+   * is the one standing next to the machine, and the photograph is usually taken on a later
+   * day than the entry. Showing the camera on rows where it would be refused is worse than
+   * not showing it: the supervisor learns the button is a lie.</p>
+   */
+  const mayPhotograph = (machine: Equipment): boolean =>
+    canWrite || (canAdd && machine.status === 'PENDING' && machine.createdBy === user?.id);
+
+  /** The object URL for a picture chosen but not yet sent. See PhotoThumb on why it is state. */
+  const [newPhotoPreview, setNewPhotoPreview] = useState<string | null>(null);
+  useEffect(() => {
+    if (!newPhoto) {
+      setNewPhotoPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(newPhoto);
+    setNewPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [newPhoto]);
+
   const openNew = () => {
     setEditing(null);
     setDraft(emptyDraft());
+    setNewPhoto(null);
     setActionError(null);
     setOpen(true);
   };
 
   const openEdit = (machine: Equipment) => {
     setEditing(machine);
+    setNewPhoto(null);
     setDraft({
       name: machine.name,
       assetCode: machine.assetCode ?? '',
@@ -139,15 +172,45 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
       remarks: draft.remarks.trim() || undefined,
     };
     try {
-      if (editing) {
-        await update.mutateAsync({ ...input, id: editing.id, version: editing.version });
-      } else {
-        await add.mutateAsync({ ...input, id: crypto.randomUUID() });
+      const saved = editing
+        ? await update.mutateAsync({ ...input, id: editing.id, version: editing.version })
+        : await add.mutateAsync({ ...input, id: crypto.randomUUID() });
+      /*
+        The photograph second, and only once the row exists. The other order would put a file
+        in storage with nothing to belong to if the entry were then refused — and a machine
+        recorded without its picture is still a machine recorded, which is the whole reason
+        the picture can be added on a later day.
+      */
+      if (newPhoto) {
+        await setPhoto.mutateAsync({
+          equipmentId: saved.id,
+          siteId: saved.siteId,
+          file: newPhoto,
+        });
       }
       setOpen(false);
     } catch (error) {
       // On the dialog, not behind it: the number already on the register is the one thing
       // the person typing can do something about.
+      setActionError(apiErrorDetail(error));
+    }
+  };
+
+  /** Photographing a machine already on the register — the "later" half of the feature. */
+  const photograph = async (machine: Equipment, file: File) => {
+    setActionError(null);
+    try {
+      await setPhoto.mutateAsync({ equipmentId: machine.id, siteId: machine.siteId, file });
+    } catch (error) {
+      setActionError(apiErrorDetail(error));
+    }
+  };
+
+  const unphotograph = async (machine: Equipment) => {
+    setActionError(null);
+    try {
+      await removePhoto.mutateAsync(machine.id);
+    } catch (error) {
       setActionError(apiErrorDetail(error));
     }
   };
@@ -171,6 +234,30 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
   };
 
   const columns: RecordColumn<Equipment>[] = [
+    {
+      /*
+        First, because it is what the office is actually reading the register for. "Concrete
+        mixer, no number on it" typed from a yard forty kilometres away is a sentence; the
+        picture is the evidence, and it is also what tells the second of four identical
+        centering frames from the first.
+      */
+      key: 'photo',
+      header: 'Photo',
+      cell: (machine) =>
+        machine.photoAttachmentId ? (
+          <MachinePhoto attachmentId={machine.photoAttachmentId} name={machine.name} />
+        ) : mayPhotograph(machine) ? (
+          <PickPhotoButton
+            label="Photograph it"
+            busy={setPhoto.isPending}
+            onPick={(file) => void photograph(machine, file)}
+          />
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            No photo
+          </Typography>
+        ),
+    },
     {
       key: 'machine',
       header: 'Machine',
@@ -397,6 +484,53 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
               multiline
               minRows={2}
             />
+
+            {/*
+              The photograph, and never a reason to hold the entry back. A machine written
+              down in the rain at the gate and photographed on Thursday is the ordinary case,
+              which is why this says so rather than sitting here marked optional.
+            */}
+            <Stack spacing={1}>
+              <Typography variant="body2" color="text.secondary">
+                A picture of it
+              </Typography>
+              <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
+                {newPhotoPreview ? (
+                  <PhotoThumb src={newPhotoPreview} name={newPhoto?.name ?? 'Photo'} size={72} />
+                ) : (
+                  editing?.photoAttachmentId && (
+                    <MachinePhoto
+                      attachmentId={editing.photoAttachmentId}
+                      name={editing.name}
+                      size={72}
+                    />
+                  )
+                )}
+                <PickPhotoButton
+                  label={
+                    newPhoto || editing?.photoAttachmentId ? 'Take another' : 'Photograph it'
+                  }
+                  busy={setPhoto.isPending}
+                  onPick={setNewPhoto}
+                />
+                {editing?.photoAttachmentId && !newPhoto && canWrite && (
+                  <Button
+                    size="small"
+                    color="error"
+                    disabled={removePhoto.isPending}
+                    onClick={() => void unphotograph(editing)}
+                  >
+                    Remove photo
+                  </Button>
+                )}
+              </Stack>
+              <Typography variant="caption" color="text.secondary">
+                {editing
+                  ? 'Sent when you save.'
+                  : 'Or add it later — the entry does not wait for a photograph.'}
+              </Typography>
+            </Stack>
+
             {actionError && <Alert severity="error">{actionError}</Alert>}
           </Stack>
         </DialogContent>

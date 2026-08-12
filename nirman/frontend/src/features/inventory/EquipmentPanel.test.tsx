@@ -45,13 +45,23 @@ const SITE_ENTRY: Equipment = {
   condition: 'WORKING',
   status: 'PENDING',
   createdAt: '2026-08-11T04:00:00Z',
+  /** u-1 is who the mocked session is, so this is the supervisor's own entry. */
+  createdBy: 'u-1',
   version: 0,
 };
+
+/** Small enough that the compressor passes it through, which is what jsdom can run. */
+function jpeg(name = 'mixer.jpg'): File {
+  return new File([new Uint8Array(64)], name, { type: 'image/jpeg' });
+}
 
 function renderPanel(rows: Equipment[] = [SITE_ENTRY]) {
   get.mockImplementation((url: string) => {
     if (url === '/inventory/equipment') return Promise.resolve({ data: rows });
     if (url === '/vendors') return Promise.resolve({ data: { content: [] } });
+    if (url.startsWith('/attachments/')) {
+      return Promise.resolve({ data: { url: 'blob:signed', fileName: 'mixer.jpg' } });
+    }
     return Promise.reject(new Error(`unexpected GET ${url}`));
   });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -157,6 +167,113 @@ describe('EquipmentPanel', () => {
 
     expect(screen.getByRole('button', { name: 'Add it' })).toBeDisabled();
     expect(screen.getByRole('combobox', { name: 'Hired from' })).toBeInTheDocument();
+  });
+
+  /*
+    The half of the feature that decides whether it gets used at all. A machine is written
+    down at the gate in the rain and photographed on Thursday, so the register has to take the
+    picture on a day of its own — from the row, without reopening or correcting anything.
+  */
+  it('photographs a machine already on the register, in two calls', async () => {
+    post.mockResolvedValue({ data: { id: 'att-9' } });
+    put.mockResolvedValue({ data: { ...SITE_ENTRY, photoAttachmentId: 'att-9' } });
+    const user = userEvent.setup({ delay: null });
+    renderPanel();
+    const register = await findRegister();
+
+    await user.upload(register.getByLabelText('Photograph it'), jpeg());
+
+    // The file into storage first: a row pointing at an attachment that does not exist is a
+    // broken picture on the office's screen, while a file with no owner is only a stray file.
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    const [uploadUrl, , config] = post.mock.calls[0] as [
+      string,
+      FormData,
+      { params: { ownerEntityType: string; kind: string; siteId: string } },
+    ];
+    expect(uploadUrl).toBe('/attachments');
+    expect(config.params).toMatchObject({
+      ownerEntityType: 'SITE_EQUIPMENT',
+      kind: 'PHOTO',
+      siteId: 'site-a',
+    });
+
+    await waitFor(() => expect(put).toHaveBeenCalledOnce());
+    expect(put.mock.calls[0]![0]).toBe('/inventory/equipment/eq-1/photo');
+    expect(put.mock.calls[0]![1]).toEqual({ attachmentId: 'att-9' });
+  });
+
+  /** A picture on the entry is what the office is reading the register for. */
+  it('shows the picture on the row once there is one', async () => {
+    renderPanel([{ ...SITE_ENTRY, photoAttachmentId: 'att-9' }]);
+    const register = await findRegister();
+
+    const thumbnail = await waitFor(() =>
+      register.getByRole('img', { name: 'Concrete Mixer 10/7' }),
+    );
+    // Signed on demand rather than carried on forty rows nobody scrolls through.
+    expect(get).toHaveBeenCalledWith('/attachments/att-9/url');
+    expect(thumbnail).toHaveAttribute('src', 'blob:signed');
+    expect(register.queryByRole('button', { name: 'Photograph it' })).not.toBeInTheDocument();
+  });
+
+  /*
+    The camera is offered exactly where it would work. The server lets the man who entered a
+    machine photograph it until the office has decided, and nobody else at the site — a button
+    that appears on every row and fails on most of them teaches the supervisor to distrust it.
+  */
+  it('offers the camera on the entry the supervisor made, and not on the rest', async () => {
+    renderPanel([
+      SITE_ENTRY,
+      { ...SITE_ENTRY, id: 'eq-2', name: 'Somebody else’s vibrator', createdBy: 'u-9' },
+      { ...SITE_ENTRY, id: 'eq-3', name: 'Already accepted mixer', status: 'ACCEPTED' },
+    ]);
+    await findRegister();
+    const rowFor = (name: string) =>
+      within(within(table()).getByText(name).closest('tr') as HTMLElement);
+
+    expect(rowFor('Concrete Mixer 10/7').getByLabelText('Photograph it')).toBeInTheDocument();
+    // Not his to photograph, and not his to photograph any more, respectively.
+    expect(rowFor('Somebody else’s vibrator').getByText('No photo')).toBeInTheDocument();
+    expect(rowFor('Already accepted mixer').getByText('No photo')).toBeInTheDocument();
+  });
+
+  /** The office may photograph any row, decided or not: correcting the register is theirs. */
+  it('lets the office photograph a row it has already accepted', async () => {
+    permissions = ['equipment:read', 'equipment:approve', 'equipment:write'];
+    renderPanel([{ ...SITE_ENTRY, status: 'ACCEPTED', createdBy: 'u-9' }]);
+    const register = await findRegister();
+
+    expect(register.getByLabelText('Photograph it')).toBeInTheDocument();
+  });
+
+  /**
+   * Adding a machine and photographing it is one act to the person doing it and two calls on
+   * the wire, in that order: the picture cannot be attached to a row that does not exist yet.
+   */
+  it('sends the picture after the machine it belongs to', async () => {
+    post.mockImplementation((url: string) =>
+      url === '/attachments'
+        ? Promise.resolve({ data: { id: 'att-9' } })
+        : Promise.resolve({ data: { ...SITE_ENTRY, id: 'eq-new', siteId: 'site-a' } }),
+    );
+    put.mockResolvedValue({ data: SITE_ENTRY });
+    const user = userEvent.setup({ delay: null });
+    renderPanel();
+    await findRegister();
+
+    await user.click(screen.getByRole('button', { name: 'Add equipment' }));
+    // The row behind carries a camera of its own, so this stays inside the form.
+    const form = within(await screen.findByRole('dialog'));
+    await user.type(form.getByRole('textbox', { name: 'What is it' }), 'Needle vibrator');
+    await user.upload(form.getByLabelText('Photograph it'), jpeg());
+    // Seen before it is sent, so the thumb over the lens is caught by the man who took it.
+    expect(await form.findByRole('img', { name: 'mixer.jpg' })).toBeInTheDocument();
+    await user.click(form.getByRole('button', { name: 'Add it' }));
+
+    await waitFor(() => expect(put).toHaveBeenCalledOnce());
+    expect(post.mock.calls.map((call) => call[0])).toEqual(['/inventory/equipment', '/attachments']);
+    expect(put.mock.calls[0]![0]).toBe('/inventory/equipment/eq-new/photo');
   });
 
   /** The number already on the register is the one thing the person typing can act on. */

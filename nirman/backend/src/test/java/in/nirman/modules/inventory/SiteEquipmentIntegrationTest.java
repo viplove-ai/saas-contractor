@@ -3,18 +3,23 @@ package in.nirman.modules.inventory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.nirman.AbstractIntegrationTest;
+import in.nirman.InMemoryStorageConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -28,6 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * what the office remembered. But an entry nobody checked is a claim, so it waits as PENDING
  * until an administrator agrees, and correcting or removing a row is the office's alone.</p>
  */
+@Import(InMemoryStorageConfig.class)
 class SiteEquipmentIntegrationTest extends AbstractIntegrationTest {
 
     private static final String PASSWORD = "Nirman@123";
@@ -202,6 +208,140 @@ class SiteEquipmentIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/v1/inventory/equipment/" + id)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
+    }
+
+    // ------------------------------------------------------------------ the photograph
+
+    /**
+     * The half the register turns on. "Concrete mixer, no number on it", typed from a yard
+     * forty kilometres away, is a sentence; the picture is the evidence the office is short
+     * of — and it arrives on a different day from the entry, because the machine is written
+     * down at the gate in the rain and photographed on Thursday.
+     */
+    @Test
+    @DisplayName("the man who entered a machine photographs it afterwards, while it still waits")
+    void theSitePhotographsItsOwnPendingEntry() throws Exception {
+        String supervisor = loginToken("vivek");
+        String id = UUID.randomUUID().toString();
+        JsonNode entered = enter(supervisor, body(UUID.fromString(id), "Plate Compactor", null));
+        // Entered without one, which is the ordinary case and never a reason to refuse it.
+        // Absent rather than null: the response body omits what has no value.
+        assertThat(entered.has("photoAttachmentId")).isFalse();
+
+        String attachmentId = uploadPhoto(supervisor, "mixer.jpg");
+        mockMvc.perform(put("/api/v1/inventory/equipment/" + id + "/photo")
+                        .header("Authorization", "Bearer " + supervisor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"attachmentId\":\"%s\"}".formatted(attachmentId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.photoAttachmentId").value(attachmentId))
+                // The entry itself is untouched: a photograph is not a decision about it.
+                .andExpect(jsonPath("$.status").value("PENDING"));
+
+        // And the file is now the machine's, so nothing can discard it as a stray upload.
+        mockMvc.perform(delete("/api/v1/attachments/" + attachmentId)
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    /**
+     * Once the office has decided, the row is the office's — including its picture. An entry
+     * that can still be changed by the man who made it makes the acceptance mean nothing.
+     */
+    @Test
+    @DisplayName("the site cannot re-photograph an entry the office has already accepted")
+    void theSiteCannotPhotographADecidedEntry() throws Exception {
+        String supervisor = loginToken("vivek");
+        String office = loginToken("viplove");
+        String id = UUID.randomUUID().toString();
+        enter(supervisor, body(UUID.fromString(id), "Decided Mixer", null));
+        mockMvc.perform(post("/api/v1/inventory/equipment/" + id + "/decision")
+                        .header("Authorization", "Bearer " + office)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"ACCEPT\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/v1/inventory/equipment/" + id + "/photo")
+                        .header("Authorization", "Bearer " + supervisor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"attachmentId\":\"%s\"}"
+                                .formatted(uploadPhoto(supervisor, "late.jpg"))))
+                .andExpect(status().isForbidden());
+
+        // The office may, on the same row, at any time — correcting the register is theirs.
+        String theirs = uploadPhoto(office, "office.jpg");
+        mockMvc.perform(put("/api/v1/inventory/equipment/" + id + "/photo")
+                        .header("Authorization", "Bearer " + office)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"attachmentId\":\"%s\"}".formatted(theirs)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.photoAttachmentId").value(theirs));
+    }
+
+    /** A machine is identified by a picture of it. A PDF identifies nothing. */
+    @Test
+    @DisplayName("a file that is not a picture is refused as a photograph")
+    void onlyAPictureIsAPhotograph() throws Exception {
+        String office = loginToken("viplove");
+        String id = UUID.randomUUID().toString();
+        enter(office, body(UUID.fromString(id), "Documented Mixer", null));
+
+        MvcResult uploaded = mockMvc.perform(multipart("/api/v1/attachments")
+                        .file(new MockMultipartFile("file", "invoice.pdf", "application/pdf",
+                                "%PDF-1.4".getBytes(StandardCharsets.UTF_8)))
+                        .param("ownerEntityType", "SITE_EQUIPMENT")
+                        .param("kind", "DOCUMENT")
+                        .header("Authorization", "Bearer " + office))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String attachmentId = objectMapper.readTree(uploaded.getResponse().getContentAsString())
+                .get("id").asText();
+
+        mockMvc.perform(put("/api/v1/inventory/equipment/" + id + "/photo")
+                        .header("Authorization", "Bearer " + office)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"attachmentId\":\"%s\"}".formatted(attachmentId)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.detail")
+                        .value(org.hamcrest.Matchers.containsString("is not one")));
+    }
+
+    /** Taking it off is the same act as replacing it, and needs no second endpoint. */
+    @Test
+    @DisplayName("a null attachment takes the picture off the entry")
+    void theOfficeTakesThePictureOff() throws Exception {
+        String office = loginToken("viplove");
+        String id = UUID.randomUUID().toString();
+        enter(office, body(UUID.fromString(id), "Rephotographed Mixer", null));
+        mockMvc.perform(put("/api/v1/inventory/equipment/" + id + "/photo")
+                        .header("Authorization", "Bearer " + office)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"attachmentId\":\"%s\"}"
+                                .formatted(uploadPhoto(office, "first.jpg"))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/v1/inventory/equipment/" + id + "/photo")
+                        .header("Authorization", "Bearer " + office)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"attachmentId\":null}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.photoAttachmentId").doesNotExist());
+    }
+
+    // ------------------------------------------------------------------ helpers
+
+    /** A picture in the bucket, waiting for a record to claim it. */
+    private String uploadPhoto(String token, String fileName) throws Exception {
+        MvcResult result = mockMvc.perform(multipart("/api/v1/attachments")
+                        .file(new MockMultipartFile("file", fileName, "image/jpeg",
+                                new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0}))
+                        .param("ownerEntityType", "SITE_EQUIPMENT")
+                        .param("kind", "PHOTO")
+                        .param("siteId", SITE_A)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asText();
     }
 
     private String body(UUID id, String name, String assetCode) {

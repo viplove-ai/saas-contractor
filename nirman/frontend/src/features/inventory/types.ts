@@ -223,11 +223,22 @@ export interface Equipment {
   supplierId?: string;
   supplierName?: string;
   remarks?: string;
+  /**
+   * The picture of the machine, or absent. An id rather than a URL: a download link is
+   * signed and short-lived, so it is asked for when a thumbnail is actually drawn.
+   */
+  photoAttachmentId?: string;
   /** PENDING until the office accepts it. Anybody at the site may enter a machine. */
   status: EquipmentStatus;
   decidedAt?: string;
   decisionRemarks?: string;
   createdAt: string;
+  /**
+   * Who entered it. Here for one comparison: the man who entered a machine may photograph it
+   * while the office has not yet decided, and a screen that cannot tell whose row it is would
+   * offer the camera everywhere and let the server refuse most of them.
+   */
+  createdBy?: string;
   version: number;
 }
 
