@@ -44,6 +44,18 @@ public class DocumentNumberService {
          */
         MATERIAL("MAT"),
         /**
+         * Nor is an expense head named at a site. It needs a code the taxonomy has not
+         * already used, and nobody at a site is going to invent one that the office's own
+         * naming would not collide with a month later.
+         */
+        EXPENSE_CATEGORY("EXH"),
+        /**
+         * Nor is a supplier. His code is derived from what he supplies and what he is called;
+         * this is the fallback for the name that yields nothing usable and for the improbable
+         * tenth firm of one name — a code nobody would choose, but never a collision.
+         */
+        VENDOR("VEN"),
+        /**
          * Nor is a worker. His number is what goes against his name on the muster roll, and
          * it was being typed by whoever took him on — which means a supervisor at the gate
          * inventing one, and two men on two sites given the same. The counter has always

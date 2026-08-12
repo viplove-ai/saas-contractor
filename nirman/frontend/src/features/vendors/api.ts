@@ -35,7 +35,6 @@ export function useVendors(q = '', type = '') {
 }
 
 export interface VendorInput {
-  code: string;
   name: string;
   vendorType: VendorType;
   contactPerson?: string | undefined;

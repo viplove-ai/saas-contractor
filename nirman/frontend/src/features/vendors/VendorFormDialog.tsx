@@ -69,7 +69,6 @@ export function VendorFormDialog({ open, vendor, onClose }: Props) {
     reset(
       vendor
         ? {
-            code: vendor.code,
             name: vendor.name,
             vendorType: vendor.vendorType,
             contactPerson: vendor.contactPerson ?? '',
@@ -108,18 +107,17 @@ export function VendorFormDialog({ open, vendor, onClose }: Props) {
         <Stack spacing={2} sx={{ pt: 1 }}>
           {serverError && <Alert severity="error">{serverError}</Alert>}
 
-          <TextField
-            label="Short code"
-            disabled={editing}
-            error={!!errors.code}
-            helperText={
-              errors.code?.message ??
-              (editing
-                ? 'A code is permanent: every delivery and bill from him hangs off it.'
-                : 'Short and unique, e.g. KSN-STEEL.')
-            }
-            {...register('code')}
-          />
+          {/*
+            The code is shown, never asked for. It is permanent — every delivery and bill
+            from him hangs off it — and it is the server's to mint, from what he supplies and
+            what he is called.
+          */}
+          {editing && (
+            <Typography variant="body2" color="text.secondary">
+              Code <strong>{vendor.code}</strong> · assigned when he was onboarded, and
+              permanent: every delivery and bill from him hangs off it.
+            </Typography>
+          )}
           <TextField
             label="Firm’s name"
             error={!!errors.name}
@@ -261,7 +259,6 @@ export function VendorFormDialog({ open, vendor, onClose }: Props) {
 
 function emptyVendor(): VendorForm {
   return {
-    code: '',
     name: '',
     vendorType: 'MATERIAL',
     contactPerson: '',

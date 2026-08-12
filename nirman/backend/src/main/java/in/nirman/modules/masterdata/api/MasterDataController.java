@@ -8,6 +8,7 @@ import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateVendorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.ExpenseCategoryResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.MaterialCategoryResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.MaterialResponse;
+import in.nirman.modules.masterdata.api.dto.MasterDataDtos.NameExpenseCategoryRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveConversionRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveExpenseCategoryRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveMaterialCategoryRequest;
@@ -203,6 +204,20 @@ public class MasterDataController {
     public ResponseEntity<ExpenseCategoryResponse> createExpenseCategory(
             @Valid @RequestBody SaveExpenseCategoryRequest request) {
         ExpenseCategoryResponse created = service.createExpenseCategory(request);
+        return ResponseEntity.created(
+                URI.create("/api/v1/expense-categories/" + created.id())).body(created);
+    }
+
+    @PostMapping("/expense-categories/field")
+    @Operation(summary = "Name an expense head at the site while booking an expense",
+            description = "For whoever is holding the bill, not the office: a name and "
+                    + "nothing else. The row is marked provisional and neither cost flag is "
+                    + "set. A head already carrying the same name is returned rather than "
+                    + "duplicated, because two heads for one kind of spending split a "
+                    + "month's figure across two lines of the same report.")
+    public ResponseEntity<ExpenseCategoryResponse> nameExpenseCategory(
+            @Valid @RequestBody NameExpenseCategoryRequest request) {
+        ExpenseCategoryResponse created = service.nameExpenseCategory(request);
         return ResponseEntity.created(
                 URI.create("/api/v1/expense-categories/" + created.id())).body(created);
     }

@@ -8,9 +8,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount } from '../../shared/formatters';
+import { useSelectedSite } from '../../shared/siteSelection';
 import { ReferenceNotice } from '../../shared/ReferenceNotice';
 import { StatusChip, type RecordStatus } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
@@ -20,10 +21,11 @@ import {
   useCreateExpense,
   useExpenseCategories,
   useExpenses,
+  useNameExpenseCategory,
   useSites,
   useSubmitExpense,
 } from './api';
-import type { DuplicateCandidate, ExpenseWorkflow } from './types';
+import { CATEGORY_OTHER, type DuplicateCandidate, type ExpenseWorkflow } from './types';
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -42,9 +44,11 @@ function today(): string {
  */
 export function AddExpensePage() {
   const { hasPermission } = useAuth();
-  const [siteId, setSiteId] = useState('');
   const [expenseDate, setExpenseDate] = useState(today());
   const [categoryId, setCategoryId] = useState('');
+  /** What he called it, when the taxonomy has no head for what the money went on. */
+  const [otherName, setOtherName] = useState('');
+  const [namingError, setNamingError] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [billNumber, setBillNumber] = useState('');
   const [amountBeforeTax, setAmountBeforeTax] = useState('');
@@ -59,19 +63,15 @@ export function AddExpensePage() {
   const [expenseId, setExpenseId] = useState(() => crypto.randomUUID());
 
   const sites = useSites();
+  const [siteId, setSiteId] = useSelectedSite(sites.data);
   const categories = useExpenseCategories();
+  const nameCategory = useNameExpenseCategory();
   const create = useCreateExpense();
   const submit = useSubmitExpense();
   const mine = useExpenses(siteId || undefined, '' as ExpenseWorkflow | '');
 
   const canSubmit = hasPermission('expense:create');
-
-  // Default to the first site the user can reach; most supervisors have exactly one.
-  useEffect(() => {
-    if (!siteId && sites.data?.length) {
-      setSiteId(sites.data[0]!.id);
-    }
-  }, [sites.data, siteId]);
+  const canNameHead = hasPermission('masterdata:provisional:head');
 
   const total = useMemo(() => {
     const base = Number(amountBeforeTax);
@@ -80,13 +80,41 @@ export function AddExpensePage() {
     return base + (base * rate) / 100;
   }, [amountBeforeTax, gstPercent]);
 
+  /** A kind is named either by picking one or by typing one. Both count. */
+  const kindNamed =
+    categoryId === CATEGORY_OTHER ? otherName.trim().length > 0 : Boolean(categoryId);
+
   const complete =
-    Boolean(siteId) && Boolean(categoryId) && description.trim().length > 0 && total > 0;
+    Boolean(siteId) && kindNamed && description.trim().length > 0 && total > 0;
 
   const site = sites.data?.find((candidate) => candidate.id === siteId);
   const booked = create.data;
 
-  const book = (force: boolean) => {
+  /**
+   * Books the expense, opening a head first if he had to name the kind himself.
+   *
+   * <p>The naming has to happen first and against the server: an expense carries a head id
+   * and there is nowhere to put a phrase instead. That is also why it is the one thing on
+   * this screen that a phone with no signal cannot do — the expense itself queues, a new
+   * head does not, and booking it under the wrong head to save the trip is the mess this
+   * whole answer exists to avoid.</p>
+   */
+  const book = async (force: boolean) => {
+    setNamingError(null);
+    let headId = categoryId;
+    if (categoryId === CATEGORY_OTHER) {
+      try {
+        headId = (await nameCategory.mutateAsync({ name: otherName.trim() })).id;
+      } catch (error) {
+        setNamingError(apiErrorDetail(error));
+        return;
+      }
+      // Now a head like any other, and selected — the next bill of the same kind picks it
+      // off the list rather than naming it a second time.
+      setCategoryId(headId);
+      setOtherName('');
+    }
+
     create.mutate(
       {
         force,
@@ -96,7 +124,7 @@ export function AddExpensePage() {
           id: expenseId,
           siteId,
           expenseDate,
-          categoryId,
+          categoryId: headId,
           description: description.trim(),
           billNumber: billNumber || undefined,
           amountBeforeTax: Number(amountBeforeTax),
@@ -148,19 +176,35 @@ export function AddExpensePage() {
           onChange={(e) => setExpenseDate(e.target.value)}
           InputLabelProps={{ shrink: true }}
         />
-        <TextField
-          select
-          label="What kind"
-          value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-          sx={{ flexGrow: 1, minWidth: 220 }}
-        >
-          {(categories.data ?? []).map((category) => (
-            <MenuItem key={category.id} value={category.id}>
-              {category.name}
-            </MenuItem>
-          ))}
-        </TextField>
+        <Stack spacing={1} sx={{ flexGrow: 1, minWidth: 220 }}>
+          <TextField
+            select
+            label="What kind"
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+          >
+            {(categories.data ?? []).map((category) => (
+              <MenuItem key={category.id} value={category.id}>
+                {category.name}
+              </MenuItem>
+            ))}
+            {/*
+              Last, and only for somebody allowed to name a head. The starting taxonomy is
+              the CPWD one and no site's spending fits it entirely — without this answer the
+              bill goes under whichever head is least wrong, and the office reads a
+              "Miscellaneous" figure it cannot break down.
+            */}
+            {canNameHead && <MenuItem value={CATEGORY_OTHER}>Other…</MenuItem>}
+          </TextField>
+          {categoryId === CATEGORY_OTHER && (
+            <TextField
+              label="What kind of expense is it"
+              value={otherName}
+              onChange={(e) => setOtherName(e.target.value)}
+              helperText="A few words the office will recognise — it becomes a head everyone can book to."
+            />
+          )}
+        </Stack>
       </Stack>
 
       <ReferenceNotice query={categories} what="expense heads" />
@@ -235,7 +279,7 @@ export function AddExpensePage() {
           <Button
             variant="outlined"
             disabled={overrideReason.trim().length === 0 || create.isPending}
-            onClick={() => book(true)}
+            onClick={() => void book(true)}
             sx={{ minHeight: 48, mt: 1 }}
           >
             Book it anyway
@@ -243,6 +287,12 @@ export function AddExpensePage() {
         </Alert>
       )}
 
+      {/*
+        Its own line rather than folded into the booking error: the expense has not been
+        saved, and what failed was naming the kind, which is the one part of this form that
+        needs the server.
+      */}
+      {namingError && <Alert severity="error">{namingError}</Alert>}
       {create.isError && !candidates && (
         <Alert severity="error">{apiErrorDetail(create.error)}</Alert>
       )}
@@ -262,11 +312,11 @@ export function AddExpensePage() {
         <Button
           variant="contained"
           color="secondary"
-          disabled={!complete || create.isPending}
-          onClick={() => book(false)}
+          disabled={!complete || create.isPending || nameCategory.isPending}
+          onClick={() => void book(false)}
           sx={{ minHeight: 48 }}
         >
-          {create.isPending ? 'Saving…' : 'Save as draft'}
+          {create.isPending || nameCategory.isPending ? 'Saving…' : 'Save as draft'}
         </Button>
       </Stack>
 

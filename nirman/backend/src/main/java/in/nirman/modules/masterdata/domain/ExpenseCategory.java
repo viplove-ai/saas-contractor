@@ -45,6 +45,14 @@ public class ExpenseCategory {
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
+    /**
+     * Named from a site while booking an expense rather than set up by the office (V24). A
+     * phrase off a bill, with neither of the two flags above decided — so the office can find
+     * these rows and fold them into the real taxonomy.
+     */
+    @Column(name = "provisional", nullable = false)
+    private boolean provisional;
+
     @Column(name = "sort_order", nullable = false)
     private int sortOrder;
 
@@ -117,6 +125,14 @@ public class ExpenseCategory {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public boolean isProvisional() {
+        return provisional;
+    }
+
+    public void setProvisional(boolean provisional) {
+        this.provisional = provisional;
     }
 
     public int getSortOrder() {

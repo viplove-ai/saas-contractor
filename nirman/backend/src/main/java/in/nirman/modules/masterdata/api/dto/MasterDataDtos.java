@@ -66,8 +66,16 @@ public final class MasterDataDtos {
             boolean active, Long version) {
     }
 
+    /**
+     * @param code left out by every screen. A short code is a filing decision the office was
+     *             never really making — asked for it, somebody typed the firm's initials and
+     *             the next person typed the town — so the server derives one from what he
+     *             supplies and what he is called. Still accepted, because an organisation
+     *             migrating its own register has codes that already mean something and
+     *             throwing them away would break the paper trail.
+     */
     public record CreateVendorRequest(
-            @NotBlank @Size(max = 40) @Pattern(regexp = "[A-Za-z0-9._-]+") String code,
+            @Size(max = 40) @Pattern(regexp = "[A-Za-z0-9._-]*") String code,
             @NotBlank @Size(max = 200) String name,
             @NotNull Vendor.Type vendorType,
             @Size(max = 150) String contactPerson,
@@ -171,9 +179,25 @@ public final class MasterDataDtos {
 
     // ------------------------------------------------------------------ expense categories
 
+    /**
+     * @param provisional named from a site while booking an expense, and nobody has vetted
+     *                    it — neither cost flag decided, and quite possibly a second name for
+     *                    a head the taxonomy already carries.
+     */
     public record ExpenseCategoryResponse(
             UUID id, String code, String name, UUID parentId, boolean materialPurchase,
-            boolean labourPayment, boolean requiresVendor, boolean active, int sortOrder) {
+            boolean labourPayment, boolean requiresVendor, boolean active, boolean provisional,
+            int sortOrder) {
+    }
+
+    /**
+     * An expense head named at the site, with the only thing the man holding the bill knows.
+     *
+     * <p>No flags and no parent, on purpose: whether a head's rows are inventory rather than
+     * cost, or a wage disbursement rather than a new cost, is the office's to decide, and
+     * getting it wrong double-counts a month.</p>
+     */
+    public record NameExpenseCategoryRequest(@NotBlank @Size(max = 120) String name) {
     }
 
     public record SaveExpenseCategoryRequest(

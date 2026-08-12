@@ -22,7 +22,18 @@ export interface ExpenseCategory {
   labourPayment: boolean;
   requiresVendor: boolean;
   active: boolean;
+  /** Named at a site while booking an expense, and nobody at the office has vetted it. */
+  provisional?: boolean;
 }
+
+/**
+ * The value the "what kind" picker carries for spending the taxonomy has no head for.
+ *
+ * <p>A sentinel rather than an empty string, for the reason {@code MATERIAL_NOT_LISTED} is
+ * one: an unanswered picker and a picker answered with "none of these" are different states,
+ * and only the second one asks what to call it.</p>
+ */
+export const CATEGORY_OTHER = '__other__';
 
 export interface Vendor {
   id: string;

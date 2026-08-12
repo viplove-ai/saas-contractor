@@ -194,21 +194,31 @@ describe('VendorsPage', () => {
     expect(within(row).getByText('30 days')).toBeInTheDocument();
   });
 
-  /** A code, a name and a kind. Everything else waits for the paperwork to catch up. */
-  it('onboards a supplier from a code and a name alone', async () => {
+  /**
+   * A name and a kind, and nothing else — the paperwork catches up later.
+   *
+   * <p>Not even a code. It was the first thing the form asked for and it was a filing
+   * decision nobody was really making; the server derives it from what he supplies and what
+   * he is called, which is also the only place uniqueness can be promised.</p>
+   */
+  it('onboards a supplier from a name alone, without asking for a code', async () => {
     const user = userEvent.setup({ delay: null });
     renderRegister();
     await screen.findAllByText('Kausani Steel Traders');
 
     await user.click(screen.getByRole('button', { name: 'Onboard a supplier' }));
-    await user.type(await screen.findByLabelText('Short code'), 'KSN-SAND');
-    await user.type(screen.getByLabelText('Firm’s name'), 'Kosi Sand Suppliers');
+    expect(screen.queryByLabelText('Short code')).not.toBeInTheDocument();
+    await user.type(await screen.findByLabelText('Firm’s name'), 'Kosi Sand Suppliers');
     await user.click(screen.getByRole('button', { name: 'Onboard supplier' }));
 
     await waitFor(() => expect(post).toHaveBeenCalledOnce());
-    const [url, body] = post.mock.calls[0] as [string, { code: string; gstin?: string }];
+    const [url, body] = post.mock.calls[0] as [
+      string,
+      { code?: string; name: string; gstin?: string },
+    ];
     expect(url).toBe('/vendors');
-    expect(body.code).toBe('KSN-SAND');
+    expect(body.name).toBe('Kosi Sand Suppliers');
+    expect(body.code).toBeUndefined();
     // An empty box is "not given", not a blank GSTIN stored as a GSTIN.
     expect(body.gstin).toBeUndefined();
   });
@@ -219,8 +229,7 @@ describe('VendorsPage', () => {
     await screen.findAllByText('Kausani Steel Traders');
 
     await user.click(screen.getByRole('button', { name: 'Onboard a supplier' }));
-    await user.type(await screen.findByLabelText('Short code'), 'KSN-SAND');
-    await user.type(screen.getByLabelText('Firm’s name'), 'Kosi Sand Suppliers');
+    await user.type(await screen.findByLabelText('Firm’s name'), 'Kosi Sand Suppliers');
     await user.type(screen.getByLabelText('GSTIN (optional)'), '05AABCU');
     await user.click(screen.getByRole('button', { name: 'Onboard supplier' }));
 

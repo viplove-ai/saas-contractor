@@ -14,12 +14,10 @@ const optional = (max: number) =>
  * the paperwork catches up.</p>
  */
 export const vendorSchema = z.object({
-  code: z
-    .string()
-    .trim()
-    .min(1, 'Enter a short code')
-    .max(40, 'At most 40 characters')
-    .regex(/^[A-Za-z0-9._-]+$/, 'Letters, digits, dot, underscore and hyphen only'),
+  // No code. It used to be the first thing the form asked for and it was a filing decision
+  // nobody was really making: one person typed the firm's initials, the next typed the town,
+  // and the register sorted into no order. The server derives it from what he supplies and
+  // what he is called, and only the server can promise it is unique.
   name: z.string().trim().min(1, 'Enter the firm’s name').max(200, 'At most 200 characters'),
   vendorType: z.enum(['MATERIAL', 'SUBCONTRACTOR', 'SERVICE', 'TRANSPORT', 'OTHER']),
   contactPerson: optional(150),

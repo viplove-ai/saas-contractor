@@ -12,6 +12,7 @@ import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateVendorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.ExpenseCategoryResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.MaterialCategoryResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.MaterialResponse;
+import in.nirman.modules.masterdata.api.dto.MasterDataDtos.NameExpenseCategoryRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveConversionRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveExpenseCategoryRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveMaterialCategoryRequest;
@@ -61,6 +62,9 @@ import java.util.stream.Collectors;
 @Transactional
 @PreAuthorize("hasAuthority('masterdata:read')")
 public class MasterDataService {
+
+    /** Where a head named at a site sorts: after everything the office set up. */
+    private static final int FIELD_NAMED_SORT_ORDER = 900;
 
     private final UnitRepository units;
     private final SkillCategoryRepository skillCategories;
@@ -171,9 +175,13 @@ public class MasterDataService {
     // does not hold masterdata:write, where a mistake reaches every screen in the system.
     @PreAuthorize("hasAuthority('vendor:write')")
     public VendorResponse createVendor(CreateVendorRequest request) {
-        requireFreeCode(vendors.existsByOrgIdAndCode(orgId(), request.code()), "Vendor",
-                request.code());
-        Vendor vendor = new Vendor(orgId(), request.code(), request.name(), request.vendorType());
+        String code = emptyToNull(request.code());
+        if (code == null) {
+            code = generateVendorCode(request.vendorType(), request.name());
+        } else {
+            requireFreeCode(vendors.existsByOrgIdAndCode(orgId(), code), "Vendor", code);
+        }
+        Vendor vendor = new Vendor(orgId(), code, request.name(), request.vendorType());
         vendor.setContactPerson(request.contactPerson());
         vendor.setMobile(request.mobile());
         vendor.setEmail(request.email());
@@ -390,7 +398,114 @@ public class MasterDataService {
         return mapper.toResponse(category);
     }
 
+    /**
+     * An expense head named at a site, because the money has already been spent.
+     *
+     * <p>An expense is booked against a head and cannot be booked without one, and the
+     * starting taxonomy is the CPWD list every organisation gets. The first bill for
+     * something that list never imagined leaves a supervisor picking whichever head is least
+     * wrong — which is how a month's "Miscellaneous" becomes a figure the office cannot break
+     * down. This is the alternative: he says what it was, and it becomes a head.</p>
+     *
+     * <p>What he may set is the name and nothing else. The two flags decide whether the
+     * head's rows are cost at all — material purchase is inventory, labour payment settles a
+     * wage attendance has already counted — and either one guessed from a site double-counts
+     * a month. So both stay false, which is the ordinary case, and the row is marked
+     * {@code provisional} so the office knows nobody decided otherwise.</p>
+     *
+     * <p>A name the organisation already holds comes back as the head it already holds, on
+     * the reasoning behind {@link #addFieldMaterial}: two heads called "site cleaning" split
+     * one figure across two lines of the same report.</p>
+     */
+    @PreAuthorize("hasAuthority('masterdata:provisional:head')")
+    public ExpenseCategoryResponse nameExpenseCategory(NameExpenseCategoryRequest request) {
+        String name = request.name().trim().replaceAll("\\s+", " ");
+        if (name.isEmpty()) {
+            throw new BusinessException("expense-category.name-required",
+                    "An expense needs to say what kind of spending it was.");
+        }
+        List<ExpenseCategory> existing = expenseCategories.findByName(orgId(), name);
+        if (!existing.isEmpty()) {
+            return mapper.toResponse(existing.get(0));
+        }
+
+        ExpenseCategory category = new ExpenseCategory(orgId(),
+                documentNumbers.next(orgId(), DocType.EXPENSE_CATEGORY, LocalDate.now()),
+                name, null);
+        category.setProvisional(true);
+        // Under the heads the office set up, in every picker that sorts by this. A head
+        // nobody vetted is not the first answer anybody should reach for.
+        category.setSortOrder(FIELD_NAMED_SORT_ORDER);
+        expenseCategories.save(category);
+        recordCreate("EXPENSE_CATEGORY", category.getId(), category.getCode());
+        return mapper.toResponse(category);
+    }
+
     // ------------------------------------------------------------------ internals
+
+    /**
+     * A short code for a supplier nobody was ever really choosing one for.
+     *
+     * <p>The field was asked for and answered badly: one person typed the firm's initials,
+     * the next typed the town it delivers from, and the register ended up with codes that
+     * sort into no order and tell you nothing. It is derived instead, from the two things
+     * that identify a supplier at a glance — what he supplies and what he is called —
+     * {@code MAT-SHIVSHAKTI}, {@code TRN-KUMAON}.</p>
+     *
+     * <p>Uniqueness is the whole reason the server does it and not the screen. A clash gets a
+     * counter, and a name with nothing usable in it (a firm written entirely in Devanagari,
+     * say) falls back to the same document-number counter that gives materials and workers
+     * theirs — a code nobody would choose, but never a collision and never a refusal while
+     * somebody is standing at a gate.</p>
+     */
+    private String generateVendorCode(Vendor.Type type, String name) {
+        String base = VENDOR_CODE_PREFIX.getOrDefault(type, "SUP") + "-" + slug(name);
+        if (!vendors.existsByOrgIdAndCode(orgId(), base)) {
+            return base;
+        }
+        // Two firms of the same name supplying the same thing is rare and real — a dealer and
+        // his brother's yard. The second one is -2.
+        for (int suffix = 2; suffix <= 9; suffix++) {
+            String candidate = base + "-" + suffix;
+            if (!vendors.existsByOrgIdAndCode(orgId(), candidate)) {
+                return candidate;
+            }
+        }
+        return documentNumbers.next(orgId(), DocType.VENDOR, LocalDate.now());
+    }
+
+    /** What he supplies, in three letters, at the front of his code. */
+    private static final Map<Vendor.Type, String> VENDOR_CODE_PREFIX = Map.of(
+            Vendor.Type.MATERIAL, "MAT",
+            Vendor.Type.SUBCONTRACTOR, "SUB",
+            Vendor.Type.SERVICE, "SRV",
+            Vendor.Type.TRANSPORT, "TRN",
+            Vendor.Type.OTHER, "GEN");
+
+    /**
+     * The firm's name as a code fragment: capitals and digits only, whole words, stopping at
+     * {@value #VENDOR_SLUG_MAX} characters. Whole words because {@code SHIVSHAKTI} is
+     * recognisable and {@code SHIVSHAK} is a typo somebody will try to correct.
+     */
+    private static String slug(String name) {
+        StringBuilder slug = new StringBuilder();
+        for (String word : name.toUpperCase(java.util.Locale.ROOT).split("[^A-Z0-9]+")) {
+            if (word.isEmpty()) {
+                continue;
+            }
+            if (slug.length() + word.length() > VENDOR_SLUG_MAX && slug.length() > 0) {
+                break;
+            }
+            slug.append(word.length() > VENDOR_SLUG_MAX
+                    ? word.substring(0, VENDOR_SLUG_MAX) : word);
+            if (slug.length() >= VENDOR_SLUG_MAX) {
+                break;
+            }
+        }
+        return slug.length() == 0 ? "SUPPLIER" : slug.toString();
+    }
+
+    private static final int VENDOR_SLUG_MAX = 14;
 
     private void applyMaterialFields(Material material, UUID categoryId, String hsnCode,
                                      java.math.BigDecimal gstPercent, java.math.BigDecimal minStock,

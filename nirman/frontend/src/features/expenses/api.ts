@@ -61,6 +61,36 @@ export function useExpenseCategories() {
   });
 }
 
+/**
+ * A head named at the site, for spending the taxonomy has never heard of.
+ *
+ * <p>The row it creates is a phrase off a bill with neither cost flag set, marked
+ * provisional so the office can find it. A name the organisation already holds comes back as
+ * the head it already holds, so "site cleaning" typed twice does not become two lines of the
+ * same report.</p>
+ */
+export function useNameExpenseCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { name: string }) =>
+      (await apiClient.post<ExpenseCategory>('/expense-categories/field', input)).data,
+    onSuccess: (created) => {
+      /*
+        Into the list before the refetch lands, not after. The screen selects the head it
+        just opened, and a picker holding a value none of its options carry is a picker that
+        has quietly emptied itself — for however long the round trip takes, which on a site
+        handset is not a moment.
+      */
+      queryClient.setQueryData<ExpenseCategory[]>(expenseKeys.categories, (current) =>
+        current && !current.some((category) => category.id === created.id)
+          ? [...current, created]
+          : current,
+      );
+      void queryClient.invalidateQueries({ queryKey: expenseKeys.categories });
+    },
+  });
+}
+
 export function useVendors() {
   return useQuery({
     queryKey: expenseKeys.vendors,
