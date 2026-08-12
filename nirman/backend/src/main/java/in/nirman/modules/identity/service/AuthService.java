@@ -178,6 +178,11 @@ public class AuthService {
                     HttpStatus.UNPROCESSABLE_ENTITY);
         }
         user.changePassword(passwordEncoder.encode(newPassword), false);
+        // Both halves, and the second is what makes it immediate: the refresh family can no
+        // longer buy a token, and the tokens already out are refused on their next request.
+        // This tab goes with them — the client spends the new password on a fresh sign-in
+        // straight away, which is the only way to keep one session and end the rest.
+        user.endAllSessions();
         refreshTokens.revokeAllForUser(user.getId(), Instant.now(), "PASSWORD_CHANGE");
         audit.record(ENTITY_USER, user.getId(), "PASSWORD_CHANGED", null, null, null);
     }
@@ -203,7 +208,7 @@ public class AuthService {
         boolean allSites = roleCodes.stream().anyMatch(ALL_SITE_ROLES::contains);
         Set<UUID> siteIds = allSites ? Set.of() : activeSiteIds(user.getId());
         return new AuthenticatedUser(user.getId(), user.getOrgId(), user.getUsername(),
-                roleCodes, permissions, siteIds, allSites);
+                roleCodes, permissions, siteIds, allSites, user.getSessionEpoch());
     }
 
     private Set<UUID> activeSiteIds(UUID userId) {

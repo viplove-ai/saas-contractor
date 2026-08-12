@@ -31,6 +31,7 @@ public class JwtTokenService {
     static final String CLAIM_ROLES = "roles";
     static final String CLAIM_PERMISSIONS = "perms";
     static final String CLAIM_SITES = "sites";
+    static final String CLAIM_SESSION_EPOCH = "sep";
     static final String ALL_SITES = "ALL";
 
     private final JwtProperties properties;
@@ -56,6 +57,7 @@ public class JwtTokenService {
                 .claim(CLAIM_ROLES, List.copyOf(user.roles()))
                 .claim(CLAIM_PERMISSIONS, List.copyOf(user.permissions()))
                 .claim(CLAIM_SITES, sites)
+                .claim(CLAIM_SESSION_EPOCH, user.sessionEpoch())
                 .signWith(key)
                 .compact();
     }
@@ -89,7 +91,20 @@ public class JwtTokenService {
                 roles,
                 permissions,
                 siteIds,
-                allSites);
+                allSites,
+                sessionEpoch(claims));
+    }
+
+    /**
+     * A token minted before the claim existed reads as {@code NO_SESSION_EPOCH} and is
+     * refused. That signs everybody out once, on the deploy that adds this — which is the
+     * safe direction: the alternative is honouring tokens that nothing can withdraw.
+     */
+    private static long sessionEpoch(Claims claims) {
+        Object claim = claims.get(CLAIM_SESSION_EPOCH);
+        return claim instanceof Number number
+                ? number.longValue()
+                : AuthenticatedUser.NO_SESSION_EPOCH;
     }
 
     private static Set<String> stringSet(Object claim) {

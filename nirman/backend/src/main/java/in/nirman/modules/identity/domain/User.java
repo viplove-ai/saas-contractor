@@ -52,6 +52,9 @@ public class User extends BaseEntity {
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 
+    @Column(name = "session_epoch", nullable = false)
+    private long sessionEpoch;
+
     // Eager on purpose: the principal (roles → permissions) is assembled outside any
     // transaction on every login and refresh, and the sets are a handful of rows.
     @ManyToMany(fetch = FetchType.EAGER)
@@ -152,6 +155,26 @@ public class User extends BaseEntity {
 
     public Instant getLastLoginAt() {
         return lastLoginAt;
+    }
+
+    public long getSessionEpoch() {
+        return sessionEpoch;
+    }
+
+    /**
+     * Ends every session on this account, on every device, at once.
+     *
+     * <p>Revoking the refresh tokens is the other half and is done by the caller; this half
+     * is what makes it immediate. An access token is a signed claim that no request looks
+     * up, so without the counter a handset already holding one would keep working until it
+     * expired — and a reset is asked for precisely when that is unacceptable.</p>
+     *
+     * <p>The caller's own device is signed out too, which is the point: the person asking
+     * has no way to say which of the live sessions is the one they meant to keep. The
+     * screens that need to carry on simply sign in again with the new password.</p>
+     */
+    public void endAllSessions() {
+        this.sessionEpoch++;
     }
 
     public Set<Role> getRoles() {

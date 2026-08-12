@@ -142,7 +142,9 @@ public class UserService {
         boolean before = user.isActive();
         user.setActive(active);
         if (!active) {
-            // A disabled user must not keep a live session through a stored refresh token.
+            // A disabled user must not keep a live session — neither through a stored
+            // refresh token nor through the access token already on the handset.
+            user.endAllSessions();
             refreshTokens.revokeAllForUser(user.getId(), Instant.now(), "USER_DEACTIVATED");
         }
         audit.record("USER", user.getId(), active ? "ACTIVATE" : "DEACTIVATE",
@@ -152,8 +154,13 @@ public class UserService {
 
     /**
      * Sets a new password on someone else's account and forces a change at next sign-in, so
-     * the value the admin hands over never stays live. Every open session is revoked: a
-     * reset is normally asked for because the account is in the wrong hands.
+     * the value the admin hands over never stays live. Every open session ends: a reset is
+     * normally asked for because the account is in the wrong hands.
+     *
+     * <p>Ends, and ends <em>now</em>. Revoking the refresh tokens stops the next fifteen
+     * minutes; the session counter stops this one. A phone that has been lost is already
+     * carrying a signed access token, and until the counter moved on it went on marking
+     * attendance under that name for as long as the token had left to run.</p>
      *
      * <p>Deliberately no way to read a password back — the admin knows what they typed, and
      * an endpoint that returns credentials is one that logs and caches them.</p>
@@ -162,6 +169,7 @@ public class UserService {
     public void resetPassword(UUID id, ResetPasswordRequest request) {
         User user = requireUser(id);
         user.changePassword(passwordEncoder.encode(request.temporaryPassword()), true);
+        user.endAllSessions();
         refreshTokens.revokeAllForUser(user.getId(), Instant.now(), "PASSWORD_RESET");
         audit.record("USER", user.getId(), "PASSWORD_RESET", null,
                 Map.of("mustChangePassword", true), null);
