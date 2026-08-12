@@ -1,8 +1,12 @@
 package in.nirman.modules.inventory.service;
 
+import in.nirman.modules.inventory.domain.GoodsReceipt;
+import in.nirman.modules.inventory.domain.GoodsReceiptItem;
 import in.nirman.modules.inventory.domain.StockBalance;
 import in.nirman.modules.inventory.domain.StockTransaction;
 import in.nirman.modules.inventory.domain.StockTransaction.TxnType;
+import in.nirman.modules.inventory.repository.GoodsReceiptItemRepository;
+import in.nirman.modules.inventory.repository.GoodsReceiptRepository;
 import in.nirman.modules.inventory.repository.StockBalanceRepository;
 import in.nirman.modules.inventory.repository.StockTransactionRepository;
 import in.nirman.modules.masterdata.service.MaterialLookup;
@@ -45,15 +49,22 @@ public class InventoryLookupService implements InventoryLookup {
 
     private final StockTransactionRepository transactions;
     private final StockBalanceRepository balances;
+    private final GoodsReceiptRepository goodsReceipts;
+    private final GoodsReceiptItemRepository goodsReceiptLines;
     private final MaterialLookup materials;
     private final SiteLookup sites;
     private final CurrentUserProvider currentUser;
 
     public InventoryLookupService(StockTransactionRepository transactions,
-                                 StockBalanceRepository balances, MaterialLookup materials,
+                                 StockBalanceRepository balances,
+                                 GoodsReceiptRepository goodsReceipts,
+                                 GoodsReceiptItemRepository goodsReceiptLines,
+                                 MaterialLookup materials,
                                  SiteLookup sites, CurrentUserProvider currentUser) {
         this.transactions = transactions;
         this.balances = balances;
+        this.goodsReceipts = goodsReceipts;
+        this.goodsReceiptLines = goodsReceiptLines;
         this.materials = materials;
         this.sites = sites;
         this.currentUser = currentUser;
@@ -195,6 +206,50 @@ public class InventoryLookupService implements InventoryLookup {
     @Override
     public int consumptionWithoutBoqItem(UUID siteId, LocalDate from, LocalDate to) {
         return (int) transactions.countConsumptionWithoutBoqItem(orgId(), siteId, from, to);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Read off the receipts rather than off a per-vendor table, because the receipts are
+     * where it is written down and a second copy is a second version of the truth. Two
+     * queries and no third: the receipts, then every line of them at once.</p>
+     */
+    @Override
+    public List<VendorPurchase> vendorPurchases(UUID vendorId, LocalDate from, LocalDate to) {
+        List<GoodsReceipt> found = goodsReceipts.findForVendor(orgId(), vendorId, from, to);
+        if (found.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, List<GoodsReceiptItem>> byReceipt = goodsReceiptLines
+                .findByGrnIdIn(found.stream().map(GoodsReceipt::getId).toList()).stream()
+                .collect(Collectors.groupingBy(GoodsReceiptItem::getGrnId));
+        Set<UUID> materialIds = byReceipt.values().stream().flatMap(List::stream)
+                .map(GoodsReceiptItem::getMaterialId).collect(Collectors.toSet());
+        Map<UUID, MaterialLookup.MaterialInfo> materialsById = materials.byIds(materialIds);
+        Map<UUID, String> unitCodes = unitCodesFor(byReceipt);
+
+        List<VendorPurchase> rows = new ArrayList<>();
+        for (GoodsReceipt receipt : found) {
+            for (GoodsReceiptItem line : byReceipt.getOrDefault(receipt.getId(), List.of())) {
+                MaterialLookup.MaterialInfo material = materialsById.get(line.getMaterialId());
+                rows.add(new VendorPurchase(receipt.getId(), receipt.getGrnNumber(),
+                        receipt.getReceiptDate(), receipt.getInvoiceNumber(), receipt.getSiteId(),
+                        line.getMaterialId(),
+                        material == null ? null : material.code(),
+                        material == null ? null : material.name(),
+                        unitCodes.get(line.getUnitId()),
+                        line.getQuantity(), line.getRate(), line.getAmount(),
+                        receipt.getWorkflowStatus().hasPosted()));
+            }
+        }
+        return rows;
+    }
+
+    private Map<UUID, String> unitCodesFor(Map<UUID, List<GoodsReceiptItem>> byReceipt) {
+        Set<UUID> unitIds = byReceipt.values().stream().flatMap(List::stream)
+                .map(GoodsReceiptItem::getUnitId).collect(Collectors.toSet());
+        return unitIds.isEmpty() ? Map.of() : materials.unitCodes(unitIds);
     }
 
     // ------------------------------------------------------------------ internals

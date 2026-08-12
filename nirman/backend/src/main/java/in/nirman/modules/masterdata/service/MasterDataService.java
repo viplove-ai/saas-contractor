@@ -172,7 +172,10 @@ public class MasterDataService {
         return mapper.toResponse(requireVendor(id));
     }
 
-    @PreAuthorize("hasAuthority('masterdata:write')")
+    // vendor:write, not masterdata:write (V21). Onboarding a dealer is the accountant's
+    // work — he holds the GSTIN, the bank details and the credit terms — and he deliberately
+    // does not hold masterdata:write, where a mistake reaches every screen in the system.
+    @PreAuthorize("hasAuthority('vendor:write')")
     public VendorResponse createVendor(CreateVendorRequest request) {
         requireFreeCode(vendors.existsByOrgIdAndCode(orgId(), request.code()), "Vendor",
                 request.code());
@@ -194,7 +197,7 @@ public class MasterDataService {
         return mapper.toResponse(vendor);
     }
 
-    @PreAuthorize("hasAuthority('masterdata:write')")
+    @PreAuthorize("hasAuthority('vendor:write')")
     public VendorResponse updateVendor(UUID id, UpdateVendorRequest request) {
         Vendor vendor = requireVendor(id);
         requireVersion(vendor.getVersion(), request.version(), "Vendor", id);

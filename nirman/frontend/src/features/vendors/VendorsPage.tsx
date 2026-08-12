@@ -1,0 +1,248 @@
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  MenuItem,
+  Paper,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography,
+} from '@mui/material';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { apiErrorDetail } from '../../shared/apiClient';
+import { useAuth } from '../auth/AuthContext';
+import { useVendors } from './api';
+import { VendorFormDialog } from './VendorFormDialog';
+import { VENDOR_TYPE_LABEL, type Vendor, type VendorType } from './types';
+
+/**
+ * The supplier register.
+ *
+ * <p>Everything about a dealer was already in the system except a screen to put it on: the
+ * table has carried his GSTIN and his bank details since the first migration, and the only
+ * way to fill them in was a SQL prompt. This is that screen, and the row leads to his
+ * account — what he has sent, what he has billed, and what has gone out to him.</p>
+ */
+export function VendorsPage() {
+  const { hasPermission } = useAuth();
+  const [q, setQ] = useState('');
+  const [type, setType] = useState('');
+  const [editing, setEditing] = useState<Vendor | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+
+  const vendors = useVendors(q, type);
+  const canWrite = hasPermission('vendor:write');
+  const canSeeMoney = hasPermission('vendor:balance:manage');
+
+  const openNew = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  return (
+    <Stack spacing={3}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={2}
+        justifyContent="space-between"
+        alignItems={{ sm: 'center' }}
+      >
+        <Stack spacing={0.5}>
+          <Typography variant="h1">Suppliers</Typography>
+          <Typography color="text.secondary">
+            Dealers, subcontractors and transporters — how to reach them, what they have sent,
+            and where each account stands.
+          </Typography>
+        </Stack>
+        {canWrite && (
+          <Button variant="contained" color="secondary" onClick={openNew}>
+            Onboard a supplier
+          </Button>
+        )}
+      </Stack>
+
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <TextField
+          label="Search"
+          value={q}
+          onChange={(event) => setQ(event.target.value)}
+          placeholder="Name or code"
+          sx={{ maxWidth: 320, flex: 1 }}
+        />
+        <TextField
+          select
+          label="Kind"
+          value={type}
+          onChange={(event) => setType(event.target.value)}
+          sx={{ minWidth: 200 }}
+        >
+          <MenuItem value="">All kinds</MenuItem>
+          {(Object.keys(VENDOR_TYPE_LABEL) as VendorType[]).map((option) => (
+            <MenuItem key={option} value={option}>
+              {VENDOR_TYPE_LABEL[option]}
+            </MenuItem>
+          ))}
+        </TextField>
+      </Stack>
+
+      {vendors.isLoading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <CircularProgress />
+        </Box>
+      )}
+      {vendors.isError && <Alert severity="error">{apiErrorDetail(vendors.error)}</Alert>}
+
+      {/* Phone: a card each. The register has six columns and the last is Actions, which on
+          a 375px screen sits off the right edge of a table nobody thinks to scroll. */}
+      {vendors.data && (
+        <Stack
+          component="ul"
+          aria-label="Suppliers"
+          spacing={2}
+          sx={{ display: { xs: 'flex', md: 'none' }, listStyle: 'none', m: 0, p: 0 }}
+        >
+          {vendors.data.map((vendor) => (
+            <Paper
+              key={vendor.id}
+              component="li"
+              elevation={0}
+              sx={{ p: 2, border: 1, borderColor: 'divider' }}
+            >
+              <Stack spacing={1}>
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography fontWeight={600}>{vendor.name}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {vendor.code} · {VENDOR_TYPE_LABEL[vendor.vendorType]}
+                    </Typography>
+                  </Box>
+                  {!vendor.active && <Chip size="small" label="Inactive" />}
+                </Stack>
+                <Typography variant="body2" color="text.secondary">
+                  {contactLine(vendor)}
+                </Typography>
+                <Stack direction="row" spacing={1}>
+                  {canSeeMoney && (
+                    <Button size="small" component={Link} to={`/vendors/${vendor.id}`}>
+                      Account
+                    </Button>
+                  )}
+                  {canWrite && (
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setEditing(vendor);
+                        setFormOpen(true);
+                      }}
+                    >
+                      Edit
+                    </Button>
+                  )}
+                </Stack>
+              </Stack>
+            </Paper>
+          ))}
+          {vendors.data.length === 0 && (
+            <Typography component="li" color="text.secondary">
+              No suppliers on the register yet.
+            </Typography>
+          )}
+        </Stack>
+      )}
+
+      {vendors.data && (
+        <Paper
+          elevation={0}
+          sx={{
+            display: { xs: 'none', md: 'block' },
+            border: 1,
+            borderColor: 'divider',
+            overflowX: 'auto',
+          }}
+        >
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Supplier</TableCell>
+                <TableCell>Kind</TableCell>
+                <TableCell>Contact</TableCell>
+                <TableCell>GSTIN</TableCell>
+                <TableCell align="right">Credit</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {vendors.data.map((vendor) => (
+                <TableRow key={vendor.id} hover>
+                  <TableCell>
+                    <Typography fontWeight={600}>{vendor.name}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {vendor.code}
+                      {!vendor.active && ' · inactive'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>{VENDOR_TYPE_LABEL[vendor.vendorType]}</TableCell>
+                  <TableCell>{contactLine(vendor)}</TableCell>
+                  {/* An em dash, not a blank: "nobody has entered it" is worth reading as
+                      a gap rather than as an empty cell somebody might take for none. */}
+                  <TableCell>{vendor.gstin || '—'}</TableCell>
+                  <TableCell align="right">
+                    {vendor.creditDays === 0 ? 'On delivery' : `${vendor.creditDays} days`}
+                  </TableCell>
+                  <TableCell align="right">
+                    <Stack direction="row" spacing={1} justifyContent="flex-end">
+                      {canSeeMoney && (
+                        <Button size="small" component={Link} to={`/vendors/${vendor.id}`}>
+                          Account
+                        </Button>
+                      )}
+                      {canWrite && (
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setEditing(vendor);
+                            setFormOpen(true);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                      )}
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {vendors.data.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6}>
+                    <Typography color="text.secondary">
+                      No suppliers on the register yet.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Paper>
+      )}
+
+      <VendorFormDialog
+        open={formOpen}
+        vendor={editing}
+        onClose={() => setFormOpen(false)}
+      />
+    </Stack>
+  );
+}
+
+/** The person and the number, or whichever of the two is on file. */
+function contactLine(vendor: Vendor): string {
+  return [vendor.contactPerson, vendor.mobile].filter(Boolean).join(' · ') || '—';
+}

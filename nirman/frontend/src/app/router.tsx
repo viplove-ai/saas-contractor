@@ -127,6 +127,12 @@ export const router = createBrowserRouter([
           screen('stores', async () => ({
             Component: (await import('../features/admin/StoresPage')).StoresPage,
           })),
+          screen('vendors', async () => ({
+            Component: (await import('../features/vendors/VendorsPage')).VendorsPage,
+          })),
+          screen('vendors/:vendorId', async () => ({
+            Component: (await import('../features/vendors/VendorDetailPage')).VendorDetailPage,
+          })),
         ],
       },
     ],

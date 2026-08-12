@@ -68,6 +68,77 @@ public final class CashDtos {
             LocalDate oldestUnpaidDate) {
     }
 
+    /**
+     * Money paid to a supplier before there is a bill to put it against.
+     *
+     * <p>It is how a lorry of steel gets loaded, and the system could not record it: a
+     * payment had to name an expense. The accountant was told, in as many words by the
+     * overpayment refusal, to "record the excess as a separate advance" — and had nowhere to
+     * record it. So it went in a second book, which is where a supplier's account and the
+     * system's account of him stop agreeing.</p>
+     */
+    public record RecordVendorAdvanceRequest(
+            @NotNull LocalDate paymentDate,
+            @NotNull @DecimalMin(value = "0", inclusive = false) BigDecimal amount,
+            @NotBlank @Size(max = 20) String paymentMode,
+            @Size(max = 80) String referenceNumber,
+            @Size(max = 60) String bankAccount,
+            /** Why it went out early. An advance with no reason is indistinguishable later
+             *  from a payment somebody forgot to attach to a bill. */
+            @NotBlank @Size(max = 500) String remarks) {
+    }
+
+    /**
+     * Where a supplier's account stands, in figures that are each answerable on their own.
+     *
+     * <p>Deliberately five numbers rather than one balance. "He is owed 40,000" is the
+     * question nobody can settle an argument with — the supplier wants to know which bills,
+     * the accountant wants to know what has already gone out, and the advance sitting
+     * against no bill is the figure both of them forget. A single net balance hides all
+     * three, and it is the one number that cannot be reconciled against anything he holds.</p>
+     *
+     * @param billedAmount     approved bills from him, whether paid or not
+     * @param paidAgainstBills cash that went out against those bills
+     * @param advancePaid      cash paid on account, against no bill of his
+     * @param outstanding      billed less paid: what he is still owed on bills raised
+     * @param netPosition      outstanding less the unadjusted advance. Negative means we are
+     *                         ahead of him — money is sitting with him against nothing yet.
+     */
+    public record VendorAccountResponse(
+            UUID vendorId,
+            String vendorCode,
+            String vendorName,
+            BigDecimal openingBalance,
+            BigDecimal billedAmount,
+            BigDecimal paidAgainstBills,
+            BigDecimal advancePaid,
+            BigDecimal outstanding,
+            BigDecimal netPosition,
+            int openBills,
+            LocalDate oldestUnpaidDate,
+            BigDecimal purchasedValue,
+            int deliveryCount) {
+    }
+
+    /** One line a supplier delivered: what, how much, at what rate, on which bill. */
+    public record VendorPurchaseRow(
+            UUID receiptId,
+            String grnNumber,
+            LocalDate receiptDate,
+            String invoiceNumber,
+            UUID siteId,
+            UUID materialId,
+            String materialCode,
+            String materialName,
+            String unitCode,
+            BigDecimal quantity,
+            /** Null while the office has not priced the line — the delivery still happened. */
+            BigDecimal rate,
+            BigDecimal amount,
+            /** False until the delivery was verified into the store. */
+            boolean received) {
+    }
+
     // ------------------------------------------------------------------ site advances
 
     public record IssueAdvanceRequest(

@@ -35,6 +35,25 @@ public interface GoodsReceiptRepository extends JpaRepository<GoodsReceipt, UUID
                                        @Param("vendorId") UUID vendorId,
                                        @Param("invoiceNumber") String invoiceNumber);
 
+    /**
+     * Everything one supplier delivered, newest first. Cancelled receipts are left out —
+     * a voided delivery is one nobody claims happened, and it would make the history
+     * disagree with the invoices he sent.
+     */
+    @Query("""
+            SELECT g FROM GoodsReceipt g
+            WHERE g.orgId = :orgId
+              AND g.vendorId = :vendorId
+              AND (:from IS NULL OR g.receiptDate >= :from)
+              AND (:to IS NULL OR g.receiptDate <= :to)
+              AND g.workflowStatus <> in.nirman.modules.inventory.domain.DocumentWorkflow.CANCELLED
+            ORDER BY g.receiptDate DESC, g.grnNumber DESC
+            """)
+    List<GoodsReceipt> findForVendor(@Param("orgId") UUID orgId,
+                                     @Param("vendorId") UUID vendorId,
+                                     @Param("from") LocalDate from,
+                                     @Param("to") LocalDate to);
+
     @Query("""
             SELECT g FROM GoodsReceipt g
             WHERE g.orgId = :orgId

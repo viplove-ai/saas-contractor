@@ -103,4 +103,46 @@ public interface InventoryLookup {
 
     /** Issues charged to no work item over a period — consumption nobody can attribute. */
     int consumptionWithoutBoqItem(UUID siteId, LocalDate from, LocalDate to);
+
+    /**
+     * One line a supplier delivered: what it was, how much of it, and at what rate.
+     *
+     * <p>The rate is the one the office put on the line against his invoice, so it is what
+     * he charged rather than what the material is worth now. That is the point of the
+     * history — a rate that has moved from 385 to 415 over four deliveries is the
+     * conversation somebody is about to have with him.</p>
+     *
+     * @param rate null on a delivery nobody has priced yet. It is still a delivery, and
+     *             leaving it off the list would hide exactly the row that needs attention.
+     */
+    record VendorPurchase(
+            UUID receiptId,
+            String grnNumber,
+            LocalDate receiptDate,
+            String invoiceNumber,
+            UUID siteId,
+            UUID materialId,
+            String materialCode,
+            String materialName,
+            String unitCode,
+            BigDecimal quantity,
+            BigDecimal rate,
+            BigDecimal amount,
+            boolean received) {
+    }
+
+    /**
+     * Everything one supplier has sent, newest first, line by line.
+     *
+     * <p>Not narrowed by site assignment, deliberately: this is a question about a supplier's
+     * account rather than about a site's work, and the two permissions that reach it —
+     * {@code vendor:balance:manage} and {@code vendor:write} — belong to roles that see the
+     * whole company anyway. Narrowing it would produce a purchase history that does not add
+     * up to the invoices he sent.</p>
+     *
+     * @param received true when the delivery was verified into the store. An unverified one
+     *                 is a claim, and it is listed as such rather than left out — the
+     *                 supplier believes he delivered it either way.
+     */
+    List<VendorPurchase> vendorPurchases(UUID vendorId, LocalDate from, LocalDate to);
 }

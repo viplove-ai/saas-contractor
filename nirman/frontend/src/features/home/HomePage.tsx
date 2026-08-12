@@ -89,6 +89,9 @@ const GROUPS: Group[] = [
       // A site arrives with its own store, so this tile is for the second one and the
       // third — not a step anybody has to take before the site can be used.
       { title: 'Stores', to: '/stores', permission: 'site:write' },
+      // Behind vendor:write rather than masterdata:write: onboarding a dealer is the
+      // accountant's work, and he deliberately does not hold the master-data permission.
+      { title: 'Suppliers', to: '/vendors', permission: 'vendor:write' },
     ],
   },
   {

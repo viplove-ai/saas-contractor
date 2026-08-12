@@ -8,12 +8,16 @@ import in.nirman.modules.expense.api.dto.CashDtos.AdvanceResponse;
 import in.nirman.modules.expense.api.dto.CashDtos.IssueAdvanceRequest;
 import in.nirman.modules.expense.api.dto.CashDtos.PaymentResponse;
 import in.nirman.modules.expense.api.dto.CashDtos.RecordPaymentRequest;
+import in.nirman.modules.expense.api.dto.CashDtos.RecordVendorAdvanceRequest;
 import in.nirman.modules.expense.api.dto.CashDtos.SettlementResponse;
 import in.nirman.modules.expense.api.dto.CashDtos.SubmitSettlementRequest;
+import in.nirman.modules.expense.api.dto.CashDtos.VendorAccountResponse;
 import in.nirman.modules.expense.api.dto.CashDtos.VendorBalanceRow;
+import in.nirman.modules.expense.api.dto.CashDtos.VendorPurchaseRow;
 import in.nirman.modules.expense.domain.SiteAdvance;
 import in.nirman.modules.expense.service.PaymentService;
 import in.nirman.modules.expense.service.SiteAdvanceService;
+import in.nirman.modules.expense.service.VendorAccountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -47,12 +51,14 @@ import java.util.UUID;
 public class CashController {
 
     private final PaymentService payments;
+    private final VendorAccountService vendorAccounts;
     private final SiteAdvanceService advances;
     private final ApprovalEngine approvals;
 
-    public CashController(PaymentService payments, SiteAdvanceService advances,
-                          ApprovalEngine approvals) {
+    public CashController(PaymentService payments, VendorAccountService vendorAccounts,
+                          SiteAdvanceService advances, ApprovalEngine approvals) {
         this.payments = payments;
+        this.vendorAccounts = vendorAccounts;
         this.advances = advances;
         this.approvals = approvals;
     }
@@ -78,6 +84,35 @@ public class CashController {
             @Valid @RequestBody RecordPaymentRequest request) {
         PaymentResponse created = payments.record(request);
         return ResponseEntity.created(URI.create("/api/v1/payments/" + created.id())).body(created);
+    }
+
+    /**
+     * Cash to a supplier before any bill of his exists. Its own endpoint rather than a
+     * payment with a null expense, because the two are different acts and the second is a
+     * mistake far more often than it is an advance.
+     */
+    @PostMapping("/vendors/{id}/advances")
+    @Operation(summary = "Pay a supplier on account, against no particular bill")
+    public ResponseEntity<PaymentResponse> recordVendorAdvance(
+            @PathVariable UUID id, @Valid @RequestBody RecordVendorAdvanceRequest request) {
+        PaymentResponse created = vendorAccounts.recordAdvance(id, request);
+        return ResponseEntity.created(URI.create("/api/v1/payments/" + created.id())).body(created);
+    }
+
+    @GetMapping("/vendors/{id}/account")
+    @Operation(summary = "Where one supplier's account stands: billed, paid, advanced, "
+            + "outstanding — five figures, never merged into a balance")
+    public VendorAccountResponse vendorAccount(@PathVariable UUID id) {
+        return vendorAccounts.account(id);
+    }
+
+    @GetMapping("/vendors/{id}/purchases")
+    @Operation(summary = "What the supplier has delivered, line by line, with quantity and rate")
+    public List<VendorPurchaseRow> vendorPurchases(
+            @PathVariable UUID id,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return vendorAccounts.purchases(id, from, to);
     }
 
     @GetMapping("/vendors/balances")
