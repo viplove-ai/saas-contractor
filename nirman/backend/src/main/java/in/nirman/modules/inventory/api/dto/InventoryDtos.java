@@ -30,11 +30,17 @@ public final class InventoryDtos {
      * tonnes, bags — and the server converts it to the material's base unit. The client
      * never sends base quantities, because the challan never has them.
      */
+    /**
+     * {@code rate} is optional and normally absent. The storekeeper books what came off the
+     * lorry against a challan that often carries no price at all; the office prices the line
+     * against the invoice afterwards, and the service refuses a rate from anyone who does
+     * not hold {@code inventory:price} rather than quietly dropping it.
+     */
     public record ReceiptLine(
             @NotNull UUID materialId,
             @NotNull UUID unitId,
             @NotNull @DecimalMin(value = "0", inclusive = false) BigDecimal quantity,
-            @NotNull @DecimalMin("0") BigDecimal rate,
+            @DecimalMin("0") BigDecimal rate,
             @DecimalMin("0") BigDecimal gstPercent,
             @Size(max = 300) String remarks) {
     }
@@ -328,6 +334,29 @@ public final class InventoryDtos {
             @Size(max = 500) String remarks) {
 
         public enum Action { VERIFY, REJECT }
+    }
+
+    /**
+     * What the office says a delivery cost, line by line.
+     *
+     * <p>Its own call rather than a field on the verify request, because pricing and
+     * checking against the challan are two acts and only sometimes the same person's. An
+     * accountant may price a week of receipts without deciding whether any of them matched
+     * what turned up; the engineer standing at the store may do both in one go, and the
+     * screen makes that two requests rather than making this one mean two things.</p>
+     *
+     * <p>Lines omitted keep the rate they had, so correcting one line of eight is a request
+     * about one line.</p>
+     */
+    public record PriceReceiptRequest(
+            @NotEmpty @Valid List<LinePrice> lines) {
+    }
+
+    public record LinePrice(
+            @NotNull UUID lineId,
+            /** Per the line's own unit, excluding tax. Zero is allowed: free issue happens. */
+            @NotNull @DecimalMin("0") BigDecimal rate,
+            @DecimalMin("0") BigDecimal gstPercent) {
     }
 
     public record ApproveIssueRequest(

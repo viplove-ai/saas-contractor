@@ -138,7 +138,8 @@ export interface ReceiptInput {
   invoiceNumber?: string | undefined;
   challanNumber?: string | undefined;
   vehicleNumber?: string | undefined;
-  lines: { materialId: string; unitId: string; quantity: number; rate: number }[];
+  /** The rate is left out unless the caller holds inventory:price — the server refuses it. */
+  lines: { materialId: string; unitId: string; quantity: number; rate?: number }[];
 }
 
 /**
@@ -167,6 +168,27 @@ export function useReceipts(storeId: string | undefined, status: string) {
         })
       ).data,
     enabled: Boolean(storeId),
+  });
+}
+
+/**
+ * What the office says the delivery cost. Its own call, because pricing and checking
+ * against the challan are two acts — and on this screen usually two people, twenty minutes
+ * apart.
+ */
+export function usePriceReceipt() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      id: string;
+      lines: { lineId: string; rate: number; gstPercent?: number }[];
+    }) =>
+      (await apiClient.put<Receipt>(`/inventory/goods-receipts/${input.id}/prices`, {
+        lines: input.lines,
+      })).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inventoryKeys.allReceipts });
+    },
   });
 }
 

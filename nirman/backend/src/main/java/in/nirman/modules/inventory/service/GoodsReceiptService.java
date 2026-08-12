@@ -6,6 +6,8 @@ import in.nirman.common.PageResponse;
 import in.nirman.common.PeriodLockGuard;
 import in.nirman.modules.audit.AuditService;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.CreateReceiptRequest;
+import in.nirman.modules.inventory.api.dto.InventoryDtos.LinePrice;
+import in.nirman.modules.inventory.api.dto.InventoryDtos.PriceReceiptRequest;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.ReceiptLine;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.ReceiptResponse;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.VerifyReceiptRequest;
@@ -34,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Deliveries arriving at a store.
@@ -144,6 +147,7 @@ public class GoodsReceiptService {
         if (!force) {
             assertNotDuplicate(request.vendorId(), request.invoiceNumber());
         }
+        assertMayPriceWhatItPriced(request.lines());
 
         String number = documentNumbers.next(orgId(), DocumentNumberService.DocType.GOODS_RECEIPT,
                 request.receiptDate());
@@ -172,8 +176,62 @@ public class GoodsReceiptService {
     }
 
     /**
+     * What the office says the delivery cost, line by line.
+     *
+     * <p>Separate from booking it, because the two are separate people's answers: the
+     * storekeeper has a challan, which is a delivery note and frequently carries no price
+     * at all, and the invoice reaches the office days later. Asking him for a rate got a
+     * guess, and a guessed rate does not stay on the document — it goes into the moving
+     * average and mis-values every issue of that material for months.</p>
+     *
+     * <p>Only before the material has moved. Once a receipt is verified its rate is in the
+     * ledger, and the way to correct a valuation from there is an adjustment, which leaves
+     * the trail that silently re-pricing a posted document would erase.</p>
+     */
+    @PreAuthorize("hasAuthority('inventory:price')")
+    public ReceiptResponse price(UUID id, PriceReceiptRequest request) {
+        GoodsReceipt receipt = require(id);
+        siteAccessGuard.assertCanAccess(receipt.getSiteId());
+        periodLockGuard.assertOpen(receipt.getSiteId(), receipt.getReceiptDate(),
+                PeriodLockGuard.Module.INVENTORY);
+        if (receipt.getWorkflowStatus().hasPosted()) {
+            throw new BusinessException("receipt.already-posted",
+                    "Receipt " + receipt.getGrnNumber() + " has already put material into the "
+                            + "store at the rate it carried. Correct the value with a stock "
+                            + "adjustment instead.");
+        }
+
+        Map<UUID, GoodsReceiptItem> byId = lines.findByGrnId(id).stream()
+                .collect(Collectors.toMap(GoodsReceiptItem::getId, line -> line));
+        for (LinePrice priced : request.lines()) {
+            GoodsReceiptItem line = byId.get(priced.lineId());
+            if (line == null) {
+                throw new BusinessException("receipt.unknown-line",
+                        "That line is not on receipt " + receipt.getGrnNumber() + ".");
+            }
+            // Re-derived rather than trusted from the request: the entered unit may be
+            // tonnes and the ledger works in kilograms, and the conversion is the material's
+            // to state, not the pricer's.
+            BigDecimal factor = materials.factorToBase(line.getMaterialId(), line.getUnitId());
+            line.price(priced.rate(), priced.gstPercent(), factor);
+        }
+        List<GoodsReceiptItem> all = lines.saveAll(byId.values());
+        applyTotals(receipt, all);
+
+        audit.record("GOODS_RECEIPT", id, "PRICE", null,
+                Map.of("grnNumber", receipt.getGrnNumber(), "linesPriced", request.lines().size(),
+                        "totalAmount", receipt.getTotalAmount()), null);
+        return responses.toReceiptResponse(receipt);
+    }
+
+    /**
      * The engineer's check against the challan. Verifying is what puts the material into
      * the store: one ledger row per line, at the rate on the invoice excluding tax.
+     *
+     * <p>Which is why it refuses a receipt with a line nobody has priced. Verification is
+     * the moment a claim becomes stock, and stock carries a value — a line posted at no rate
+     * would enter the moving average as free material and drag the valuation of everything
+     * already in the store down with it.</p>
      *
      * <p>Posting is idempotent at the line level, so a double click or a retried request
      * cannot deliver the same lorry twice.</p>
@@ -199,9 +257,12 @@ public class GoodsReceiptService {
             return responses.toReceiptResponse(receipt);
         }
 
+        List<GoodsReceiptItem> receiptLines = lines.findByGrnId(receipt.getId());
+        assertEveryLinePriced(receipt, receiptLines);
+
         receipt.verify(Instant.now(), currentUser.currentUserIdOrNull());
         int posted = 0;
-        for (GoodsReceiptItem line : lines.findByGrnId(receipt.getId())) {
+        for (GoodsReceiptItem line : receiptLines) {
             var movement = new StockLedgerService.Movement(receipt.getOrgId(),
                     receipt.getProjectId(), receipt.getSiteId(), receipt.getStoreId(),
                     line.getMaterialId(), TxnType.RECEIPT, receipt.getReceiptDate(),
@@ -259,6 +320,41 @@ public class GoodsReceiptService {
                             .formatted(invoiceNumber, clashes.getFirst().getGrnNumber())
                             + "force=true if this really is a second delivery.");
         }
+    }
+
+    /**
+     * Refuses a rate from somebody who may book a delivery but not price one.
+     *
+     * <p>A refusal rather than a quiet drop. The number would be wrong, and the storekeeper
+     * who typed it has to find out from the screen that it is not his to type — dropping it
+     * silently teaches him the field works and leaves him believing the receipt says what he
+     * entered.</p>
+     */
+    private void assertMayPriceWhatItPriced(List<ReceiptLine> requested) {
+        boolean pricedSomething = requested.stream().anyMatch(line -> line.rate() != null);
+        if (pricedSomething && !currentUser.hasPermission("inventory:price")) {
+            throw BusinessException.forbidden(
+                    "You can book the delivery, but the rate is set by the office against the "
+                            + "invoice. Send the quantities and leave the rate out.");
+        }
+    }
+
+    /**
+     * Names the materials still waiting on a price, rather than saying the receipt is not
+     * ready: on an eight-line delivery, which line is the whole question.
+     */
+    private static void assertEveryLinePriced(GoodsReceipt receipt, List<GoodsReceiptItem> items) {
+        List<GoodsReceiptItem> unpriced = items.stream()
+                .filter(line -> !line.isPriced())
+                .toList();
+        if (unpriced.isEmpty()) {
+            return;
+        }
+        throw new BusinessException("receipt.unpriced",
+                "Receipt " + receipt.getGrnNumber() + " has " + unpriced.size()
+                        + " line(s) with no rate yet. Verifying is what puts the material into "
+                        + "the store, and stock cannot be carried at no value — price them "
+                        + "against the invoice first.");
     }
 
     private List<GoodsReceiptItem> saveLines(UUID grnId, List<ReceiptLine> requested) {

@@ -45,10 +45,15 @@ public class GoodsReceiptItem {
     @Column(name = "quantity_base", nullable = false, precision = 18, scale = 4)
     private BigDecimal quantityBase;
 
-    @Column(name = "rate", nullable = false, precision = 18, scale = 4)
+    /**
+     * Per entered unit, excluding tax. Null until the office prices the line — the
+     * storekeeper books what arrived and is not the one who knows what it cost. Null is not
+     * zero: a free issue from the department is a real rate of zero and somebody decided it.
+     */
+    @Column(name = "rate", precision = 18, scale = 4)
     private BigDecimal rate;
 
-    @Column(name = "rate_base", nullable = false, precision = 18, scale = 4)
+    @Column(name = "rate_base", precision = 18, scale = 4)
     private BigDecimal rateBase;
 
     @Column(name = "gst_percent", nullable = false, precision = 5, scale = 2)
@@ -67,6 +72,8 @@ public class GoodsReceiptItem {
     }
 
     /**
+     * @param rate         per entered unit, excluding tax, or null for a line the office has
+     *                     not priced yet
      * @param factorToBase base units per entered unit — 1000 for a tonne of a material
      *                     stocked in kilograms, 1 when the entered unit is the base unit
      */
@@ -77,13 +84,36 @@ public class GoodsReceiptItem {
         this.materialId = materialId;
         this.unitId = unitId;
         this.quantity = quantity;
+        this.quantityBase = quantity.multiply(factorToBase).setScale(4, RoundingMode.HALF_UP);
+        price(rate, gstPercent, factorToBase);
+    }
+
+    /**
+     * Puts a price on the line, or replaces the one it had.
+     *
+     * <p>Everything money-shaped on the row is derived here rather than stored twice over:
+     * the base rate the ledger values at, the line amount, and the tax on it. An unpriced
+     * line carries zero for the two totals, because a receipt that has not been priced is
+     * worth nothing <em>so far</em> — and the totals are re-derived the moment it is.</p>
+     */
+    public void price(BigDecimal rate, BigDecimal gstPercent, BigDecimal factorToBase) {
         this.rate = rate;
         this.gstPercent = gstPercent == null ? BigDecimal.ZERO : gstPercent;
-        this.quantityBase = quantity.multiply(factorToBase).setScale(4, RoundingMode.HALF_UP);
+        if (rate == null) {
+            this.rateBase = null;
+            this.amount = BigDecimal.ZERO;
+            this.gstAmount = BigDecimal.ZERO;
+            return;
+        }
         this.rateBase = rate.divide(factorToBase, 4, RoundingMode.HALF_UP);
         this.amount = quantity.multiply(rate).setScale(2, RoundingMode.HALF_UP);
         this.gstAmount = amount.multiply(this.gstPercent)
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+    }
+
+    /** Whether the office has said what this cost. Zero is priced; null is not. */
+    public boolean isPriced() {
+        return rate != null;
     }
 
     public UUID getId() {

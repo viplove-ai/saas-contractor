@@ -124,7 +124,7 @@ class OfflineReplayIntegrationTest extends AbstractIntegrationTest {
         String unitId = unitId();
         String body = """
                 {"id":"%s","storeId":"%s","receiptDate":"%s","challanNumber":"CH-PHASE7",
-                 "lines":[{"materialId":"%s","unitId":"%s","quantity":40,"rate":410}]}"""
+                 "lines":[{"materialId":"%s","unitId":"%s","quantity":40}]}"""
                 .formatted(id, STORE_A, LocalDate.now(), materialId, unitId);
 
         mockMvc.perform(post("/api/v1/inventory/goods-receipts")

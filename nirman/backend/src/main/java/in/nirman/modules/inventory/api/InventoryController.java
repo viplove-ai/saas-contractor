@@ -12,6 +12,7 @@ import in.nirman.modules.inventory.api.dto.InventoryDtos.DecideCountRequest;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.IssueResponse;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.LedgerRow;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.OpeningStockRequest;
+import in.nirman.modules.inventory.api.dto.InventoryDtos.PriceReceiptRequest;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.ReceiptResponse;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.ReceiveTransferRequest;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.StockPosition;
@@ -36,6 +37,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -106,6 +108,14 @@ public class InventoryController {
     @GetMapping("/goods-receipts/{id}")
     public ReceiptResponse getReceipt(@PathVariable UUID id) {
         return receipts.get(id);
+    }
+
+    @PutMapping("/goods-receipts/{id}/prices")
+    @Operation(summary = "Price the lines against the invoice. The storekeeper who booked the "
+            + "delivery does not set the rate; verification refuses a line without one.")
+    public ReceiptResponse priceReceipt(@PathVariable UUID id,
+                                        @Valid @RequestBody PriceReceiptRequest request) {
+        return receipts.price(id, request);
     }
 
     @PostMapping("/goods-receipts/{id}/verify")

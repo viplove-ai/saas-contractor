@@ -126,8 +126,9 @@ export interface ReceiptLineResponse {
   quantity: number;
   quantityBase: number;
   baseUnitCode?: string;
-  rate: number;
-  rateBase: number;
+  /** Absent until the office prices the line against the invoice; see inventory:price. */
+  rate?: number;
+  rateBase?: number;
   gstPercent: number;
   gstAmount: number;
   amount: number;
@@ -210,7 +211,11 @@ export interface LineDraft {
   materialId: string;
   unitId: string;
   quantity: string;
-  /** Receipts only. Issues are valued by the server at the store's average. */
+  /**
+   * Receipts only, and only for somebody who may price one. The storekeeper books what the
+   * challan says and the office puts a rate on it afterwards; issues are valued by the
+   * server at the store's average.
+   */
   rate?: string;
   boqItemId?: string | undefined;
   /** What the storekeeper called it, when the catalogue has no name for it. */

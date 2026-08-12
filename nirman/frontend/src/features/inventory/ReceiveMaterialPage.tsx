@@ -21,12 +21,13 @@ import {
   useAddFieldMaterial,
   useCreateReceipt,
   useMaterials,
+  usePriceReceipt,
   useReceipts,
   useUnits,
   useVerifyReceipt,
 } from './api';
 import { StorePicker } from './StorePicker';
-import { MATERIAL_NOT_LISTED, type LineDraft } from './types';
+import { MATERIAL_NOT_LISTED, type LineDraft, type Receipt } from './types';
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -65,9 +66,9 @@ export function ReceiveMaterialPage() {
   const create = useCreateReceipt();
   const nameMaterial = useAddFieldMaterial();
   const pending = useReceipts(storeId || undefined, 'SUBMITTED');
-  const verify = useVerifyReceipt();
 
   const canVerify = hasPermission('inventory:verify');
+  const canPrice = hasPermission('inventory:price');
   const canNameMaterial = hasPermission('masterdata:provisional');
 
   const total = useMemo(
@@ -86,8 +87,15 @@ export function ReceiveMaterialPage() {
       ? (line.newName ?? '').trim().length > 0
       : Boolean(line.materialId);
 
+  // A rate is not part of being complete. The storekeeper has a challan, which is a
+  // delivery note and often carries no price at all; what makes his line finished is
+  // knowing what arrived and how much of it.
   const complete = lines.filter(
-    (line) => named(line) && line.unitId && Number(line.quantity) > 0 && line.rate !== '',
+    (line) =>
+      named(line) &&
+      line.unitId &&
+      Number(line.quantity) > 0 &&
+      (!canPrice || line.rate !== ''),
   );
 
   const updateLine = (key: string, patch: Partial<LineDraft>) => {
@@ -123,7 +131,12 @@ export function ReceiveMaterialPage() {
    */
   const submit = async () => {
     setNamingError(null);
-    let resolved: { materialId: string; unitId: string; quantity: number; rate: number }[];
+    let resolved: {
+      materialId: string;
+      unitId: string;
+      quantity: number;
+      rate?: number;
+    }[];
     try {
       resolved = await Promise.all(
         complete.map(async (line) => ({
@@ -138,7 +151,9 @@ export function ReceiveMaterialPage() {
               : line.materialId,
           unitId: line.unitId,
           quantity: Number(line.quantity),
-          rate: Number(line.rate),
+          // Omitted, not zero: the server refuses a rate from anyone without the
+          // permission, and zero would be a price somebody claimed.
+          ...(canPrice ? { rate: Number(line.rate) } : {}),
         })),
       );
     } catch (error) {
@@ -262,15 +277,17 @@ export function ReceiveMaterialPage() {
                 onChange={(e) => updateLine(line.key, { quantity: e.target.value })}
                 sx={{ minWidth: 120 }}
               />
-              <TextField
-                label="Rate"
-                type="number"
-                inputMode="decimal"
-                value={line.rate ?? ''}
-                onChange={(e) => updateLine(line.key, { rate: e.target.value })}
-                helperText="Per unit above, before tax"
-                sx={{ minWidth: 140 }}
-              />
+              {canPrice && (
+                <TextField
+                  label="Rate"
+                  type="number"
+                  inputMode="decimal"
+                  value={line.rate ?? ''}
+                  onChange={(e) => updateLine(line.key, { rate: e.target.value })}
+                  helperText="Per unit above, before tax"
+                  sx={{ minWidth: 140 }}
+                />
+              )}
               <IconButton
                 aria-label="Remove line"
                 onClick={() =>
@@ -297,15 +314,23 @@ export function ReceiveMaterialPage() {
         >
           Add material
         </Button>
-        <Typography color="text.secondary">Value before tax: {formatAmount(total)}</Typography>
+        {canPrice ? (
+          <Typography color="text.secondary">Value before tax: {formatAmount(total)}</Typography>
+        ) : (
+          <Typography color="text.secondary">
+            The office prices this against the invoice.
+          </Typography>
+        )}
       </Stack>
 
       {namingError && <Alert severity="error">{namingError}</Alert>}
       {create.isError && <Alert severity="error">{apiErrorDetail(create.error)}</Alert>}
       {create.isSuccess && (
         <Alert severity="success">
-          Booked {create.data.grnNumber}. It reaches the store once an engineer checks it
-          against the challan.
+          Booked {create.data.grnNumber}.{' '}
+          {canPrice
+            ? 'It reaches the store once it is checked against the challan.'
+            : 'It reaches the store once the office prices it and an engineer checks it against the challan.'}
         </Alert>
       )}
 
@@ -334,60 +359,147 @@ export function ReceiveMaterialPage() {
       {pending.data?.content.length === 0 && (
         <Typography color="text.secondary">Nothing is waiting at this store.</Typography>
       )}
-      {verify.isError && <Alert severity="error">{apiErrorDetail(verify.error)}</Alert>}
-
       <Stack spacing={1}>
         {(pending.data?.content ?? []).map((receipt) => (
-          <Paper key={receipt.id} elevation={0} sx={{ p: 1.5, border: 1, borderColor: 'divider' }}>
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={1.5}
-              justifyContent="space-between"
-              alignItems={{ sm: 'center' }}
-            >
-              <div>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Typography fontWeight={600}>{receipt.grnNumber}</Typography>
-                  <StatusChip status="SUBMITTED" />
-                </Stack>
-                <Typography variant="body2" color="text.secondary">
-                  {receipt.receiptDate}
-                  {receipt.challanNumber && <> · challan {receipt.challanNumber}</>}
-                  {' · '}
-                  {formatAmount(receipt.totalAmount)}
-                </Typography>
-                {receipt.lines.map((line) => (
-                  <Typography key={line.id} variant="body2" color="text.secondary">
-                    {line.materialName} —{' '}
-                    {formatQuantity(line.quantity, line.unitCode)} @ {formatAmount(line.rate)}
-                  </Typography>
-                ))}
-              </div>
-              {canVerify && (
-                <Stack direction="row" spacing={1}>
-                  <Button
-                    variant="contained"
-                    color="secondary"
-                    disabled={verify.isPending}
-                    onClick={() => verify.mutate({ id: receipt.id, action: 'VERIFY' })}
-                    sx={{ minHeight: 48 }}
-                  >
-                    Matches challan
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    disabled={verify.isPending}
-                    onClick={() => verify.mutate({ id: receipt.id, action: 'REJECT' })}
-                    sx={{ minHeight: 48 }}
-                  >
-                    Reject
-                  </Button>
-                </Stack>
-              )}
-            </Stack>
-          </Paper>
+          <PendingReceipt
+            key={receipt.id}
+            receipt={receipt}
+            canVerify={canVerify}
+            canPrice={canPrice}
+          />
         ))}
       </Stack>
     </Stack>
+  );
+}
+
+/**
+ * One delivery waiting to be checked, and priced on the way.
+ *
+ * <p>Pricing lives here rather than on the entry form above because it is the office's
+ * answer and the form is the gate's. What the storekeeper had in his hand was a challan,
+ * which frequently carries no price; the invoice reaches the office days later, and until
+ * somebody has read it the rate is a guess that would go straight into the moving average.</p>
+ *
+ * <p>Two calls on one button, in order: the rates go up first, then the verification that
+ * posts them to the ledger. They are two acts on the server — an accountant may price a week
+ * of receipts without deciding whether any of them matched what turned up — but at a small
+ * site it is one person with the invoice in front of him, so the screen makes it one press.</p>
+ */
+function PendingReceipt({
+  receipt,
+  canVerify,
+  canPrice,
+}: {
+  receipt: Receipt;
+  canVerify: boolean;
+  canPrice: boolean;
+}) {
+  const price = usePriceReceipt();
+  const verify = useVerifyReceipt();
+  const [rates, setRates] = useState<Record<string, string>>({});
+
+  const unpriced = receipt.lines.filter((line) => line.rate === undefined);
+  /** Every line has either a rate on file or one typed here, so verification will not bounce. */
+  const readyToVerify = unpriced.every((line) => Number(rates[line.id] ?? '') >= 0 && rates[line.id] !== undefined && rates[line.id] !== '');
+  const busy = price.isPending || verify.isPending;
+
+  const priceThenVerify = async () => {
+    const typed = Object.entries(rates)
+      .filter(([, value]) => value !== '')
+      .map(([lineId, value]) => ({ lineId, rate: Number(value) }));
+    if (typed.length > 0) {
+      await price.mutateAsync({ id: receipt.id, lines: typed });
+    }
+    await verify.mutateAsync({ id: receipt.id, action: 'VERIFY' });
+  };
+
+  return (
+    <Paper elevation={0} sx={{ p: 1.5, border: 1, borderColor: 'divider' }}>
+      <Stack spacing={1.5}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1.5}
+          justifyContent="space-between"
+          alignItems={{ sm: 'center' }}
+        >
+          <div>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Typography fontWeight={600}>{receipt.grnNumber}</Typography>
+              <StatusChip status="SUBMITTED" />
+            </Stack>
+            <Typography variant="body2" color="text.secondary">
+              {receipt.receiptDate}
+              {receipt.challanNumber && <> · challan {receipt.challanNumber}</>}
+              {unpriced.length === 0 && <> · {formatAmount(receipt.totalAmount)}</>}
+            </Typography>
+            {receipt.lines.map((line) => (
+              <Typography key={line.id} variant="body2" color="text.secondary">
+                {line.materialName} — {formatQuantity(line.quantity, line.unitCode)}
+                {line.rate === undefined ? ' · not priced yet' : ` @ ${formatAmount(line.rate)}`}
+              </Typography>
+            ))}
+          </div>
+          {canVerify && (
+            <Stack direction="row" spacing={1}>
+              <Button
+                variant="contained"
+                color="secondary"
+                disabled={busy || !readyToVerify}
+                onClick={() => void priceThenVerify()}
+                sx={{ minHeight: 48 }}
+              >
+                Matches challan
+              </Button>
+              <Button
+                variant="outlined"
+                disabled={busy}
+                onClick={() => verify.mutate({ id: receipt.id, action: 'REJECT' })}
+                sx={{ minHeight: 48 }}
+              >
+                Reject
+              </Button>
+            </Stack>
+          )}
+        </Stack>
+
+        {/*
+          The rates the office is putting on it. Only shown to somebody who may set one, and
+          only for the lines still waiting: a receipt already priced needs nothing here, and
+          a rate already posted is corrected with a stock adjustment, not by retyping it.
+        */}
+        {canPrice && unpriced.length > 0 && (
+          <Stack spacing={1}>
+            <Typography variant="body2" color="text.secondary">
+              Rate against the invoice, before tax:
+            </Typography>
+            {unpriced.map((line) => (
+              <TextField
+                key={line.id}
+                label={line.materialName ?? 'Rate'}
+                type="number"
+                inputMode="decimal"
+                size="small"
+                value={rates[line.id] ?? ''}
+                onChange={(e) =>
+                  setRates((current) => ({ ...current, [line.id]: e.target.value }))
+                }
+                helperText={`Per ${line.unitCode ?? 'unit'}`}
+                sx={{ maxWidth: 240 }}
+              />
+            ))}
+          </Stack>
+        )}
+
+        {!canPrice && unpriced.length > 0 && (
+          <Typography variant="body2" color="text.secondary">
+            Waiting on the office to price it. It cannot reach the store until then.
+          </Typography>
+        )}
+
+        {price.isError && <Alert severity="error">{apiErrorDetail(price.error)}</Alert>}
+        {verify.isError && <Alert severity="error">{apiErrorDetail(verify.error)}</Alert>}
+      </Stack>
+    </Paper>
   );
 }

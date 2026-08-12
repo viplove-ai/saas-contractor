@@ -4,10 +4,19 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReceiveMaterialPage } from './ReceiveMaterialPage';
-import type { Material, PageResponse, Receipt, Site, Store, Unit } from './types';
+import type {
+  Material,
+  PageResponse,
+  Receipt,
+  ReceiptLineResponse,
+  Site,
+  Store,
+  Unit,
+} from './types';
 
 const get = vi.fn();
 const post = vi.fn();
+const put = vi.fn();
 
 vi.mock('../../shared/apiClient', async () => {
   const actual = await vi.importActual<typeof import('../../shared/apiClient')>(
@@ -18,6 +27,7 @@ vi.mock('../../shared/apiClient', async () => {
     apiClient: {
       get: (...args: unknown[]) => get(...args),
       post: (...args: unknown[]) => post(...args),
+      put: (...args: unknown[]) => put(...args),
     },
   };
 });
@@ -120,6 +130,27 @@ const WAITING: PageResponse<Receipt> = {
   ],
 };
 
+function stripRate(line: ReceiptLineResponse): ReceiptLineResponse {
+  const { rate: _rate, rateBase: _rateBase, ...rest } = line;
+  return { ...rest, gstAmount: 0, amount: 0 };
+}
+
+/** The same delivery as it actually arrives: booked at the gate, with no rate on it yet. */
+const WAITING_UNPRICED: PageResponse<Receipt> = {
+  ...WAITING,
+  content: [
+    {
+      ...WAITING.content[0]!,
+      subTotal: 0,
+      gstAmount: 0,
+      totalAmount: 0,
+      // The keys are dropped rather than set to undefined: the API omits nulls, so an
+      // unpriced line arrives with no rate field at all.
+      lines: [stripRate(WAITING.content[0]!.lines[0]!)],
+    },
+  ],
+};
+
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -148,6 +179,7 @@ describe('ReceiveMaterialPage', () => {
     vi.clearAllMocks();
     permissions = ['inventory:receive', 'inventory:read'];
     mockGets();
+    put.mockResolvedValue({ data: {} });
     post.mockResolvedValue({ data: { id: 'g1', grnNumber: 'GRN-2025-0001', lines: [] } });
   });
 
@@ -197,7 +229,6 @@ describe('ReceiveMaterialPage', () => {
     await user.click(screen.getByRole('combobox', { name: 'Unit' }));
     await user.click(await screen.findByRole('option', { name: 'BAG' }));
     await user.type(screen.getByRole('spinbutton', { name: 'Quantity' }), '12');
-    await user.type(screen.getByRole('spinbutton', { name: 'Rate' }), '450');
     await user.click(screen.getByRole('button', { name: /Book 1 material/ }));
 
     await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
@@ -206,7 +237,7 @@ describe('ReceiveMaterialPage', () => {
     expect(post.mock.calls[0]![1]).toEqual({ name: 'Tile Adhesive', baseUnitId: 'unit-bag' });
     expect(post.mock.calls[1]![0]).toBe('/inventory/goods-receipts');
     expect((post.mock.calls[1]![1] as { lines: unknown[] }).lines).toEqual([
-      { materialId: 'mat-new', unitId: 'unit-bag', quantity: 12, rate: 450 },
+      { materialId: 'mat-new', unitId: 'unit-bag', quantity: 12 },
     ]);
   });
 
@@ -230,7 +261,6 @@ describe('ReceiveMaterialPage', () => {
     await user.click(screen.getByRole('combobox', { name: 'Material' }));
     await user.click(await screen.findByRole('option', { name: 'Cement OPC 43 Grade' }));
     await user.type(screen.getByRole('spinbutton', { name: 'Quantity' }), '100');
-    await user.type(screen.getByRole('spinbutton', { name: 'Rate' }), '415');
     await user.type(screen.getByRole('textbox', { name: 'Challan number' }), 'SS/856');
     await user.click(screen.getByRole('button', { name: /Book 1 material/ }));
 
@@ -244,12 +274,42 @@ describe('ReceiveMaterialPage', () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     );
     expect(body.challanNumber).toBe('SS/856');
+    // No rate: the storekeeper does not price a delivery, and the server refuses one
+    // from him outright rather than dropping it.
     expect(body.lines).toEqual([
-      { materialId: 'mat-cement', unitId: 'unit-bag', quantity: 100, rate: 415 },
+      { materialId: 'mat-cement', unitId: 'unit-bag', quantity: 100 },
     ]);
   });
 
-  it('will not book a line that is missing a rate', async () => {
+  /**
+   * The rate is not merely optional for him, it is absent. A disabled box would say the
+   * number is his and he is not allowed to change it; there is no box, because the answer
+   * is not his to give.
+   */
+  it('never asks the storekeeper for a rate', async () => {
+    renderPage();
+    await screen.findByRole('combobox', { name: 'Material' });
+
+    expect(screen.queryByRole('spinbutton', { name: 'Rate' })).not.toBeInTheDocument();
+    expect(screen.getByText('The office prices this against the invoice.')).toBeInTheDocument();
+  });
+
+  /** What arrived and how much of it is the whole of his answer, and it is enough. */
+  it('books a line the storekeeper has no rate for', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findByRole('combobox', { name: 'Material' });
+
+    await user.click(screen.getByRole('combobox', { name: 'Material' }));
+    await user.click(await screen.findByRole('option', { name: 'Cement OPC 43 Grade' }));
+    await user.type(screen.getByRole('spinbutton', { name: 'Quantity' }), '100');
+
+    expect(screen.getByRole('button', { name: /Book 1 material/ })).toBeEnabled();
+  });
+
+  /** Somebody who may price one is still held to filling the box that is in front of him. */
+  it('will not book a line whose rate the office left blank', async () => {
+    permissions = ['inventory:receive', 'inventory:read', 'inventory:price'];
     const user = userEvent.setup({ delay: null });
     renderPage();
     await screen.findByRole('combobox', { name: 'Material' });
@@ -270,11 +330,10 @@ describe('ReceiveMaterialPage', () => {
     await user.click(screen.getByRole('combobox', { name: 'Material' }));
     await user.click(await screen.findByRole('option', { name: 'Cement OPC 43 Grade' }));
     await user.type(screen.getByRole('spinbutton', { name: 'Quantity' }), '10');
-    await user.type(screen.getByRole('spinbutton', { name: 'Rate' }), '415');
     await user.click(screen.getByRole('button', { name: /Book 1 material/ }));
 
     expect(
-      await screen.findByText(/reaches the store once an engineer checks it/),
+      await screen.findByText(/reaches the store once the office prices it/),
     ).toBeInTheDocument();
   });
 
@@ -299,5 +358,44 @@ describe('ReceiveMaterialPage', () => {
     await waitFor(() => expect(post).toHaveBeenCalledOnce());
     expect(post.mock.calls[0]![0]).toBe('/inventory/goods-receipts/g9/verify');
     expect(post.mock.calls[0]![1]).toMatchObject({ action: 'VERIFY' });
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The two calls in order, on one press. Pricing and checking are separate acts on the
+   * server; at a small site they are one person with the invoice in front of him.
+   */
+  it('prices an unpriced delivery on the way to verifying it', async () => {
+    permissions = ['inventory:receive', 'inventory:read', 'inventory:verify', 'inventory:price'];
+    mockGets(WAITING_UNPRICED);
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findByText('GRN-2025-0009');
+
+    // Nothing can be signed off until somebody has said what it cost.
+    expect(screen.getByRole('button', { name: 'Matches challan' })).toBeDisabled();
+
+    await user.type(
+      screen.getByRole('spinbutton', { name: 'Cement OPC 43 Grade' }),
+      '415',
+    );
+    await user.click(screen.getByRole('button', { name: 'Matches challan' }));
+
+    await waitFor(() => expect(put).toHaveBeenCalledOnce());
+    expect(put.mock.calls[0]![0]).toBe('/inventory/goods-receipts/g9/prices');
+    expect(put.mock.calls[0]![1]).toEqual({ lines: [{ lineId: 'l1', rate: 415 }] });
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    expect(post.mock.calls[0]![0]).toBe('/inventory/goods-receipts/g9/verify');
+  });
+
+  /** He can see it is stuck, and why, without being handed a box that is not his. */
+  it('tells the storekeeper an unpriced delivery is waiting on the office', async () => {
+    mockGets(WAITING_UNPRICED);
+    renderPage();
+    await screen.findByText('GRN-2025-0009');
+
+    expect(screen.getByText(/Cement OPC 43 Grade — 100 BAG · not priced yet/)).toBeInTheDocument();
+    expect(screen.getByText(/Waiting on the office to price it/)).toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton', { name: 'Cement OPC 43 Grade' })).not.toBeInTheDocument();
   });
 });

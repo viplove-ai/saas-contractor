@@ -109,7 +109,7 @@ class FieldMaterialIntegrationTest extends AbstractIntegrationTest {
                         .content("""
                                 {"id":"%s","storeId":"%s","receiptDate":"%s",
                                  "challanNumber":"CH-FIELD-1",
-                                 "lines":[{"materialId":"%s","unitId":"%s","quantity":10,"rate":450}]}"""
+                                 "lines":[{"materialId":"%s","unitId":"%s","quantity":10}]}"""
                                 .formatted(UUID.randomUUID(), STORE_A, LocalDate.now(),
                                         materialId, bag)))
                 .andExpect(status().isCreated())

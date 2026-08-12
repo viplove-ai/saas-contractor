@@ -239,7 +239,8 @@ class StockLedgerIntegrationTest extends AbstractIntegrationTest {
         String bagUnit = unitId(uttam, "BAG");
         String material = createMaterial(uttam, TEST_CODE_PREFIX + "PERM", bagUnit);
 
-        String grnId = createReceipt(vivek, material, bagUnit, "20", "400");
+        // Unpriced, because a supervisor sending a rate is refused outright now (V20).
+        String grnId = createReceipt(vivek, material, bagUnit, "20", null);
         verify(vivek, grnId).andExpect(status().isForbidden());
 
         // And nothing reached the store on the strength of his own say-so.
@@ -276,6 +277,14 @@ class StockLedgerIntegrationTest extends AbstractIntegrationTest {
         verify(token, grnId).andExpect(status().isOk());
     }
 
+    /** A line as it goes out, with the rate left off entirely when nobody has priced it. */
+    private static String line(String materialId, String unitId, String quantity, String rate) {
+        String priced = rate == null ? "" : ",\"rate\":" + rate;
+        return """
+                {"materialId":"%s","unitId":"%s","quantity":%s%s}"""
+                .formatted(materialId, unitId, quantity, priced);
+    }
+
     private String createReceipt(String token, String materialId, String unitId,
                                  String quantity, String rate) throws Exception {
         return postReceipt(token, UUID.randomUUID().toString(), materialId, unitId, quantity, rate)
@@ -289,10 +298,9 @@ class StockLedgerIntegrationTest extends AbstractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"id":"%s","storeId":"%s","receiptDate":"%s",
-                                 "challanNumber":"CH-TEST",
-                                 "lines":[{"materialId":"%s","unitId":"%s","quantity":%s,"rate":%s}]}"""
-                                .formatted(clientId, STORE_A, LocalDate.now(), materialId,
-                                        unitId, quantity, rate)))
+                                 "challanNumber":"CH-TEST","lines":[%s]}"""
+                                .formatted(clientId, STORE_A, LocalDate.now(),
+                                        line(materialId, unitId, quantity, rate))))
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString());
