@@ -279,7 +279,7 @@ class LabourTransferIntegrationTest extends AbstractIntegrationTest {
         JsonNode directory = objectMapper.readTree(result.getResponse().getContentAsString());
         assertThat(directory).hasSize(2);
         // And it carries a destination only — nothing about how the other site is run.
-        assertThat(directory.get(0).has("supervisorId")).isFalse();
+        assertThat(directory.get(0).has("supervisorIds")).isFalse();
         assertThat(directory.get(0).has("standardShiftHours")).isFalse();
     }
 

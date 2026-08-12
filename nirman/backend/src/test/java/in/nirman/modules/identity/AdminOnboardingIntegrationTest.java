@@ -62,6 +62,10 @@ class AdminOnboardingIntegrationTest extends AbstractIntegrationTest {
         jdbc.update("""
                 DELETE FROM stores WHERE site_id IN
                     (SELECT id FROM sites WHERE code LIKE ?)""", TEST_SITE_PREFIX + "%");
+        // Who was named on it holds the site down the same way the store does (V19).
+        jdbc.update("""
+                DELETE FROM site_staff WHERE site_id IN
+                    (SELECT id FROM sites WHERE code LIKE ?)""", TEST_SITE_PREFIX + "%");
         jdbc.update("DELETE FROM sites WHERE code LIKE ?", TEST_SITE_PREFIX + "%");
     }
 
@@ -171,7 +175,7 @@ class AdminOnboardingIntegrationTest extends AbstractIntegrationTest {
                                  "monthlyWageDays":26,"version":%d}"""
                                 .formatted(site.get("version").asLong())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.siteEngineerId").doesNotExist());
+                .andExpect(jsonPath("$.siteEngineerIds").isEmpty());
 
         assertThat(sitesVisibleTo("dropped.eng", "Handover@5")).isEmpty();
         String engineerToken = loginToken("dropped.eng", "Handover@5");
@@ -192,7 +196,7 @@ class AdminOnboardingIntegrationTest extends AbstractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"projectId":"%s","code":"TST-C","name":"Test Block C",
-                                 "siteEngineerId":"%s","standardShiftHours":8.00,
+                                 "siteEngineerIds":["%s"],"standardShiftHours":8.00,
                                  "monthlyWageDays":26}"""
                                 .formatted(PROJECT_ID, supervisorId)))
                 .andExpect(status().isUnprocessableEntity());
@@ -287,7 +291,7 @@ class AdminOnboardingIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"projectId":"%s","code":"%s","name":"%s","siteEngineerId":"%s",
+                                {"projectId":"%s","code":"%s","name":"%s","siteEngineerIds":["%s"],
                                  "standardShiftHours":8.00,"monthlyWageDays":26}"""
                                 .formatted(PROJECT_ID, code, name, engineerId)))
                 .andExpect(status().isCreated())

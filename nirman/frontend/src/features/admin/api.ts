@@ -390,8 +390,9 @@ export interface SiteInput {
   code: string;
   name: string;
   address?: string | undefined;
-  siteEngineerId?: string | undefined;
-  supervisorId?: string | undefined;
+  /** Sent whole each time: the form's view of who runs the site replaces the register's. */
+  siteEngineerIds: string[];
+  supervisorIds: string[];
   startDate?: string | undefined;
   standardShiftHours: number;
   monthlyWageDays: number;
@@ -407,8 +408,6 @@ export function useCreateSite() {
         await apiClient.post<AdminSite>('/sites', {
           ...input,
           address: input.address || undefined,
-          siteEngineerId: input.siteEngineerId || undefined,
-          supervisorId: input.supervisorId || undefined,
           startDate: input.startDate || undefined,
         })
       ).data,
@@ -428,8 +427,8 @@ export function useUpdateSite() {
         await apiClient.put<AdminSite>(`/sites/${input.id}`, {
           name: input.name,
           address: input.address || undefined,
-          siteEngineerId: input.siteEngineerId || undefined,
-          supervisorId: input.supervisorId || undefined,
+          siteEngineerIds: input.siteEngineerIds,
+          supervisorIds: input.supervisorIds,
           status: input.status,
           startDate: input.startDate || undefined,
           standardShiftHours: input.standardShiftHours,

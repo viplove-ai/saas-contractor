@@ -128,8 +128,10 @@ export const siteSchema = z.object({
     .regex(/^[A-Za-z0-9._-]+$/, 'Letters, digits, dot, underscore and hyphen only'),
   name: z.string().trim().min(1, 'Enter the site name').max(200, 'At most 200 characters'),
   address: z.string().trim().optional(),
-  siteEngineerId: z.string().optional(),
-  supervisorId: z.string().optional(),
+  // Empty is allowed and is a real state: an engineer has to exist before the site he runs
+  // can be created, so a site is often added before anybody is named on it.
+  siteEngineerIds: z.array(z.string()),
+  supervisorIds: z.array(z.string()),
   startDate: z.string().optional(),
   status: z.enum(['PLANNED', 'ACTIVE', 'SUSPENDED', 'CLOSED']),
   standardShiftHours: z.coerce

@@ -14,6 +14,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 /** Request and response shapes for projects, sites and stores. */
@@ -113,8 +114,9 @@ public final class ProjectDtos {
             String address,
             BigDecimal latitude,
             BigDecimal longitude,
-            UUID siteEngineerId,
-            UUID supervisorId,
+            /** Everyone named on the site as engineer, and everyone named as supervisor. */
+            List<UUID> siteEngineerIds,
+            List<UUID> supervisorIds,
             Site.Status status,
             LocalDate startDate,
             BigDecimal standardShiftHours,
@@ -147,8 +149,13 @@ public final class ProjectDtos {
             String address,
             @Digits(integer = 3, fraction = 6) BigDecimal latitude,
             @Digits(integer = 3, fraction = 6) BigDecimal longitude,
-            UUID siteEngineerId,
-            UUID supervisorId,
+            /**
+             * The whole list each time, not a delta: the screen's view of who runs the site
+             * wins outright, and a null is read as "nobody", which is what an empty register
+             * means. Naming somebody here is what grants them the site.
+             */
+            List<UUID> siteEngineerIds,
+            List<UUID> supervisorIds,
             LocalDate startDate,
             @NotNull @Digits(integer = 2, fraction = 2)
             @jakarta.validation.constraints.DecimalMin(value = "0.5")
@@ -162,8 +169,9 @@ public final class ProjectDtos {
             String address,
             @Digits(integer = 3, fraction = 6) BigDecimal latitude,
             @Digits(integer = 3, fraction = 6) BigDecimal longitude,
-            UUID siteEngineerId,
-            UUID supervisorId,
+            /** @see CreateSiteRequest#siteEngineerIds — sent whole, and a null clears it. */
+            List<UUID> siteEngineerIds,
+            List<UUID> supervisorIds,
             Site.Status status,
             LocalDate startDate,
             @NotNull @Digits(integer = 2, fraction = 2)

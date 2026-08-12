@@ -14,10 +14,13 @@ import in.nirman.modules.project.api.dto.ProjectDtos.StoreResponse;
 import in.nirman.modules.project.api.dto.ProjectDtos.UpdateSiteRequest;
 import in.nirman.modules.project.api.dto.ProjectDtos.UpdateStoreRequest;
 import in.nirman.modules.project.domain.Site;
+import in.nirman.modules.project.domain.SiteStaff;
+import in.nirman.modules.project.domain.SiteStaff.Post;
 import in.nirman.modules.project.domain.Store;
 import in.nirman.modules.project.mapper.ProjectMapper;
 import in.nirman.modules.project.repository.ProjectRepository;
 import in.nirman.modules.project.repository.SiteRepository;
+import in.nirman.modules.project.repository.SiteStaffRepository;
 import in.nirman.modules.project.repository.StoreRepository;
 import in.nirman.security.CurrentUserProvider;
 import in.nirman.security.SiteAccessGuard;
@@ -36,7 +39,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Sites and their stores. Listing quietly narrows to the caller's assigned sites; direct
@@ -48,6 +50,7 @@ import java.util.stream.Stream;
 public class SiteService implements SiteLookup {
 
     private final SiteRepository sites;
+    private final SiteStaffRepository siteStaff;
     private final StoreRepository stores;
     private final ProjectRepository projects;
     private final SiteAccessGuard siteAccessGuard;
@@ -58,12 +61,14 @@ public class SiteService implements SiteLookup {
     private final AuditService audit;
     private final ProjectMapper mapper;
 
-    public SiteService(SiteRepository sites, StoreRepository stores, ProjectRepository projects,
+    public SiteService(SiteRepository sites, SiteStaffRepository siteStaff,
+                       StoreRepository stores, ProjectRepository projects,
                        SiteAccessGuard siteAccessGuard, SiteDeletionGuard deletionGuard,
                        StoreDeletionGuard storeDeletionGuard,
                        SiteStaffing staffing, CurrentUserProvider currentUser,
                        AuditService audit, ProjectMapper mapper) {
         this.sites = sites;
+        this.siteStaff = siteStaff;
         this.stores = stores;
         this.projects = projects;
         this.siteAccessGuard = siteAccessGuard;
@@ -90,7 +95,7 @@ public class SiteService implements SiteLookup {
                     .filter(s -> projectId == null || s.getProjectId().equals(projectId))
                     .toList();
         }
-        return result.stream().map(mapper::toResponse).toList();
+        return toResponses(result);
     }
 
     /**
@@ -107,13 +112,13 @@ public class SiteService implements SiteLookup {
         List<Site> result = projectId == null
                 ? sites.findByOrgIdAndDeletedAtIsNotNullOrderByCode(orgId)
                 : sites.findByOrgIdAndProjectIdAndDeletedAtIsNotNullOrderByCode(orgId, projectId);
-        return result.stream().map(mapper::toResponse).toList();
+        return toResponses(result);
     }
 
     @Transactional(readOnly = true)
     @PreAuthorize("hasAuthority('site:read')")
     public SiteResponse get(UUID id) {
-        return mapper.toResponse(requireSite(id));
+        return toResponse(requireSite(id));
     }
 
     /**
@@ -150,19 +155,19 @@ public class SiteService implements SiteLookup {
             throw BusinessException.conflict("site.code-taken",
                     "A site with code '" + request.code() + "' already exists.");
         });
-        requireStaff(orgId, request.siteEngineerId(), request.supervisorId());
+        List<UUID> engineers = requireStaff(orgId, request.siteEngineerIds(), Post.ENGINEER);
+        List<UUID> supervisors = requireStaff(orgId, request.supervisorIds(), Post.SUPERVISOR);
         Site site = new Site(orgId, request.projectId(), request.code(), request.name());
         applyMutableFields(site, request.name(), request.address(), request.latitude(),
-                request.longitude(), request.siteEngineerId(), request.supervisorId(),
+                request.longitude(),
                 request.startDate(), request.standardShiftHours(), request.monthlyWageDays(),
                 request.usesOutsourcedLabour());
         sites.save(site);
         createDefaultStore(site);
-        staffing.updateSiteAccess(orgId, site.getId(),
-                staffIds(request.siteEngineerId(), request.supervisorId()), Set.of());
+        replaceStaff(site, engineers, supervisors);
         audit.record("SITE", site.getId(), "CREATE", null,
                 Map.of("code", site.getCode(), "name", site.getName()), null);
-        return mapper.toResponse(site);
+        return toResponse(site);
     }
 
     /**
@@ -216,20 +221,22 @@ public class SiteService implements SiteLookup {
         Map<String, Object> before = Map.of("name", site.getName(),
                 "status", site.getStatus().name(),
                 "standardShiftHours", site.getStandardShiftHours());
-        requireStaff(site.getOrgId(), request.siteEngineerId(), request.supervisorId());
-        Set<UUID> previousStaff = staffIds(site.getSiteEngineerId(), site.getSupervisorId());
+        List<UUID> engineers = requireStaff(site.getOrgId(), request.siteEngineerIds(),
+                Post.ENGINEER);
+        List<UUID> supervisors = requireStaff(site.getOrgId(), request.supervisorIds(),
+                Post.SUPERVISOR);
         applyMutableFields(site, request.name(), request.address(), request.latitude(),
-                request.longitude(), request.siteEngineerId(), request.supervisorId(),
+                request.longitude(),
                 request.startDate(), request.standardShiftHours(), request.monthlyWageDays(),
                 request.usesOutsourcedLabour());
         if (request.status() != null) {
             site.setStatus(request.status());
         }
-        applyStaffChange(site, previousStaff);
+        replaceStaff(site, engineers, supervisors);
         audit.record("SITE", site.getId(), "UPDATE", before,
                 Map.of("name", site.getName(), "status", site.getStatus().name(),
                         "standardShiftHours", site.getStandardShiftHours()), null);
-        return mapper.toResponse(site);
+        return toResponse(site);
     }
 
     /**
@@ -255,7 +262,7 @@ public class SiteService implements SiteLookup {
         }
         deletionGuard.assertDeletable(site.getId());
         applyDelete(site, Instant.now(), reason);
-        return mapper.toResponse(site);
+        return toResponse(site);
     }
 
     /**
@@ -272,7 +279,9 @@ public class SiteService implements SiteLookup {
 
     private void applyDelete(Site site, Instant at, String reason) {
         site.delete(at, currentUser.currentUserIdOrNull(), reason);
-        Set<UUID> posted = staffIds(site.getSiteEngineerId(), site.getSupervisorId());
+        // The staff rows stay: they are what a restore puts back, and they are also the
+        // record of who ran the site while it existed. Only the access goes.
+        Set<UUID> posted = postedUserIds(site.getId());
         if (!posted.isEmpty()) {
             staffing.updateSiteAccess(site.getOrgId(), site.getId(), Set.of(), posted);
         }
@@ -292,7 +301,7 @@ public class SiteService implements SiteLookup {
         }
         requireLiveProject(site.getProjectId());
         applyRestore(site);
-        return mapper.toResponse(site);
+        return toResponse(site);
     }
 
     /** @see #deleteWithProject — the same arrangement in reverse. */
@@ -302,7 +311,7 @@ public class SiteService implements SiteLookup {
 
     private void applyRestore(Site site) {
         site.restore();
-        Set<UUID> posted = staffIds(site.getSiteEngineerId(), site.getSupervisorId());
+        Set<UUID> posted = postedUserIds(site.getId());
         if (!posted.isEmpty()) {
             staffing.updateSiteAccess(site.getOrgId(), site.getId(), posted, Set.of());
         }
@@ -539,35 +548,94 @@ public class SiteService implements SiteLookup {
 
     // ------------------------------------------------------------------ internals
 
-    private void requireStaff(UUID orgId, UUID engineerId, UUID supervisorId) {
-        if (engineerId != null) {
-            staffing.requireStaffMember(orgId, engineerId, "ENGINEER");
+    /**
+     * Checks every name the register is about to carry, and hands back the list de-duped.
+     *
+     * <p>A null list is nobody, which is what a site with no engineer yet looks like and is
+     * a real intermediate state — the engineer has to exist before the site he runs can be
+     * created. The same id twice is one posting: the screen sends what its switches say and
+     * two switches for one man is not two engineers.</p>
+     */
+    private List<UUID> requireStaff(UUID orgId, List<UUID> userIds, Post post) {
+        if (userIds == null || userIds.isEmpty()) {
+            return List.of();
         }
-        if (supervisorId != null) {
-            staffing.requireStaffMember(orgId, supervisorId, "SUPERVISOR");
-        }
+        List<UUID> distinct = userIds.stream().filter(Objects::nonNull).distinct().toList();
+        distinct.forEach(userId -> staffing.requireStaffMember(orgId, userId, post.name()));
+        return distinct;
     }
 
     /**
-     * Keeps site access in step with who is named on the site. Someone dropped from the
-     * site loses their assignment to it — that is what removing them was for — while
-     * someone who merely swapped seats (engineer to supervisor) appears in both sets and
-     * is left untouched.
+     * Writes the register's view of who runs the site, and keeps the access rows in step
+     * with it.
+     *
+     * <p>The lists arrive whole rather than as a delta, so the rows are replaced outright.
+     * What cannot be replaced outright is the access: somebody who merely swapped posts, or
+     * who is named twice over as engineer of one shift and supervisor of the other, appears
+     * in both the old and the new set and must not lose the site for an instant. So access
+     * is granted for the names that are new to the site and withdrawn only for the names
+     * that have left it entirely.</p>
      */
-    private void applyStaffChange(Site site, Set<UUID> previousStaff) {
-        Set<UUID> current = staffIds(site.getSiteEngineerId(), site.getSupervisorId());
+    private void replaceStaff(Site site, List<UUID> engineers, List<UUID> supervisors) {
+        Set<UUID> previous = postedUserIds(site.getId());
+        siteStaff.deleteAll(siteStaff.findBySiteId(site.getId()));
+        // Flushed before the inserts: the unique key is (site, user, post), and re-saving a
+        // posting that is not going to change would otherwise collide with its own old row.
+        siteStaff.flush();
+        for (UUID userId : engineers) {
+            siteStaff.save(new SiteStaff(site.getOrgId(), site.getId(), userId, Post.ENGINEER));
+        }
+        for (UUID userId : supervisors) {
+            siteStaff.save(new SiteStaff(site.getOrgId(), site.getId(), userId, Post.SUPERVISOR));
+        }
+
+        Set<UUID> current = new HashSet<>(engineers);
+        current.addAll(supervisors);
         Set<UUID> granted = new HashSet<>(current);
-        granted.removeAll(previousStaff);
-        Set<UUID> revoked = new HashSet<>(previousStaff);
+        granted.removeAll(previous);
+        Set<UUID> revoked = new HashSet<>(previous);
         revoked.removeAll(current);
         if (!granted.isEmpty() || !revoked.isEmpty()) {
             staffing.updateSiteAccess(site.getOrgId(), site.getId(), granted, revoked);
         }
     }
 
-    private static Set<UUID> staffIds(UUID engineerId, UUID supervisorId) {
-        return Stream.of(engineerId, supervisorId).filter(Objects::nonNull)
+    /** Everybody named on the site, under either post, each of them once. */
+    private Set<UUID> postedUserIds(UUID siteId) {
+        return siteStaff.findBySiteId(siteId).stream()
+                .map(SiteStaff::getUserId)
                 .collect(Collectors.toSet());
+    }
+
+    private SiteResponse toResponse(Site site) {
+        return withStaff(site, siteStaff.findBySiteId(site.getId()));
+    }
+
+    /** A register of sites, with one query for every row's names rather than one per row. */
+    private List<SiteResponse> toResponses(List<Site> found) {
+        if (found.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, List<SiteStaff>> bySite = siteStaff
+                .findBySiteIdIn(found.stream().map(Site::getId).toList()).stream()
+                .collect(Collectors.groupingBy(SiteStaff::getSiteId));
+        return found.stream()
+                .map(site -> withStaff(site, bySite.getOrDefault(site.getId(), List.of())))
+                .toList();
+    }
+
+    private SiteResponse withStaff(Site site, List<SiteStaff> posted) {
+        return mapper.toResponse(site, namesUnder(posted, Post.ENGINEER),
+                namesUnder(posted, Post.SUPERVISOR));
+    }
+
+    /** Sorted, so the register and the form both draw the same list in the same order. */
+    private static List<UUID> namesUnder(List<SiteStaff> posted, Post post) {
+        return posted.stream()
+                .filter(row -> row.getPost() == post)
+                .map(SiteStaff::getUserId)
+                .sorted()
+                .toList();
     }
 
     private Site requireSite(UUID id) {
@@ -580,7 +648,6 @@ public class SiteService implements SiteLookup {
 
     private static void applyMutableFields(Site site, String name, String address,
                                            java.math.BigDecimal latitude, java.math.BigDecimal longitude,
-                                           UUID engineerId, UUID supervisorId,
                                            java.time.LocalDate startDate,
                                            java.math.BigDecimal shiftHours, int wageDays,
                                            boolean usesOutsourcedLabour) {
@@ -588,8 +655,6 @@ public class SiteService implements SiteLookup {
         site.setAddress(address);
         site.setLatitude(latitude);
         site.setLongitude(longitude);
-        site.setSiteEngineerId(engineerId);
-        site.setSupervisorId(supervisorId);
         site.setStartDate(startDate);
         site.setStandardShiftHours(shiftHours);
         site.setMonthlyWageDays(wageDays);

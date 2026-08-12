@@ -32,9 +32,14 @@ export interface AdminSite {
   address?: string;
   latitude?: number;
   longitude?: number;
-  /** Naming these two is what grants them access to the site; see SiteStaffing on the server. */
-  siteEngineerId?: string;
-  supervisorId?: string;
+  /**
+   * Who is named on the site, and as what. Lists rather than one of each, because a block
+   * split between a day and a night supervisor is an ordinary site and one column each
+   * described it as an impossible one. Naming somebody here is what grants them access to
+   * the site; see SiteStaff and SiteStaffing on the server.
+   */
+  siteEngineerIds: string[];
+  supervisorIds: string[];
   status: SiteStatus;
   startDate?: string;
   standardShiftHours: number;

@@ -63,6 +63,8 @@ const LIVE_SITES: AdminSite[] = [
     standardShiftHours: 7,
     monthlyWageDays: 26,
     usesOutsourcedLabour: false,
+    siteEngineerIds: [],
+    supervisorIds: [],
     version: 0,
   },
 ];

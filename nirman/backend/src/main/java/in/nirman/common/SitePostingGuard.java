@@ -6,8 +6,8 @@ import java.util.UUID;
 /**
  * Keeps "who is named on a site" and "who may open it" from contradicting each other.
  *
- * <p>They are two different facts and the system needs both. {@code sites.site_engineer_id}
- * and {@code sites.supervisor_id} say who <b>runs</b> the site — one of each, printed on the
+ * <p>They are two different facts and the system needs both. {@code site_staff} says who
+ * <b>runs</b> the site — the engineers and the supervisors it is posted, printed on the
  * register and on every report. {@code user_site_assignments} says who may <b>reach</b> it —
  * any number of people, and the only one of the two {@link in.nirman.security.SiteAccessGuard}
  * consults. So the sync between them can only ever run one way: naming somebody on a site

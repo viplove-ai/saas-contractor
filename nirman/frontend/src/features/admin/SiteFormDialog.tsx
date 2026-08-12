@@ -2,16 +2,19 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Alert,
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  FormGroup,
   FormHelperText,
   MenuItem,
   Stack,
   Switch,
   TextField,
+  Typography,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -38,13 +41,18 @@ const DEFAULT_SHIFT_HOURS = 8;
 const DEFAULT_WAGE_DAYS = 26;
 
 /**
- * Adding a site and posting its engineer and supervisor to it.
+ * Adding a site and posting its engineers and supervisors to it.
  *
- * <p>Naming the two here is what grants them the site: the server opens a site assignment
- * for whoever is named and closes it for whoever is dropped, which is the row the access
- * guard reads on every request. That is why the pickers list only members who hold the
- * matching role — posting an accountant as supervisor would be refused server-side, and a
- * picker that offered it would only teach the admin to expect it to work.</p>
+ * <p>Naming them here is what grants them the site: the server opens a site assignment for
+ * whoever is named and closes it for whoever is dropped, which is the row the access guard
+ * reads on every request. That is why the pickers list only members who hold the matching
+ * role — posting an accountant as supervisor would be refused server-side, and a picker that
+ * offered it would only teach the admin to expect it to work.</p>
+ *
+ * <p>Both pickers take as many names as the site needs. A block worked in two shifts has two
+ * supervisors and a job with separate civil and electrical work has two engineers; while
+ * each picker held one name, the second man was not merely unlisted on the register, he was
+ * shut out of the site.</p>
  */
 export function SiteFormDialog({ open, site, onClose }: Props) {
   const editing = site !== null;
@@ -68,8 +76,8 @@ export function SiteFormDialog({ open, site, onClose }: Props) {
       code: '',
       name: '',
       address: '',
-      siteEngineerId: '',
-      supervisorId: '',
+      siteEngineerIds: [],
+      supervisorIds: [],
       startDate: '',
       status: 'ACTIVE',
       standardShiftHours: DEFAULT_SHIFT_HOURS,
@@ -90,8 +98,8 @@ export function SiteFormDialog({ open, site, onClose }: Props) {
             code: site.code,
             name: site.name,
             address: site.address ?? '',
-            siteEngineerId: site.siteEngineerId ?? '',
-            supervisorId: site.supervisorId ?? '',
+            siteEngineerIds: site.siteEngineerIds,
+            supervisorIds: site.supervisorIds,
             startDate: site.startDate ?? '',
             status: site.status,
             standardShiftHours: site.standardShiftHours,
@@ -103,8 +111,8 @@ export function SiteFormDialog({ open, site, onClose }: Props) {
             code: '',
             name: '',
             address: '',
-            siteEngineerId: '',
-            supervisorId: '',
+            siteEngineerIds: [],
+            supervisorIds: [],
             startDate: '',
             status: 'ACTIVE',
             standardShiftHours: DEFAULT_SHIFT_HOURS,
@@ -128,20 +136,8 @@ export function SiteFormDialog({ open, site, onClose }: Props) {
     }
   });
 
-  const staffOptions = (
-    data: { id: string; fullName: string; username: string; active: boolean }[] | undefined,
-  ) => [
-    <MenuItem key="none" value="">
-      Nobody yet
-    </MenuItem>,
-    ...(data ?? [])
-      .filter((member) => member.active)
-      .map((member) => (
-        <MenuItem key={member.id} value={member.id}>
-          {member.fullName} ({member.username})
-        </MenuItem>
-      )),
-  ];
+  const engineerOptions = staffOptions(engineers.data?.content);
+  const supervisorOptions = staffOptions(supervisors.data?.content);
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
@@ -197,37 +193,33 @@ export function SiteFormDialog({ open, site, onClose }: Props) {
 
           <Controller
             control={control}
-            name="siteEngineerId"
+            name="siteEngineerIds"
             render={({ field }) => (
-              <TextField
-                {...field}
-                select
-                label="Site engineer"
-                error={!!errors.siteEngineerId}
-                helperText={
-                  errors.siteEngineerId?.message ?? 'Gets access to this site as soon as you save.'
-                }
-              >
-                {staffOptions(engineers.data?.content)}
-              </TextField>
+              <StaffPicker
+                label="Site engineers"
+                value={field.value}
+                onChange={field.onChange}
+                options={engineerOptions}
+                emptyHint="No engineer named yet. The site works without one; nobody holding
+                  only the engineer role will see it until you name them."
+                helperText="Whoever is named gets access to this site as soon as you save."
+              />
             )}
           />
           <Controller
             control={control}
-            name="supervisorId"
+            name="supervisorIds"
             render={({ field }) => (
-              <TextField
-                {...field}
-                select
-                label="Site supervisor"
-                error={!!errors.supervisorId}
-                helperText={
-                  errors.supervisorId?.message ??
-                  'Removing someone here takes their access to this site away.'
-                }
-              >
-                {staffOptions(supervisors.data?.content)}
-              </TextField>
+              <StaffPicker
+                label="Site supervisors"
+                value={field.value}
+                onChange={field.onChange}
+                options={supervisorOptions}
+                emptyHint="No supervisor named yet. Nobody can mark attendance here until
+                  there is one."
+                helperText="Name as many as the site has — a block worked in two shifts has
+                  two. Taking someone off here takes their access to this site away."
+              />
             )}
           />
 
@@ -305,5 +297,71 @@ export function SiteFormDialog({ open, site, onClose }: Props) {
         </Button>
       </DialogActions>
     </Dialog>
+  );
+}
+
+interface StaffOption {
+  id: string;
+  label: string;
+}
+
+/** The active members holding a role, as options. A deactivated one would be refused. */
+function staffOptions(
+  data: { id: string; fullName: string; username: string; active: boolean }[] | undefined,
+): StaffOption[] {
+  return (data ?? [])
+    .filter((member) => member.active)
+    .map((member) => ({ id: member.id, label: `${member.fullName} (${member.username})` }));
+}
+
+/**
+ * However many names the post has, as a tick per member rather than a multi-select.
+ *
+ * <p>A dropdown with checkboxes hides the answer behind a tap, and the question this screen
+ * is really asking — "is everybody who runs this site on the list" — is one you answer by
+ * looking. A contractor's staff is a dozen people, so the list is short enough to show.</p>
+ */
+function StaffPicker({
+  label,
+  value,
+  onChange,
+  options,
+  helperText,
+  emptyHint,
+}: {
+  label: string;
+  value: string[];
+  onChange: (next: string[]) => void;
+  options: StaffOption[];
+  helperText: string;
+  emptyHint: string;
+}) {
+  const toggle = (id: string) =>
+    onChange(value.includes(id) ? value.filter((held) => held !== id) : [...value, id]);
+
+  return (
+    <Stack spacing={0.5}>
+      <Typography variant="subtitle2">{label}</Typography>
+      {options.length === 0 ? (
+        <FormHelperText>
+          Nobody holds this role yet. Onboard them on the Members screen first.
+        </FormHelperText>
+      ) : (
+        // Named as a group: two of these sit on the dialog, and a tick carrying nothing but
+        // a person's name does not say which of the two posts it is granting.
+        <FormGroup role="group" aria-label={label}>
+          {options.map((option) => (
+            <FormControlLabel
+              key={option.id}
+              control={
+                <Checkbox checked={value.includes(option.id)} onChange={() => toggle(option.id)} />
+              }
+              label={option.label}
+            />
+          ))}
+        </FormGroup>
+      )}
+      <FormHelperText>{value.length === 0 ? emptyHint : helperText}</FormHelperText>
+    </Stack>
   );
 }

@@ -50,18 +50,29 @@ VALUES ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-0000000
         'Guest house extension block: RCC frame, masonry, finishing and E&M works.');
 
 -- The 7.00 shift is what the Kausani wage sheet actually computes with (docs/09).
-INSERT INTO sites (id, org_id, project_id, code, name, address, site_engineer_id,
-                   supervisor_id, status, start_date, standard_shift_hours, monthly_wage_days) VALUES
-    -- KSN-A: engineer Uttam, supervisor Vivek
+INSERT INTO sites (id, org_id, project_id, code, name, address,
+                   status, start_date, standard_shift_hours, monthly_wage_days) VALUES
     ('31000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001',
      '30000000-0000-0000-0000-000000000001', 'KSN-A', 'Kausani Main Block',
-     'Kausani, Bageshwar', '20000000-0000-0000-0000-000000000002',
-     '20000000-0000-0000-0000-000000000003', 'ACTIVE', DATE '2024-12-01', 7.00, 26),
-    -- KSN-B: engineer Uttam, supervised by Viplove himself
+     'Kausani, Bageshwar', 'ACTIVE', DATE '2024-12-01', 7.00, 26),
     ('31000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001',
      '30000000-0000-0000-0000-000000000001', 'KSN-B', 'Kausani Annexe',
-     'Kausani, Bageshwar', '20000000-0000-0000-0000-000000000002',
-     '20000000-0000-0000-0000-000000000001', 'ACTIVE', DATE '2025-02-01', 7.00, 26);
+     'Kausani, Bageshwar', 'ACTIVE', DATE '2025-02-01', 7.00, 26);
+
+-- Who is named on each site, and as what. A post is a row rather than a column (V19), so a
+-- site may carry two supervisors; these two do not, because the sample data is meant to be
+-- the ordinary case and the second supervisor is not it.
+INSERT INTO site_staff (id, org_id, site_id, user_id, post) VALUES
+    -- KSN-A: engineer Uttam, supervisor Vivek
+    ('33000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001',
+     '31000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002', 'ENGINEER'),
+    ('33000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001',
+     '31000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', 'SUPERVISOR'),
+    -- KSN-B: engineer Uttam, supervised by Viplove himself
+    ('33000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001',
+     '31000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000002', 'ENGINEER'),
+    ('33000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000001',
+     '31000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001', 'SUPERVISOR');
 
 INSERT INTO stores (id, org_id, site_id, code, name, location, is_default) VALUES
     ('32000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001',

@@ -275,9 +275,10 @@ export function UserFormDialog({ open, user, onClose }: Props) {
                   <Typography variant="subtitle2">Sites</Typography>
                   {(sites.data ?? []).map((site) => {
                     /*
-                      Two different facts meet on this switch. The sites register names one
-                      engineer and one supervisor per site; these postings say who may open
-                      it, and any number of people can. Naming somebody on a site grants them
+                      Two different facts meet on this switch. The sites register names the
+                      engineers and supervisors of a site; these postings say who may open
+                      it, and that includes people the register never names — a store keeper,
+                      an accountant sent to count. Naming somebody on a site grants them
                       the site — that sync already runs — but this screen could take the site
                       back off the very engineer named on it, leaving the register saying he
                       runs KSN-A and the door shut to him. So a site he is named on is shown
@@ -361,11 +362,11 @@ function postOn(site: AdminSite, userId: string | undefined): string | null {
   if (!userId) {
     return null;
   }
-  if (site.siteEngineerId === userId) {
-    return 'Site engineer';
-  }
-  if (site.supervisorId === userId) {
-    return 'Supervisor';
-  }
-  return null;
+  // Both, when he is the engineer and the supervisor of a small job — a site may name him
+  // twice and the switch has to explain why it will not move either way.
+  const held = [
+    site.siteEngineerIds.includes(userId) ? 'Site engineer' : null,
+    site.supervisorIds.includes(userId) ? 'Supervisor' : null,
+  ].filter((post): post is string => post !== null);
+  return held.length === 0 ? null : held.join(' and ');
 }

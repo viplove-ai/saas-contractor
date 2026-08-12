@@ -45,6 +45,8 @@ const SITES: AdminSite[] = [
     standardShiftHours: 8,
     monthlyWageDays: 26,
     usesOutsourcedLabour: false,
+    siteEngineerIds: [],
+    supervisorIds: [],
     version: 0,
   },
 ];

@@ -44,11 +44,9 @@ public class Site extends BaseEntity {
     @Column(name = "longitude", precision = 9, scale = 6)
     private BigDecimal longitude;
 
-    @Column(name = "site_engineer_id")
-    private UUID siteEngineerId;
-
-    @Column(name = "supervisor_id")
-    private UUID supervisorId;
+    // Who runs the site is not a column here any more: a site may have two supervisors, or
+    // two engineers, and one of each was a rule about how many people may work there rather
+    // than a fact about this one. See SiteStaff.
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
@@ -132,22 +130,6 @@ public class Site extends BaseEntity {
 
     public void setLongitude(BigDecimal longitude) {
         this.longitude = longitude;
-    }
-
-    public UUID getSiteEngineerId() {
-        return siteEngineerId;
-    }
-
-    public void setSiteEngineerId(UUID siteEngineerId) {
-        this.siteEngineerId = siteEngineerId;
-    }
-
-    public UUID getSupervisorId() {
-        return supervisorId;
-    }
-
-    public void setSupervisorId(UUID supervisorId) {
-        this.supervisorId = supervisorId;
     }
 
     public Status getStatus() {

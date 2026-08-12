@@ -230,6 +230,10 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
           projectId: createdProjectId,
           code: siteCode.trim(),
           name: siteName.trim(),
+          // Nobody named yet: this is the first site of a brand-new project, and who runs
+          // it is a decision for the Sites screen once there is somebody to name.
+          siteEngineerIds: [],
+          supervisorIds: [],
           status: 'ACTIVE',
           standardShiftHours: DEFAULT_SHIFT_HOURS,
           monthlyWageDays: DEFAULT_WAGE_DAYS,
@@ -298,6 +302,8 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
         projectId,
         code: siteCode.trim(),
         name: siteName.trim(),
+        siteEngineerIds: [],
+        supervisorIds: [],
         status: 'ACTIVE',
         standardShiftHours: DEFAULT_SHIFT_HOURS,
         monthlyWageDays: DEFAULT_WAGE_DAYS,

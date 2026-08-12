@@ -10,7 +10,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Reads the two posts on a site straight off the sites table. See {@link SitePostingGuard}
+ * Reads the posts on a site straight off {@code site_staff}. See {@link SitePostingGuard}
  * for why the question is asked here in SQL rather than through the project module.
  */
 @Component
@@ -31,20 +31,24 @@ public class SitePostingGuardImpl implements SitePostingGuard {
         // the list is short, and this is the difference between a bind and an injection.
         String placeholders = siteIds.stream().map(id -> "?").collect(Collectors.joining(", "));
         List<Object> args = new ArrayList<>();
-        args.add(userId);
         args.addAll(siteIds);
         args.add(userId);
-        args.add(userId);
 
+        // One row per site, not per post: somebody who is both engineer and supervisor of a
+        // small job holds it once as far as a refusal is concerned, and naming him twice in
+        // the message would read as two different sites.
         List<String> held = jdbc.query("""
-                        SELECT code || ' — ' || name AS site,
-                               CASE WHEN site_engineer_id = ? THEN 'site engineer'
-                                    ELSE 'supervisor' END AS post
-                        FROM sites
-                        WHERE deleted_at IS NULL
-                          AND id IN (%s)
-                          AND (site_engineer_id = ? OR supervisor_id = ?)
-                        ORDER BY code
+                        SELECT s.code || ' — ' || s.name AS site,
+                               string_agg(DISTINCT CASE WHEN ss.post = 'ENGINEER'
+                                                        THEN 'site engineer'
+                                                        ELSE 'supervisor' END, ' and ') AS post
+                        FROM sites s
+                        JOIN site_staff ss ON ss.site_id = s.id
+                        WHERE s.deleted_at IS NULL
+                          AND s.id IN (%s)
+                          AND ss.user_id = ?
+                        GROUP BY s.id, s.code, s.name
+                        ORDER BY s.code
                         """.formatted(placeholders),
                 (rs, row) -> rs.getString("site") + " (" + rs.getString("post") + ")",
                 args.toArray());
@@ -61,9 +65,10 @@ public class SitePostingGuardImpl implements SitePostingGuard {
     @Override
     public Collection<UUID> postedSites(UUID userId) {
         return jdbc.queryForList("""
-                SELECT id FROM sites
-                WHERE deleted_at IS NULL AND (site_engineer_id = ? OR supervisor_id = ?)
-                """, UUID.class, userId, userId);
+                SELECT DISTINCT s.id FROM sites s
+                JOIN site_staff ss ON ss.site_id = s.id
+                WHERE s.deleted_at IS NULL AND ss.user_id = ?
+                """, UUID.class, userId);
     }
 
     /** "KSN-A (site engineer) and KSN-B (supervisor)", not a comma-separated dump. */
