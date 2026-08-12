@@ -77,19 +77,14 @@ export function SitesPage() {
   const canDelete = hasPermission('site:delete');
 
   /**
-   * The names under one post, as one cell. A site may carry several of each (see
-   * SiteStaff), and the register has to show all of them: a cell that named the first and
-   * stopped would read as the site having one supervisor, which is the thing the column
-   * used to enforce and no longer does.
+   * The names under one post. A site may carry several of each (see SiteStaff), and the
+   * register has to show all of them: a cell that named the first and stopped would read as
+   * the site having one supervisor, which is the thing the column used to enforce and no
+   * longer does.
    */
-  const staffNames = (ids: string[], pool: 'engineer' | 'supervisor'): string => {
-    if (ids.length === 0) {
-      return 'Not posted';
-    }
+  const staffNames = (ids: string[], pool: 'engineer' | 'supervisor'): string[] => {
     const source = pool === 'engineer' ? engineers.data?.content : supervisors.data?.content;
-    return ids
-      .map((id) => source?.find((member) => member.id === id)?.fullName ?? '—')
-      .join(', ');
+    return ids.map((id) => source?.find((member) => member.id === id)?.fullName ?? '—');
   };
 
   const projectName = (id: string): string => {
@@ -191,8 +186,8 @@ export function SitesPage() {
               key={site.id}
               site={site}
               projectCode={projectName(site.projectId)}
-              engineer={staffNames(site.siteEngineerIds, 'engineer')}
-              supervisor={staffNames(site.supervisorIds, 'supervisor')}
+              engineers={staffNames(site.siteEngineerIds, 'engineer')}
+              supervisors={staffNames(site.supervisorIds, 'supervisor')}
               canWrite={canWrite}
               canDelete={canDelete}
               deletedView={showDeleted}
@@ -243,8 +238,12 @@ export function SitesPage() {
                     </Typography>
                   </TableCell>
                   <TableCell>{projectName(site.projectId)}</TableCell>
-                  <TableCell>{staffNames(site.siteEngineerIds, 'engineer')}</TableCell>
-                  <TableCell>{staffNames(site.supervisorIds, 'supervisor')}</TableCell>
+                  <TableCell>
+                    <StaffList names={staffNames(site.siteEngineerIds, 'engineer')} />
+                  </TableCell>
+                  <TableCell>
+                    <StaffList names={staffNames(site.supervisorIds, 'supervisor')} />
+                  </TableCell>
                   <TableCell>
                     <Typography variant="caption">{site.standardShiftHours} h</Typography>
                   </TableCell>
@@ -341,8 +340,8 @@ export function SitesPage() {
 function SiteCard({
   site,
   projectCode,
-  engineer,
-  supervisor,
+  engineers,
+  supervisors,
   canWrite,
   canDelete,
   deletedView,
@@ -352,8 +351,8 @@ function SiteCard({
 }: {
   site: AdminSite;
   projectCode: string;
-  engineer: string;
-  supervisor: string;
+  engineers: string[];
+  supervisors: string[];
   canWrite: boolean;
   canDelete: boolean;
   deletedView: boolean;
@@ -380,22 +379,24 @@ function SiteCard({
           />
         </Stack>
 
-        <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="baseline">
-          <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+        {/*
+          Down the card rather than across it. Two names side by side under two headings fit
+          when there was one of each; with three supervisors the right-hand column pushed
+          into the left and both truncated. Stacked, the list grows downwards, which is the
+          direction a card has room in.
+        */}
+        <Stack direction="row" spacing={2} alignItems="flex-start">
+          <Stack spacing={0.25} sx={{ flex: 1, minWidth: 0 }}>
             <Typography variant="caption" color="text.secondary">
-              Site engineers
+              {label('Site engineer', engineers.length)}
             </Typography>
-            <Typography variant="body2" noWrap>
-              {engineer}
-            </Typography>
+            <StaffList names={engineers} />
           </Stack>
-          <Stack spacing={0.25} alignItems="flex-end" sx={{ minWidth: 0 }}>
+          <Stack spacing={0.25} sx={{ flex: 1, minWidth: 0 }}>
             <Typography variant="caption" color="text.secondary">
-              Supervisors
+              {label('Supervisor', supervisors.length)}
             </Typography>
-            <Typography variant="body2" noWrap>
-              {supervisor}
-            </Typography>
+            <StaffList names={supervisors} />
           </Stack>
         </Stack>
 
@@ -452,4 +453,45 @@ function formatDeletedAt(value: string | undefined): string {
     month: 'short',
     year: 'numeric',
   });
+}
+
+/**
+ * The people holding one post on a site, numbered and one to a line.
+ *
+ * <p>Comma-separated was fine while the register held one name each. It stopped being fine
+ * the moment a site could carry three: "Vivek Aggarwal, Ramesh Negi, Deepak Joshi" reads as
+ * one long string, and the question the column is actually answering — how many people are
+ * watching this site — has to be counted out of it by eye. Numbering answers it before the
+ * names are read.</p>
+ */
+function StaffList({ names }: { names: string[] }) {
+  if (names.length === 0) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        Not posted
+      </Typography>
+    );
+  }
+  // One name keeps its number off: "1. Uttam Rana" on a site with one engineer is a list
+  // implying a second entry that does not exist.
+  if (names.length === 1) {
+    return <Typography variant="body2">{names[0]}</Typography>;
+  }
+  return (
+    <Stack component="ol" spacing={0.25} sx={{ listStyle: 'none', m: 0, p: 0 }}>
+      {names.map((name, index) => (
+        <Typography component="li" variant="body2" key={`${name}-${index}`}>
+          <Box component="span" sx={{ color: 'text.secondary', mr: 0.75 }}>
+            {index + 1}.
+          </Box>
+          {name}
+        </Typography>
+      ))}
+    </Stack>
+  );
+}
+
+/** "Supervisors (3)" once there is more than one, and the bare noun when there is not. */
+function label(noun: string, count: number): string {
+  return count > 1 ? `${noun}s (${count})` : noun;
 }

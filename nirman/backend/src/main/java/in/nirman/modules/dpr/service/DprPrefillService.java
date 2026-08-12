@@ -150,15 +150,15 @@ public class DprPrefillService {
         return new OutsourcedPrefill(day.enabled(), day.headCount(), day.manHours(),
                 day.groups().stream()
                         .map(group -> new OutsourcedLine(group.skillCategoryId(),
-                                group.skillCategoryName(), group.labourContractorId(),
-                                group.labourContractorName(), group.headCount(),
+                                group.skillCategoryName(), group.labourSupplierId(),
+                                group.labourSupplierName(), group.headCount(),
                                 group.hours(), group.manHours()))
                         .toList());
     }
 
     static LabourLine toLabourLine(LabourLookup.LabourGroup group) {
         return new LabourLine(group.skillCategoryId(), group.skillCategoryName(),
-                group.labourContractorId(), group.labourContractorName(), group.headCount(),
+                group.labourSupplierId(), group.labourSupplierName(), group.headCount(),
                 group.regularHours(), group.overtimeHours(), false);
     }
 

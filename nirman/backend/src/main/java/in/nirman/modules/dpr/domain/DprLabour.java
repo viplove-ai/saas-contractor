@@ -31,8 +31,8 @@ public class DprLabour {
     @Column(name = "skill_category_id")
     private UUID skillCategoryId;
 
-    @Column(name = "labour_contractor_id")
-    private UUID labourContractorId;
+    @Column(name = "labour_supplier_id")
+    private UUID labourSupplierId;
 
     @Column(name = "head_count", nullable = false)
     private int headCount;
@@ -54,18 +54,18 @@ public class DprLabour {
     protected DprLabour() {
     }
 
-    public DprLabour(UUID dprId, UUID skillCategoryId, UUID labourContractorId, int headCount,
+    public DprLabour(UUID dprId, UUID skillCategoryId, UUID labourSupplierId, int headCount,
                      BigDecimal regularHours, BigDecimal overtimeHours) {
-        this(dprId, skillCategoryId, labourContractorId, headCount, regularHours, overtimeHours,
+        this(dprId, skillCategoryId, labourSupplierId, headCount, regularHours, overtimeHours,
                 false);
     }
 
-    public DprLabour(UUID dprId, UUID skillCategoryId, UUID labourContractorId, int headCount,
+    public DprLabour(UUID dprId, UUID skillCategoryId, UUID labourSupplierId, int headCount,
                      BigDecimal regularHours, BigDecimal overtimeHours, boolean outsourced) {
         this.id = UUID.randomUUID();
         this.dprId = dprId;
         this.skillCategoryId = skillCategoryId;
-        this.labourContractorId = labourContractorId;
+        this.labourSupplierId = labourSupplierId;
         this.headCount = headCount;
         this.regularHours = regularHours == null ? BigDecimal.ZERO : regularHours;
         this.overtimeHours = overtimeHours == null ? BigDecimal.ZERO : overtimeHours;
@@ -84,8 +84,8 @@ public class DprLabour {
         return skillCategoryId;
     }
 
-    public UUID getLabourContractorId() {
-        return labourContractorId;
+    public UUID getLabourSupplierId() {
+        return labourSupplierId;
     }
 
     public int getHeadCount() {

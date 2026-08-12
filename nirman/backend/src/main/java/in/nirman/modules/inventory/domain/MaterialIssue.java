@@ -50,8 +50,8 @@ public class MaterialIssue extends BaseEntity {
     @Column(name = "issued_to_name", length = 150)
     private String issuedToName;
 
-    @Column(name = "issued_to_contractor_id")
-    private UUID issuedToContractorId;
+    @Column(name = "issued_to_supplier_id")
+    private UUID issuedToSupplierId;
 
     /** The work item the material is consumed by. Header-level default for every line. */
     @Column(name = "boq_item_id")
@@ -147,12 +147,12 @@ public class MaterialIssue extends BaseEntity {
         this.issuedToName = issuedToName;
     }
 
-    public UUID getIssuedToContractorId() {
-        return issuedToContractorId;
+    public UUID getIssuedToSupplierId() {
+        return issuedToSupplierId;
     }
 
-    public void setIssuedToContractorId(UUID issuedToContractorId) {
-        this.issuedToContractorId = issuedToContractorId;
+    public void setIssuedToSupplierId(UUID issuedToSupplierId) {
+        this.issuedToSupplierId = issuedToSupplierId;
     }
 
     public UUID getBoqItemId() {

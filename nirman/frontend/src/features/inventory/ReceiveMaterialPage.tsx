@@ -27,7 +27,18 @@ import {
   useVerifyReceipt,
 } from './api';
 import { StorePicker } from './StorePicker';
-import { MATERIAL_NOT_LISTED, type LineDraft, type Receipt } from './types';
+import { MATERIAL_NOT_LISTED, type LineDraft, type Receipt, type Unit } from './types';
+
+/**
+ * Why the unit box is short. One choice is not a choice — the material is stocked that way
+ * and has no conversion to anything else — and saying so is what stops a storekeeper hunting
+ * for the tonnes he was expecting to find.
+ */
+function unitHint(choices: number): string {
+  return choices <= 1
+    ? 'How it is stocked. Add a conversion on the material to book it in another unit.'
+    : 'As the challan reads. Converted on the way in.';
+}
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -102,6 +113,28 @@ export function ReceiveMaterialPage() {
     setLines((current) =>
       current.map((line) => (line.key === key ? { ...line, ...patch } : line)),
     );
+  };
+
+  /**
+   * The units a line may actually be booked in: the material's own, plus whatever it has a
+   * conversion for. Every unit in the system was the old answer and it was the wrong one —
+   * the server refuses a unit with no conversion, and it refuses it after the storekeeper
+   * has typed the whole delivery.
+   *
+   * <p>A material the catalogue has never heard of has no base and no conversions, so the
+   * whole list is offered: he is naming it, and the unit he names it in becomes its base.</p>
+   */
+  const unitsFor = (line: LineDraft): Unit[] => {
+    const all = units.data ?? [];
+    if (line.materialId === MATERIAL_NOT_LISTED || !line.materialId) {
+      return all;
+    }
+    const material = materials.data?.find((m) => m.id === line.materialId);
+    if (!material) {
+      return all;
+    }
+    const allowed = new Set([material.baseUnitId, ...(material.altUnitIds ?? [])]);
+    return all.filter((unit) => allowed.has(unit.id));
   };
 
   /**
@@ -261,9 +294,10 @@ export function ReceiveMaterialPage() {
                 label="Unit"
                 value={line.unitId}
                 onChange={(e) => updateLine(line.key, { unitId: e.target.value })}
-                sx={{ minWidth: 110 }}
+                helperText={unitHint(unitsFor(line).length)}
+                sx={{ minWidth: 140 }}
               >
-                {(units.data ?? []).map((unit) => (
+                {unitsFor(line).map((unit) => (
                   <MenuItem key={unit.id} value={unit.id}>
                     {unit.code}
                   </MenuItem>

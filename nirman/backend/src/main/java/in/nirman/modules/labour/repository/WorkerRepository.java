@@ -38,7 +38,7 @@ public interface WorkerRepository extends JpaRepository<Worker, UUID> {
             SELECT w FROM Worker w
             WHERE w.orgId = :orgId AND w.deletedAt IS NULL
               AND (:active IS NULL OR w.active = :active)
-              AND (:contractorId IS NULL OR w.labourContractorId = :contractorId)
+              AND (:contractorId IS NULL OR w.labourSupplierId = :contractorId)
               AND (:skillId IS NULL OR w.skillCategoryId = :skillId)
               AND (:q = '' OR lower(w.fullName) LIKE lower(concat('%', :q, '%'))
                            OR lower(w.workerCode) LIKE lower(concat('%', :q, '%')))

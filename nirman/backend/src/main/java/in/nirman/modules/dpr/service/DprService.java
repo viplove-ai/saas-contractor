@@ -406,7 +406,7 @@ public class DprService {
         labourLines.deleteByDprId(report.getId());
         labourLines.flush();
         labour.groups().forEach(group -> labourLines.save(new DprLabour(report.getId(),
-                group.skillCategoryId(), group.labourContractorId(), group.headCount(),
+                group.skillCategoryId(), group.labourSupplierId(), group.headCount(),
                 group.regularHours(), group.overtimeHours())));
         // The contractor's gang, on the same table and flagged apart. Their man-hours go in
         // the regular column when the site recorded them and zero when it did not — the flag
@@ -415,7 +415,7 @@ public class DprService {
         // is still no overtime here: nobody clocked these men, so there is no shift to be
         // over.
         outsourced.groups().forEach(group -> labourLines.save(new DprLabour(report.getId(),
-                group.skillCategoryId(), group.labourContractorId(), group.headCount(),
+                group.skillCategoryId(), group.labourSupplierId(), group.headCount(),
                 group.manHours() == null ? BigDecimal.ZERO : group.manHours(),
                 BigDecimal.ZERO, true)));
     }

@@ -76,6 +76,7 @@ const MATERIALS: Material[] = [
     code: 'STL-FE500D',
     name: 'Steel TMT Fe-500D',
     baseUnitId: 'unit-kg',
+    altUnitIds: ['unit-mt'],
     minStockLevel: 500,
     gstPercent: 18,
     active: true,
@@ -188,6 +189,33 @@ describe('ReceiveMaterialPage', () => {
    * delivery that arrives in tonnes. Making the storekeeper convert at the gate is asking
    * him to make an arithmetic mistake on a lorry driver's schedule.
    */
+  /**
+   * Offering every unit was offering units the server refuses — and it refuses them after
+   * the whole delivery has been typed. Cement is stocked in bags and converts to nothing.
+   */
+  it('offers only the units a material can actually be booked in', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findByRole('combobox', { name: 'Material' });
+
+    await user.click(screen.getByRole('combobox', { name: 'Material' }));
+    await user.click(await screen.findByRole('option', { name: 'Cement OPC 43 Grade' }));
+    await user.click(screen.getByRole('combobox', { name: 'Unit' }));
+    expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['BAG']);
+  });
+
+  /** Steel is stocked in kilograms and arrives by the tonne, so both are on offer. */
+  it('offers the base unit and whatever the material converts from', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findByRole('combobox', { name: 'Material' });
+
+    await user.click(screen.getByRole('combobox', { name: 'Material' }));
+    await user.click(await screen.findByRole('option', { name: 'Steel TMT Fe-500D' }));
+    await user.click(screen.getByRole('combobox', { name: 'Unit' }));
+    expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['KG', 'MT']);
+  });
+
   it('preselects the material’s own unit but leaves it changeable', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();

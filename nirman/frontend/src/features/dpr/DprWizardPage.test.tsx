@@ -68,7 +68,7 @@ function prefill(overrides: Partial<DprPrefill> = {}): DprPrefill {
       lines: [
         {
           skillCategoryName: 'Mason',
-          labourContractorName: 'Nainital Labour Suppliers',
+          labourSupplierName: 'Nainital Labour Suppliers',
           headCount: 2,
           regularHours: 14,
           overtimeHours: 1,

@@ -42,8 +42,8 @@ export interface PageResponse<T> {
 export interface LabourLine {
   skillCategoryId?: string;
   skillCategoryName?: string;
-  labourContractorId?: string;
-  labourContractorName?: string;
+  labourSupplierId?: string;
+  labourSupplierName?: string;
   headCount: number;
   regularHours: number;
   overtimeHours: number;
@@ -139,8 +139,8 @@ export interface OutsourcedPrefill {
 export interface OutsourcedLine {
   skillCategoryId: string;
   skillCategoryName?: string;
-  labourContractorId?: string;
-  labourContractorName?: string;
+  labourSupplierId?: string;
+  labourSupplierName?: string;
   headCount: number;
   /** Hours each man worked. Absent when nobody recorded them, which is not zero. */
   hours?: number;
@@ -166,11 +166,11 @@ export const MATERIAL_NOT_LISTED = '__not-listed__';
 export interface LabourCountLine {
   skillCategoryId: string;
   /**
-   * Which labour contractor supplied the men. Still carried by the record and still stored,
-   * but nothing on screen sets it — naming a contractor means nothing until contractors are
-   * onboarded, and a picker over an empty list is a question with no answers.
+   * Which supplier sent the men. Off the one supplier register (V23), so naming him here is
+   * naming somebody who already has an account, an address and a history — which is what
+   * makes the question worth asking at all.
    */
-  labourContractorId?: string | undefined;
+  labourSupplierId?: string | undefined;
   headCount: number;
   /**
    * Hours <b>each</b> man of the trade worked, not the gang's total. Undefined when nobody
@@ -178,6 +178,26 @@ export interface LabourCountLine {
    */
   hours?: number | undefined;
   remarks?: string | undefined;
+}
+
+/**
+ * Whether a supplier, or the man he sends to run his gang, stood on the site that day.
+ *
+ * <p>Per supplier and not per trade: one supplier who sent masons, helpers and bar benders
+ * has three count lines, and the same question answered three times can contradict itself.</p>
+ */
+export interface SupplierDayLine {
+  labourSupplierId: string;
+  supplierPresent: boolean;
+  /** Who came, when it was not the supplier himself. */
+  representativeName?: string | undefined;
+  remarks?: string | undefined;
+}
+
+export interface SupplierDay extends SupplierDayLine {
+  labourSupplierName?: string;
+  /** His men on site that day, added across the trades he supplied. */
+  headCount: number;
 }
 
 export interface DayCounts {
@@ -191,9 +211,11 @@ export interface DayCounts {
   lines: (LabourCountLine & {
     id: string;
     skillCategoryName?: string;
-    labourContractorName?: string;
+    labourSupplierName?: string;
     manHours?: number;
   })[];
+  /** One entry per supplier the day names, whether or not anybody answered for him. */
+  suppliers: SupplierDay[];
 }
 
 // ---------------------------------------------------------------- the report

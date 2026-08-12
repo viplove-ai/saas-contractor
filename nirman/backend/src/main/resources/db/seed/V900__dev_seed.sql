@@ -182,9 +182,11 @@ VALUES
     ('10000000-0000-0000-0000-000000000001', 'VND-003', 'Kumaon Transport Co', 'TRANSPORT',
      'Bhupal Mehta', '+91-9810000003', NULL, 0);
 
-INSERT INTO labour_contractors (org_id, code, name, contact_person, mobile)
+-- A labour supplier is a vendor like any other (V23): one register, so the same Karam Singh
+-- who brings the gang can also be paid an advance and carry an account.
+INSERT INTO vendors (org_id, code, name, vendor_type, contact_person, mobile, gstin, credit_days)
 VALUES ('10000000-0000-0000-0000-000000000001', 'LC-001', 'Kausani Labour Co-operative',
-        'Karam Singh', '+91-9820000001');
+        'SUBCONTRACTOR', 'Karam Singh', '+91-9820000001', NULL, 0);
 
 INSERT INTO skill_categories (org_id, code, name, is_skilled)
 SELECT '10000000-0000-0000-0000-000000000001', v.code, v.name, v.skilled
@@ -240,12 +242,12 @@ VALUES
 -- by the seven-hour shift, which is what the Kausani sheet actually pays: an overtime hour
 -- is worth exactly a regular hour there, with no premium (docs/09).
 INSERT INTO workers (id, org_id, worker_code, full_name, mobile, skill_category_id,
-                     employment_type, labour_contractor_id, wage_type, joining_date, is_active)
+                     employment_type, labour_supplier_id, wage_type, joining_date, is_active)
 SELECT w.id::uuid, '10000000-0000-0000-0000-000000000001', w.code, w.name, w.mobile,
        (SELECT id FROM skill_categories WHERE code = w.skill
          AND org_id = '10000000-0000-0000-0000-000000000001'),
        w.employment,
-       (SELECT id FROM labour_contractors WHERE code = 'LC-001'
+       (SELECT id FROM vendors WHERE code = 'LC-001'
          AND org_id = '10000000-0000-0000-0000-000000000001'),
        'DAILY', DATE '2024-12-01', true
 FROM (VALUES

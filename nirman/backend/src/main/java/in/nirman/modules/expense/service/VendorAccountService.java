@@ -6,12 +6,14 @@ import in.nirman.modules.audit.AuditService;
 import in.nirman.modules.expense.api.dto.CashDtos.PaymentResponse;
 import in.nirman.modules.expense.api.dto.CashDtos.RecordVendorAdvanceRequest;
 import in.nirman.modules.expense.api.dto.CashDtos.VendorAccountResponse;
+import in.nirman.modules.expense.api.dto.CashDtos.SupplierEngagementRow;
 import in.nirman.modules.expense.api.dto.CashDtos.VendorPurchaseRow;
 import in.nirman.modules.expense.domain.Expense;
 import in.nirman.modules.expense.domain.Payment;
 import in.nirman.modules.expense.repository.ExpenseRepository;
 import in.nirman.modules.expense.repository.PaymentRepository;
 import in.nirman.modules.inventory.service.InventoryLookup;
+import in.nirman.modules.labour.service.LabourLookup;
 import in.nirman.modules.masterdata.domain.Vendor;
 import in.nirman.modules.masterdata.repository.VendorRepository;
 import in.nirman.security.CurrentUserProvider;
@@ -47,18 +49,21 @@ public class VendorAccountService {
     private final ExpenseRepository expenses;
     private final VendorRepository vendors;
     private final InventoryLookup inventory;
+    private final LabourLookup labour;
     private final DocumentNumberService documentNumbers;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
 
     public VendorAccountService(PaymentRepository payments, ExpenseRepository expenses,
                                 VendorRepository vendors, InventoryLookup inventory,
+                                LabourLookup labour,
                                 DocumentNumberService documentNumbers,
                                 CurrentUserProvider currentUser, AuditService audit) {
         this.payments = payments;
         this.expenses = expenses;
         this.vendors = vendors;
         this.inventory = inventory;
+        this.labour = labour;
         this.documentNumbers = documentNumbers;
         this.currentUser = currentUser;
         this.audit = audit;
@@ -164,6 +169,24 @@ public class VendorAccountService {
                         line.materialId(), line.materialCode(), line.materialName(),
                         line.unitCode(), line.quantity(), line.rate(), line.amount(),
                         line.received()))
+                .toList();
+    }
+
+    /**
+     * Where this supplier's men have actually worked, newest first.
+     *
+     * <p>The other half of "how do I use a supplier on a site". There is no engagement to
+     * set up and no assignment to make: a supplier becomes used on a site the moment a
+     * supervisor names him on a day's labour, and this reads that record backwards.</p>
+     */
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAuthority('vendor:balance:manage')")
+    public List<SupplierEngagementRow> labourSupplied(UUID vendorId) {
+        requireVendor(vendorId);
+        return labour.supplierEngagements(vendorId).stream()
+                .map(day -> new SupplierEngagementRow(day.siteId(), day.siteCode(),
+                        day.siteName(), day.date(), day.headCount(), day.manHours(),
+                        day.supplierPresent(), day.representativeName()))
                 .toList();
     }
 

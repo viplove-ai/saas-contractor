@@ -35,7 +35,7 @@ public final class AttendanceDtos {
             String workerCode,
             String workerName,
             UUID skillCategoryId,
-            UUID labourContractorId,
+            UUID labourSupplierId,
             BigDecimal normalRate,
             BigDecimal overtimeRate,
             AttendanceResponse attendance) {

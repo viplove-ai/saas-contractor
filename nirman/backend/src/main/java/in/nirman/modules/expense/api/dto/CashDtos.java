@@ -139,6 +139,24 @@ public final class CashDtos {
             boolean received) {
     }
 
+    /**
+     * One day a labour supplier's men were on a site.
+     *
+     * <p>The answer to "where am I using him", which is not stored anywhere on the supplier:
+     * it is made by the supervisor writing down his day, and read back the other way round.</p>
+     */
+    public record SupplierEngagementRow(
+            UUID siteId,
+            String siteCode,
+            String siteName,
+            LocalDate date,
+            int headCount,
+            /** Null on a day nobody noted hours. No money follows from it — he bills for the work. */
+            BigDecimal manHours,
+            boolean supplierPresent,
+            String representativeName) {
+    }
+
     // ------------------------------------------------------------------ site advances
 
     public record IssueAdvanceRequest(

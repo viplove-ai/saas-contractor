@@ -13,6 +13,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 /** Request and response shapes for every master-data aggregate. */
@@ -99,38 +100,6 @@ public final class MasterDataDtos {
 
     // ------------------------------------------------------------------ labour contractors
 
-    public record LabourContractorResponse(
-            UUID id, String code, String name, String contactPerson, String mobile, String email,
-            String address, String gstin, String pan, String bankAccountNo, String bankIfsc,
-            boolean active, Long version) {
-    }
-
-    public record CreateLabourContractorRequest(
-            @NotBlank @Size(max = 40) @Pattern(regexp = "[A-Za-z0-9._-]+") String code,
-            @NotBlank @Size(max = 200) String name,
-            @Size(max = 150) String contactPerson,
-            @Size(max = 20) String mobile,
-            @Email @Size(max = 150) String email,
-            String address,
-            @Size(max = 15) String gstin,
-            @Size(max = 10) String pan,
-            @Size(max = 30) String bankAccountNo,
-            @Size(max = 15) String bankIfsc) {
-    }
-
-    public record UpdateLabourContractorRequest(
-            @NotBlank @Size(max = 200) String name,
-            @Size(max = 150) String contactPerson,
-            @Size(max = 20) String mobile,
-            @Email @Size(max = 150) String email,
-            String address,
-            @Size(max = 15) String gstin,
-            @Size(max = 10) String pan,
-            @Size(max = 30) String bankAccountNo,
-            @Size(max = 15) String bankIfsc,
-            boolean active,
-            @NotNull Long version) {
-    }
 
     // ------------------------------------------------------------------ materials
 
@@ -139,10 +108,17 @@ public final class MasterDataDtos {
      *                    it — no rate, no HSN, and possibly a second name for something the
      *                    catalogue already holds.
      */
+    /**
+     * @param altUnitIds the other units this material may be booked in — the ones it has a
+     *                   conversion for. Carried on the row because a picker that offers
+     *                   every unit in the system offers units the server will refuse, and it
+     *                   refuses them after the whole delivery has been typed.
+     */
     public record MaterialResponse(
             UUID id, String code, String name, UUID categoryId, UUID baseUnitId, String hsnCode,
             BigDecimal gstPercent, BigDecimal minStockLevel, BigDecimal standardRate,
             UUID preferredVendorId, boolean consumable, boolean active, boolean provisional,
+            List<UUID> altUnitIds,
             Long version) {
     }
 

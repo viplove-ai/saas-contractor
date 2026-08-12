@@ -125,12 +125,12 @@ FROM (VALUES
 
 -- The frozen labour table: two masons on one line, the helper on another. Written from the
 -- muster, which is why it carries head counts and hours and no money.
-INSERT INTO dpr_labour (dpr_id, skill_category_id, labour_contractor_id, head_count,
+INSERT INTO dpr_labour (dpr_id, skill_category_id, labour_supplier_id, head_count,
                         regular_hours, overtime_hours)
 SELECT '82000000-0000-0000-0000-000000000001',
        (SELECT id FROM skill_categories WHERE code = l.skill
          AND org_id = '10000000-0000-0000-0000-000000000001'),
-       (SELECT id FROM labour_contractors WHERE code = 'LC-001'
+       (SELECT id FROM vendors WHERE code = 'LC-001'
          AND org_id = '10000000-0000-0000-0000-000000000001'),
        l.head_count, l.regular, l.overtime
 FROM (VALUES

@@ -20,7 +20,7 @@ export interface Worker {
   mobile?: string;
   skillCategoryId?: string;
   employmentType: EmploymentType;
-  labourContractorId?: string;
+  labourSupplierId?: string;
   wageType: WageType;
   joiningDate?: string;
   exitDate?: string;
@@ -61,7 +61,7 @@ export interface SkillCategory {
   active: boolean;
 }
 
-export interface LabourContractor {
+export interface LabourSupplier {
   id: string;
   code: string;
   name: string;

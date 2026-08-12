@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -16,7 +17,22 @@ public interface VendorRepository extends JpaRepository<Vendor, UUID> {
 
     boolean existsByOrgIdAndCode(UUID orgId, String code);
 
-    /** {@code CAST(:q AS string)} for the reason spelled out in {@link LabourContractorRepository}. */
+    /** Every live supplier, for the callers that turn an id into a name. */
+    List<Vendor> findByOrgIdAndDeletedAtIsNullOrderByCode(UUID orgId);
+
+    /**
+     * The suppliers of one kind — SUBCONTRACTOR for the men who bring gangs. Since V23 there
+     * is one register for material dealers and labour suppliers alike, and the type is what
+     * tells a picker which of them to offer.
+     */
+    List<Vendor> findByOrgIdAndVendorTypeAndActiveTrueAndDeletedAtIsNullOrderByName(
+            UUID orgId, Vendor.Type vendorType);
+
+    /**
+     * {@code CAST(:q AS string)} because an optional filter bound as a bare null gives
+     * PostgreSQL no type to infer, and the statement fails exactly when the caller filters
+     * by nothing — which is how every screen opens.
+     */
     @Query("""
             SELECT v FROM Vendor v
             WHERE v.orgId = :orgId AND v.deletedAt IS NULL

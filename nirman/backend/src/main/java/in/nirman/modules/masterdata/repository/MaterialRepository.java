@@ -32,7 +32,7 @@ public interface MaterialRepository extends JpaRepository<Material, UUID> {
             """)
     List<Material> findByName(@Param("orgId") UUID orgId, @Param("name") String name);
 
-    /** {@code CAST(:q AS string)} for the reason spelled out in {@link LabourContractorRepository}. */
+    /** {@code CAST(:q AS string)} for the reason spelled out in {@link VendorRepository}. */
     @Query("""
             SELECT m FROM Material m
             WHERE m.orgId = :orgId AND m.deletedAt IS NULL

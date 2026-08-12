@@ -5,7 +5,14 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VendorDetailPage } from './VendorDetailPage';
 import { VendorsPage } from './VendorsPage';
-import type { PageResponse, Vendor, VendorAccount, VendorPayment, VendorPurchase } from './types';
+import type {
+  PageResponse,
+  SupplierEngagement,
+  Vendor,
+  VendorAccount,
+  VendorPayment,
+  VendorPurchase,
+} from './types';
 
 const get = vi.fn();
 const post = vi.fn();
@@ -104,6 +111,28 @@ const PURCHASES: VendorPurchase[] = [
   },
 ];
 
+/** Two days his men were on site: one he attended, one he did not. */
+const LABOUR: SupplierEngagement[] = [
+  {
+    siteId: 'site-a',
+    siteCode: 'KSN-A',
+    siteName: 'Kausani Main Block',
+    date: '2025-06-12',
+    headCount: 11,
+    manHours: 88,
+    supplierPresent: true,
+    representativeName: 'Karam Singh',
+  },
+  {
+    siteId: 'site-a',
+    siteCode: 'KSN-A',
+    siteName: 'Kausani Main Block',
+    date: '2025-06-11',
+    headCount: 9,
+    supplierPresent: false,
+  },
+];
+
 const PAYMENTS: VendorPayment[] = [
   {
     id: 'p1',
@@ -148,6 +177,7 @@ describe('VendorsPage', () => {
       if (url === '/vendors/v1/account') return Promise.resolve({ data: ACCOUNT });
       if (url === '/vendors/v1/purchases') return Promise.resolve({ data: PURCHASES });
       if (url === '/payments') return Promise.resolve({ data: page(PAYMENTS) });
+      if (url === '/vendors/v1/labour') return Promise.resolve({ data: [] });
       return Promise.reject(new Error(`unexpected GET ${url}`));
     });
     post.mockResolvedValue({ data: {} });
@@ -215,9 +245,31 @@ describe('VendorDetailPage', () => {
       if (url === '/vendors/v1/account') return Promise.resolve({ data: ACCOUNT });
       if (url === '/vendors/v1/purchases') return Promise.resolve({ data: PURCHASES });
       if (url === '/payments') return Promise.resolve({ data: page(PAYMENTS) });
+      if (url === '/vendors/v1/labour') return Promise.resolve({ data: LABOUR });
       return Promise.reject(new Error(`unexpected GET ${url}`));
     });
     post.mockResolvedValue({ data: {} });
+  });
+
+  /**
+   * The other half of "how do I use a supplier on a site". Nothing is set up: he becomes
+   * used the moment a supervisor names him on a day's labour, and this reads it backwards.
+   */
+  it('shows where the supplier’s men have worked, and whether he stood there', async () => {
+    renderAccount();
+    await screen.findByText('Kausani Steel Traders');
+
+    // Two days at the same site, so the date is what tells the rows apart.
+    const row = (await screen.findByText('2025-06-12')).closest('tr')!;
+    expect(within(row).getByText('KSN-A')).toBeInTheDocument();
+    expect(within(row).getByText('11')).toBeInTheDocument();
+    expect(within(row).getByText('88')).toBeInTheDocument();
+    expect(within(row).getByText('Karam Singh')).toBeInTheDocument();
+
+    // The day he did not come says so, rather than leaving the cell blank.
+    const absent = screen.getByText('2025-06-11').closest('tr')!;
+    expect(within(absent).getByText('No')).toBeInTheDocument();
+    expect(within(absent).getByText('—')).toBeInTheDocument();   // nobody noted hours
   });
 
   /**

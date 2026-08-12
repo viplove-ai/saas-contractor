@@ -62,7 +62,7 @@ public class Site extends BaseEntity {
     private int monthlyWageDays = 26;
 
     /**
-     * The work here is let to labour contractors, so the day is recorded as head counts per
+     * The work here is let to labour suppliers, so the day is recorded as head counts per
      * trade instead of a muster roll. Off by default: a site with its own workers keeps the
      * attendance it has, and its supervisor never sees the counts section.
      */

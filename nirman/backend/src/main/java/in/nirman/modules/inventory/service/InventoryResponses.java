@@ -113,7 +113,7 @@ public class InventoryResponses {
 
         return new IssueResponse(issue.getId(), issue.getIssueNumber(), issue.getSiteId(),
                 issue.getStoreId(), storeName(issue.getStoreId()), issue.getIssueDate(),
-                issue.getIssuedToName(), issue.getIssuedToContractorId(), issue.getBoqItemId(),
+                issue.getIssuedToName(), issue.getIssuedToSupplierId(), issue.getBoqItemId(),
                 issue.getWorkLocation(), issue.getPurpose(), issue.getWorkflowStatus(),
                 issue.getApprovedAt(), issue.getRejectionReason(), totalValue,
                 issue.getVersion(), lines);

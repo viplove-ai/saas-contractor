@@ -3,11 +3,9 @@ package in.nirman.modules.masterdata.api;
 import in.nirman.common.PageResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.AddFieldMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.ConversionResponse;
-import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateLabourContractorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateVendorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.ExpenseCategoryResponse;
-import in.nirman.modules.masterdata.api.dto.MasterDataDtos.LabourContractorResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.MaterialCategoryResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.MaterialResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveConversionRequest;
@@ -17,7 +15,6 @@ import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveSkillCategoryRequ
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveUnitRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SkillCategoryResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.UnitResponse;
-import in.nirman.modules.masterdata.api.dto.MasterDataDtos.UpdateLabourContractorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.UpdateMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.UpdateVendorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.VendorResponse;
@@ -43,7 +40,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Master data: units, categories, vendors, contractors, materials. One controller because
+ * Master data: units, categories, vendors, suppliers, materials. One controller because
  * the endpoints are uniform CRUD over reference rows; paths follow docs/05.
  */
 @RestController
@@ -131,34 +128,12 @@ public class MasterDataController {
         return service.updateVendor(id, request);
     }
 
-    // ------------------------------------------------------------------ labour contractors
-
-    @GetMapping("/labour-contractors")
-    public PageResponse<LabourContractorResponse> listContractors(
-            @RequestParam(required = false) String q,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "25") int size) {
-        return service.listContractors(q, PageRequest.of(page, Math.min(size, 100), Sort.by("code")));
-    }
-
-    @PostMapping("/labour-contractors")
-    public ResponseEntity<LabourContractorResponse> createContractor(
-            @Valid @RequestBody CreateLabourContractorRequest request) {
-        LabourContractorResponse created = service.createContractor(request);
-        return ResponseEntity.created(
-                URI.create("/api/v1/labour-contractors/" + created.id())).body(created);
-    }
-
-    @GetMapping("/labour-contractors/{id}")
-    public LabourContractorResponse getContractor(@PathVariable UUID id) {
-        return service.getContractor(id);
-    }
-
-    @PutMapping("/labour-contractors/{id}")
-    public LabourContractorResponse updateContractor(
-            @PathVariable UUID id, @Valid @RequestBody UpdateLabourContractorRequest request) {
-        return service.updateContractor(id, request);
-    }
+    // ------------------------------------------------------------------ labour suppliers
+    //
+    // There are no endpoints here any more. A man who brings a gang is a supplier like the
+    // one who brings cement, and V23 folded labour_contractors into vendors: the list is
+    // GET /vendors?type=SUBCONTRACTOR, and it comes with the account, the advances and the
+    // history that the separate register never had.
 
     // ------------------------------------------------------------------ materials
 

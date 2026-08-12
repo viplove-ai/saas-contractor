@@ -134,7 +134,7 @@ public class WorkerService {
         worker.setSkillCategoryId(request.skillCategoryId());
         worker.setEmploymentType(request.employmentType() == null
                 ? Worker.EmploymentType.CONTRACT : request.employmentType());
-        worker.setLabourContractorId(request.labourContractorId());
+        worker.setLabourSupplierId(request.labourSupplierId());
         worker.setJoiningDate(from);
         worker.setAadhaarLast4(request.aadhaarLast4());
         worker.setBankAccountNo(request.bankAccountNo());
@@ -177,7 +177,7 @@ public class WorkerService {
         worker.setMobile(request.mobile());
         worker.setSkillCategoryId(request.skillCategoryId());
         worker.setEmploymentType(request.employmentType());
-        worker.setLabourContractorId(request.labourContractorId());
+        worker.setLabourSupplierId(request.labourSupplierId());
         worker.setWageType(request.wageType());
         worker.setJoiningDate(request.joiningDate());
         worker.setExitDate(request.exitDate());
@@ -348,7 +348,7 @@ public class WorkerService {
                 .orElse(null);
         return new WorkerResponse(worker.getId(), worker.getWorkerCode(), worker.getFullName(),
                 worker.getMobile(), worker.getPhotoAttachmentId(), worker.getSkillCategoryId(),
-                worker.getEmploymentType(), worker.getLabourContractorId(), worker.getWageType(),
+                worker.getEmploymentType(), worker.getLabourSupplierId(), worker.getWageType(),
                 worker.getJoiningDate(), worker.getExitDate(), worker.getAadhaarLast4(),
                 worker.getBankAccountNo(), worker.getBankIfsc(), worker.getBankName(),
                 worker.isActive(), currentRate, currentSite, worker.getVersion());

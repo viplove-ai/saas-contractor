@@ -4,13 +4,15 @@ import in.nirman.modules.labour.domain.AttendanceRecord;
 import in.nirman.modules.labour.domain.AttendanceStatus;
 import in.nirman.modules.labour.domain.WorkflowStatus;
 import in.nirman.modules.labour.domain.SiteLabourCount;
+import in.nirman.modules.labour.domain.SiteLabourSupplierDay;
 import in.nirman.modules.labour.domain.Worker;
 import in.nirman.modules.labour.repository.AttendanceRecordRepository;
 import in.nirman.modules.labour.repository.SiteLabourCountRepository;
+import in.nirman.modules.labour.repository.SiteLabourSupplierDayRepository;
 import in.nirman.modules.labour.repository.WorkerRepository;
-import in.nirman.modules.masterdata.domain.LabourContractor;
+import in.nirman.modules.masterdata.domain.Vendor;
 import in.nirman.modules.masterdata.domain.SkillCategory;
-import in.nirman.modules.masterdata.repository.LabourContractorRepository;
+import in.nirman.modules.masterdata.repository.VendorRepository;
 import in.nirman.modules.masterdata.repository.SkillCategoryRepository;
 import in.nirman.modules.project.service.SiteLookup;
 import in.nirman.security.CurrentUserProvider;
@@ -49,22 +51,25 @@ public class LabourLookupService implements LabourLookup {
     private final AttendanceRecordRepository records;
     private final WorkerRepository workers;
     private final SiteLabourCountRepository labourCounts;
+    private final SiteLabourSupplierDayRepository supplierDays;
     private final SkillCategoryRepository skillCategories;
-    private final LabourContractorRepository contractors;
+    private final VendorRepository suppliers;
     private final SiteLookup sites;
     private final CurrentUserProvider currentUser;
 
     public LabourLookupService(AttendanceRecordRepository records, WorkerRepository workers,
                               SiteLabourCountRepository labourCounts,
+                              SiteLabourSupplierDayRepository supplierDays,
                               SkillCategoryRepository skillCategories,
-                              LabourContractorRepository contractors,
+                              VendorRepository suppliers,
                               SiteLookup sites,
                               CurrentUserProvider currentUser) {
         this.records = records;
         this.workers = workers;
         this.labourCounts = labourCounts;
+        this.supplierDays = supplierDays;
         this.skillCategories = skillCategories;
-        this.contractors = contractors;
+        this.suppliers = suppliers;
         this.sites = sites;
         this.currentUser = currentUser;
     }
@@ -87,21 +92,21 @@ public class LabourLookupService implements LabourLookup {
         UUID orgId = currentUser.currentOrgId();
         Map<UUID, String> skillNames = skillCategories.findByOrgIdOrderByCode(orgId).stream()
                 .collect(Collectors.toMap(SkillCategory::getId, SkillCategory::getName));
-        Map<UUID, String> contractorNames = contractors
+        Map<UUID, String> supplierNames = suppliers
                 .findByOrgIdAndDeletedAtIsNullOrderByCode(orgId).stream()
-                .collect(Collectors.toMap(LabourContractor::getId, LabourContractor::getName));
+                .collect(Collectors.toMap(Vendor::getId, Vendor::getName));
 
         List<OutsourcedGroup> groups = rows.stream()
                 .map(row -> new OutsourcedGroup(row.getSkillCategoryId(),
                         skillNames.get(row.getSkillCategoryId()),
-                        row.getLabourContractorId(),
-                        row.getLabourContractorId() == null
-                                ? null : contractorNames.get(row.getLabourContractorId()),
+                        row.getLabourSupplierId(),
+                        row.getLabourSupplierId() == null
+                                ? null : supplierNames.get(row.getLabourSupplierId()),
                         row.getHeadCount(), row.getHours(), row.manHours()))
                 .sorted(Comparator.comparing((OutsourcedGroup g) ->
                                 g.skillCategoryName() == null ? "" : g.skillCategoryName())
-                        .thenComparing(g -> g.labourContractorName() == null
-                                ? "" : g.labourContractorName()))
+                        .thenComparing(g -> g.labourSupplierName() == null
+                                ? "" : g.labourSupplierName()))
                 .toList();
 
         // Summed over the trades that recorded hours; a trade that recorded none contributes
@@ -158,7 +163,7 @@ public class LabourLookupService implements LabourLookup {
             Worker worker = byWorker.get(record.getWorkerId());
             GroupKey key = new GroupKey(
                     worker == null ? null : worker.getSkillCategoryId(),
-                    worker == null ? null : worker.getLabourContractorId());
+                    worker == null ? null : worker.getLabourSupplierId());
             groups.computeIfAbsent(key, unused -> new Accumulator()).add(record);
         }
 
@@ -263,9 +268,9 @@ public class LabourLookupService implements LabourLookup {
         UUID orgId = currentUser.currentOrgId();
         Map<UUID, String> skillNames = skillCategories.findByOrgIdOrderByCode(orgId).stream()
                 .collect(Collectors.toMap(SkillCategory::getId, SkillCategory::getName));
-        Map<UUID, String> contractorNames = contractors
+        Map<UUID, String> supplierNames = suppliers
                 .findByOrgIdAndDeletedAtIsNullOrderByCode(orgId).stream()
-                .collect(Collectors.toMap(LabourContractor::getId, LabourContractor::getName));
+                .collect(Collectors.toMap(Vendor::getId, Vendor::getName));
 
         return groups.entrySet().stream()
                 .map(entry -> {
@@ -274,9 +279,9 @@ public class LabourLookupService implements LabourLookup {
                     return new LabourGroup(key.skillCategoryId(),
                             key.skillCategoryId() == null
                                     ? null : skillNames.get(key.skillCategoryId()),
-                            key.labourContractorId(),
-                            key.labourContractorId() == null
-                                    ? null : contractorNames.get(key.labourContractorId()),
+                            key.labourSupplierId(),
+                            key.labourSupplierId() == null
+                                    ? null : supplierNames.get(key.labourSupplierId()),
                             sum.headCount, sum.regularHours, sum.overtimeHours, sum.cost);
                 })
                 .sorted(Comparator.comparing(group -> group.skillCategoryName() == null
@@ -284,17 +289,17 @@ public class LabourLookupService implements LabourLookup {
                 .toList();
     }
 
-    private record GroupKey(UUID skillCategoryId, UUID labourContractorId) {
+    private record GroupKey(UUID skillCategoryId, UUID labourSupplierId) {
         @Override
         public boolean equals(Object other) {
             return other instanceof GroupKey that
                     && Objects.equals(skillCategoryId, that.skillCategoryId)
-                    && Objects.equals(labourContractorId, that.labourContractorId);
+                    && Objects.equals(labourSupplierId, that.labourSupplierId);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(skillCategoryId, labourContractorId);
+            return Objects.hash(skillCategoryId, labourSupplierId);
         }
     }
 
@@ -311,4 +316,56 @@ public class LabourLookupService implements LabourLookup {
             cost = cost.add(record.getTotalAmount());
         }
     }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Assembled from the counts, which are where the fact lives, with the presence rows
+     * joined on. A supplier's engagement is not stored anywhere on the supplier: it is made
+     * by the supervisor writing down his day, and reading it back the other way round is the
+     * whole of it.</p>
+     */
+    @Override
+    public List<SupplierEngagement> supplierEngagements(UUID labourSupplierId) {
+        List<SiteLabourCount> rows =
+                labourCounts.findByLabourSupplierIdOrderByCountDateDesc(labourSupplierId);
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+        // Presence is per supplier per site per day; the counts are per trade. Group the
+        // counts down to a day before either can be put beside the other.
+        Map<UUID, SiteLabourSupplierDay> presence = supplierDays
+                .findByLabourSupplierIdOrderByCountDateDesc(labourSupplierId).stream()
+                .collect(Collectors.toMap(
+                        row -> UUID.nameUUIDFromBytes(
+                                (row.getSiteId() + "|" + row.getCountDate()).getBytes()),
+                        row -> row, (a, b) -> a));
+
+        Map<UUID, int[]> menByDay = new LinkedHashMap<>();
+        Map<UUID, BigDecimal> manHoursByDay = new LinkedHashMap<>();
+        Map<UUID, SiteLabourCount> anyRow = new LinkedHashMap<>();
+        for (SiteLabourCount row : rows) {
+            UUID key = UUID.nameUUIDFromBytes(
+                    (row.getSiteId() + "|" + row.getCountDate()).getBytes());
+            menByDay.computeIfAbsent(key, unused -> new int[1])[0] += row.getHeadCount();
+            if (row.manHours() != null) {
+                manHoursByDay.merge(key, row.manHours(), BigDecimal::add);
+            }
+            anyRow.putIfAbsent(key, row);
+        }
+
+        return anyRow.entrySet().stream()
+                .map(entry -> {
+                    SiteLabourCount row = entry.getValue();
+                    SiteLookup.SiteInfo site = sites.require(row.getSiteId());
+                    SiteLabourSupplierDay day = presence.get(entry.getKey());
+                    return new SupplierEngagement(row.getSiteId(), site.code(), site.name(),
+                            row.getCountDate(), menByDay.get(entry.getKey())[0],
+                            manHoursByDay.get(entry.getKey()),
+                            day != null && day.isSupplierPresent(),
+                            day == null ? null : day.getRepresentativeName());
+                })
+                .toList();
+    }
+
 }

@@ -4,10 +4,12 @@ import {
   Alert,
   Button,
   Chip,
+  FormControlLabel,
   IconButton,
   MenuItem,
   Paper,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -21,6 +23,7 @@ import {
   useExpenseCategories,
   useIssueMaterial,
   useLabourCounts,
+  useLabourSuppliers,
   useMaterials,
   useReceiveMaterial,
   useSaveLabourCounts,
@@ -65,21 +68,30 @@ interface CountRow {
   key: string;
   skillCategoryId: string;
   /**
-   * Carried through untouched. The screen no longer asks which contractor supplied the men —
-   * there is no onboarding for contractors yet, so the picker was a list of one seeded name
-   * or of nothing — but a day entered before that change still names one, and re-saving the
-   * day must not quietly strip it.
+   * Who sent the men. Asked again now that there is somewhere to answer from: labour
+   * suppliers live on the one supplier register (V23), so the name picked here is a firm
+   * with an account, an address and a history rather than a free-text note.
+   *
+   * <p>Still optional. A site that uses one supplier every day and never says so is
+   * recording a true count with a name missing, and refusing the save over it would cost
+   * the count.</p>
    */
-  labourContractorId: string;
+  labourSupplierId: string;
   headCount: string;
   hours: string;
+}
+
+/** What the supervisor says about a supplier for the day, keyed by the supplier's id. */
+interface SupplierAnswer {
+  supplierPresent: boolean;
+  representativeName: string;
 }
 
 function emptyCount(): CountRow {
   return {
     key: crypto.randomUUID(),
     skillCategoryId: '',
-    labourContractorId: '',
+    labourSupplierId: '',
     headCount: '',
     hours: '',
   };
@@ -101,8 +113,10 @@ function emptyCount(): CountRow {
 export function OutsourcedLabourCard({ siteId, date, locked, onSaved }: DaySectionProps) {
   const counts = useLabourCounts(siteId, date);
   const categories = useSkillCategories();
+  const suppliers = useLabourSuppliers();
   const save = useSaveLabourCounts();
   const [rows, setRows] = useState<CountRow[]>([]);
+  const [answers, setAnswers] = useState<Record<string, SupplierAnswer>>({});
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
 
@@ -116,10 +130,21 @@ export function OutsourcedLabourCard({ siteId, date, locked, onSaved }: DaySecti
       counts.data.lines.map((line) => ({
         key: crypto.randomUUID(),
         skillCategoryId: line.skillCategoryId,
-        labourContractorId: line.labourContractorId ?? '',
+        labourSupplierId: line.labourSupplierId ?? '',
         headCount: String(line.headCount),
         hours: line.hours == null ? '' : String(line.hours),
       })),
+    );
+    setAnswers(
+      Object.fromEntries(
+        (counts.data.suppliers ?? []).map((supplier) => [
+          supplier.labourSupplierId,
+          {
+            supplierPresent: supplier.supplierPresent,
+            representativeName: supplier.representativeName ?? '',
+          },
+        ]),
+      ),
     );
   }, [counts.data]);
 
@@ -129,6 +154,23 @@ export function OutsourcedLabourCard({ siteId, date, locked, onSaved }: DaySecti
 
   const readOnly = locked || counts.data.periodLocked;
   const total = rows.reduce((sum, row) => sum + (Number(row.headCount) || 0), 0);
+  /*
+    The suppliers the rows currently name, with their men added across trades. Derived from
+    what is on screen rather than from what was saved, so ticking a supplier onto a line
+    brings his presence question up immediately instead of after a save.
+  */
+  const namedSuppliers = Object.entries(
+    rows.reduce<Record<string, number>>((byId, row) => {
+      if (!row.labourSupplierId) return byId;
+      byId[row.labourSupplierId] =
+        (byId[row.labourSupplierId] ?? 0) + (Number(row.headCount) || 0);
+      return byId;
+    }, {}),
+  ).map(([id, men]) => ({
+    id,
+    men,
+    name: suppliers.data?.find((candidate) => candidate.id === id)?.name ?? 'Supplier',
+  }));
   // Only the rows that carry hours. A trade counted without them contributes nothing here
   // rather than dragging the total down as a zero.
   const manHours = rows.reduce(
@@ -143,14 +185,22 @@ export function OutsourcedLabourCard({ siteId, date, locked, onSaved }: DaySecti
       .filter((row) => row.skillCategoryId && row.headCount !== '')
       .map((row) => ({
         skillCategoryId: row.skillCategoryId,
-        labourContractorId: row.labourContractorId || undefined,
+        labourSupplierId: row.labourSupplierId || undefined,
         headCount: Number(row.headCount),
         // Blank is "nobody said", which the server stores as no hours at all. Sending a zero
         // would put "they worked no hours" on the report in its place.
         hours: row.hours === '' ? undefined : Number(row.hours),
       }));
+    // Only the suppliers the day actually names. Sending an answer for somebody whose last
+    // line was just deleted would leave a presence row for a gang that is not there.
+    const named = [...new Set(lines.map((line) => line.labourSupplierId).filter(Boolean))];
+    const supplierAnswers = named.map((id) => ({
+      labourSupplierId: id as string,
+      supplierPresent: answers[id as string]?.supplierPresent ?? false,
+      representativeName: answers[id as string]?.representativeName || undefined,
+    }));
     try {
-      await save.mutateAsync({ siteId, date, lines });
+      await save.mutateAsync({ siteId, date, lines, suppliers: supplierAnswers });
       setSavedAt(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }));
       onSaved();
     } catch (caught) {
@@ -195,6 +245,35 @@ export function OutsourcedLabourCard({ siteId, date, locked, onSaved }: DaySecti
               {(categories.data ?? []).map((category) => (
                 <MenuItem key={category.id} value={category.id}>
                   {category.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            {/*
+              Who sent them. Optional, and deliberately so: a site that uses one supplier
+              every day and never names him is still recording a true count, and refusing
+              the save over a missing name would cost the count.
+            */}
+            <TextField
+              select
+              size="small"
+              label="Supplier"
+              disabled={readOnly}
+              value={row.labourSupplierId}
+              onChange={(event) =>
+                setRows((current) =>
+                  current.map((candidate) =>
+                    candidate.key === row.key
+                      ? { ...candidate, labourSupplierId: event.target.value }
+                      : candidate,
+                  ),
+                )
+              }
+              sx={{ minWidth: 170 }}
+            >
+              <MenuItem value="">Not named</MenuItem>
+              {(suppliers.data ?? []).map((supplier) => (
+                <MenuItem key={supplier.id} value={supplier.id}>
+                  {supplier.name}
                 </MenuItem>
               ))}
             </TextField>
@@ -249,6 +328,69 @@ export function OutsourcedLabourCard({ siteId, date, locked, onSaved }: DaySecti
           </Stack>
         ))}
       </Stack>
+
+      {/*
+        Who was standing over the gang. Asked once per supplier rather than once per trade —
+        the same supplier on three lines is one man, and answering for him three times is a
+        question that can disagree with itself. It is the thing a site argues about a
+        fortnight later: a gang left to itself for a week is how work goes wrong.
+      */}
+      {namedSuppliers.length > 0 && (
+        <Stack spacing={1} sx={{ pt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Was the supplier on site today?
+          </Typography>
+          {namedSuppliers.map((supplier) => (
+            <Stack
+              key={supplier.id}
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1.5}
+              alignItems={{ sm: 'center' }}
+            >
+              <FormControlLabel
+                sx={{ minWidth: 240 }}
+                control={
+                  <Switch
+                    disabled={readOnly}
+                    checked={answers[supplier.id]?.supplierPresent ?? false}
+                    onChange={(_, next) =>
+                      setAnswers((current) => ({
+                        ...current,
+                        [supplier.id]: {
+                          supplierPresent: next,
+                          representativeName: current[supplier.id]?.representativeName ?? '',
+                        },
+                      }))
+                    }
+                  />
+                }
+                label={`${supplier.name} · ${supplier.men} men`}
+              />
+              {/* Only once he says somebody was there — a name box beside an off switch is
+                  a question about a person who did not come. */}
+              {(answers[supplier.id]?.supplierPresent ?? false) && (
+                <TextField
+                  size="small"
+                  label="Who came"
+                  disabled={readOnly}
+                  value={answers[supplier.id]?.representativeName ?? ''}
+                  onChange={(event) =>
+                    setAnswers((current) => ({
+                      ...current,
+                      [supplier.id]: {
+                        supplierPresent: true,
+                        representativeName: event.target.value,
+                      },
+                    }))
+                  }
+                  helperText="Leave blank if the supplier himself came"
+                  sx={{ minWidth: 220 }}
+                />
+              )}
+            </Stack>
+          ))}
+        </Stack>
+      )}
 
       {!readOnly && (
         <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>

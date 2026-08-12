@@ -7,11 +7,15 @@ import in.nirman.modules.labour.api.dto.SiteLabourCountDtos.CountLine;
 import in.nirman.modules.labour.api.dto.SiteLabourCountDtos.CountResponse;
 import in.nirman.modules.labour.api.dto.SiteLabourCountDtos.DayCountsResponse;
 import in.nirman.modules.labour.api.dto.SiteLabourCountDtos.SaveCountsRequest;
+import in.nirman.modules.labour.api.dto.SiteLabourCountDtos.SupplierDayLine;
+import in.nirman.modules.labour.api.dto.SiteLabourCountDtos.SupplierDayResponse;
 import in.nirman.modules.labour.domain.SiteLabourCount;
+import in.nirman.modules.labour.domain.SiteLabourSupplierDay;
 import in.nirman.modules.labour.repository.SiteLabourCountRepository;
-import in.nirman.modules.masterdata.domain.LabourContractor;
+import in.nirman.modules.labour.repository.SiteLabourSupplierDayRepository;
+import in.nirman.modules.masterdata.domain.Vendor;
 import in.nirman.modules.masterdata.domain.SkillCategory;
-import in.nirman.modules.masterdata.repository.LabourContractorRepository;
+import in.nirman.modules.masterdata.repository.VendorRepository;
 import in.nirman.modules.masterdata.repository.SkillCategoryRepository;
 import in.nirman.modules.project.service.SiteLookup;
 import in.nirman.security.CurrentUserProvider;
@@ -25,6 +29,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -61,8 +66,9 @@ import java.util.stream.Collectors;
 public class SiteLabourCountService {
 
     private final SiteLabourCountRepository counts;
+    private final SiteLabourSupplierDayRepository supplierDays;
     private final SkillCategoryRepository skillCategories;
-    private final LabourContractorRepository contractors;
+    private final VendorRepository suppliers;
     private final SiteLookup sites;
     private final SiteAccessGuard siteAccessGuard;
     private final PeriodLockGuard periodLockGuard;
@@ -70,16 +76,18 @@ public class SiteLabourCountService {
     private final AuditService audit;
 
     public SiteLabourCountService(SiteLabourCountRepository counts,
+                                  SiteLabourSupplierDayRepository supplierDays,
                                   SkillCategoryRepository skillCategories,
-                                  LabourContractorRepository contractors,
+                                  VendorRepository suppliers,
                                   SiteLookup sites,
                                   SiteAccessGuard siteAccessGuard,
                                   PeriodLockGuard periodLockGuard,
                                   CurrentUserProvider currentUser,
                                   AuditService audit) {
         this.counts = counts;
+        this.supplierDays = supplierDays;
         this.skillCategories = skillCategories;
-        this.contractors = contractors;
+        this.suppliers = suppliers;
         this.sites = sites;
         this.siteAccessGuard = siteAccessGuard;
         this.periodLockGuard = periodLockGuard;
@@ -98,7 +106,8 @@ public class SiteLabourCountService {
                 lines.stream().mapToInt(CountResponse::headCount).sum(),
                 lines.stream().map(CountResponse::manHours).filter(Objects::nonNull)
                         .reduce(BigDecimal.ZERO, BigDecimal::add),
-                lines);
+                lines,
+                supplierDay(siteId, date, lines));
     }
 
     /**
@@ -133,13 +142,14 @@ public class SiteLabourCountService {
             SiteLabourCount row = existing.remove(key);
             if (row == null) {
                 counts.save(new SiteLabourCount(site.orgId(), siteId, date, line.skillCategoryId(),
-                        line.labourContractorId(), line.headCount(), line.hours(), line.remarks()));
+                        line.labourSupplierId(), line.headCount(), line.hours(), line.remarks()));
             } else {
                 row.amend(line.headCount(), line.hours(), line.remarks());
             }
         }
         // Whatever the request did not mention is a trade the supervisor took off the day.
         existing.values().forEach(counts::delete);
+        saveSupplierDays(site.orgId(), siteId, date, request.suppliers());
 
         audit.record("SITE_LABOUR_COUNT", siteId, "COUNTS_SAVED", null,
                 Map.of("date", date.toString(),
@@ -149,22 +159,109 @@ public class SiteLabourCountService {
         return day(siteId, date);
     }
 
+    // ------------------------------------------------------------------ suppliers on site
+
+    /**
+     * Every supplier the day names, whether or not anybody said he was there.
+     *
+     * <p>Built from the counts rather than from the presence rows, so a supplier who sent
+     * men and about whom nothing was recorded still appears — as present:false, which is the
+     * honest reading of a question nobody answered and the row the supervisor needs to see
+     * in order to answer it.</p>
+     */
+    private List<SupplierDayResponse> supplierDay(UUID siteId, LocalDate date,
+                                                  List<CountResponse> lines) {
+        Map<UUID, Integer> menBySupplier = new LinkedHashMap<>();
+        Map<UUID, String> names = new HashMap<>();
+        for (CountResponse line : lines) {
+            if (line.labourSupplierId() == null) {
+                continue;   // a gang nobody attributed; there is no supplier to ask about
+            }
+            menBySupplier.merge(line.labourSupplierId(), line.headCount(), Integer::sum);
+            names.putIfAbsent(line.labourSupplierId(), line.labourSupplierName());
+        }
+        Map<UUID, SiteLabourSupplierDay> recorded = supplierDays
+                .findBySiteIdAndCountDate(siteId, date).stream()
+                .collect(Collectors.toMap(SiteLabourSupplierDay::getLabourSupplierId,
+                        row -> row, (a, b) -> a, HashMap::new));
+        // A presence row for a supplier with no men left on the day still shows: it is a
+        // record somebody made, and dropping it would look like it was never entered.
+        for (SiteLabourSupplierDay row : recorded.values()) {
+            menBySupplier.putIfAbsent(row.getLabourSupplierId(), 0);
+        }
+
+        return menBySupplier.entrySet().stream()
+                .map(entry -> {
+                    SiteLabourSupplierDay row = recorded.get(entry.getKey());
+                    return new SupplierDayResponse(entry.getKey(),
+                            names.getOrDefault(entry.getKey(), supplierName(entry.getKey())),
+                            row != null && row.isSupplierPresent(),
+                            row == null ? null : row.getRepresentativeName(),
+                            row == null ? null : row.getRemarks(),
+                            entry.getValue());
+                })
+                .sorted(Comparator.comparing(response ->
+                        response.labourSupplierName() == null ? "" : response.labourSupplierName()))
+                .toList();
+    }
+
+    /**
+     * Replaces the day's presence rows.
+     *
+     * <p>A null list is a client that has nothing to say — an older phone replaying a queued
+     * day, which must not wipe an answer somebody gave on the desk. An empty list is a
+     * different claim: nobody was there, and the rows go.</p>
+     */
+    private void saveSupplierDays(UUID orgId, UUID siteId, LocalDate date,
+                                  List<SupplierDayLine> requested) {
+        if (requested == null) {
+            return;
+        }
+        Map<UUID, SiteLabourSupplierDay> existing = supplierDays
+                .findBySiteIdAndCountDate(siteId, date).stream()
+                .collect(Collectors.toMap(SiteLabourSupplierDay::getLabourSupplierId,
+                        row -> row, (a, b) -> a, HashMap::new));
+        for (SupplierDayLine line : requested) {
+            requireKnownSupplier(line.labourSupplierId());
+            SiteLabourSupplierDay row = existing.remove(line.labourSupplierId());
+            if (row == null) {
+                row = new SiteLabourSupplierDay(orgId, siteId, date, line.labourSupplierId());
+            }
+            row.setSupplierPresent(line.supplierPresent());
+            row.setRepresentativeName(line.representativeName());
+            row.setRemarks(line.remarks());
+            supplierDays.save(row);
+        }
+        existing.values().forEach(supplierDays::delete);
+    }
+
+    private String supplierName(UUID supplierId) {
+        return suppliers.findById(supplierId).map(Vendor::getName).orElse(null);
+    }
+
+    private void requireKnownSupplier(UUID supplierId) {
+        suppliers.findById(supplierId)
+                .filter(supplier -> supplier.getOrgId().equals(currentUser.currentOrgId()))
+                .orElseThrow(() -> new BusinessException("labour.supplier-unknown",
+                        "That labour supplier is not on the register."));
+    }
+
     // ------------------------------------------------------------------ internals
 
     /**
-     * Skill and contractor together are the row's identity, matching the unique index. A
-     * null contractor is its own key rather than a wildcard: "six masons, contractor not
-     * named" is a different line from "six masons under Karam Singh", and treating them as
-     * one would silently merge two contractors' men.
+     * Skill and supplier together are the row's identity, matching the unique index. A null
+     * supplier is its own key rather than a wildcard: "six masons, supplier not named" is a
+     * different line from "six masons under Karam Singh", and treating them as one would
+     * silently merge two suppliers' men.
      */
-    private record Key(UUID skillCategoryId, UUID labourContractorId) {
+    private record Key(UUID skillCategoryId, UUID labourSupplierId) {
 
         static Key of(SiteLabourCount row) {
-            return new Key(row.getSkillCategoryId(), row.getLabourContractorId());
+            return new Key(row.getSkillCategoryId(), row.getLabourSupplierId());
         }
 
         static Key of(CountLine line) {
-            return new Key(line.skillCategoryId(), line.labourContractorId());
+            return new Key(line.skillCategoryId(), line.labourSupplierId());
         }
     }
 
@@ -175,11 +272,8 @@ public class SiteLabourCountService {
                     .filter(category -> category.getOrgId().equals(orgId))
                     .orElseThrow(() -> new BusinessException("labour.skill-unknown",
                             "That trade does not exist."));
-            if (line.labourContractorId() != null) {
-                contractors.findById(line.labourContractorId())
-                        .filter(contractor -> contractor.getOrgId().equals(orgId))
-                        .orElseThrow(() -> new BusinessException("labour.contractor-unknown",
-                                "That labour contractor does not exist."));
+            if (line.labourSupplierId() != null) {
+                requireKnownSupplier(line.labourSupplierId());
             }
         }
     }
@@ -192,7 +286,7 @@ public class SiteLabourCountService {
         List<Key> keys = lines.stream().map(Key::of).toList();
         if (keys.size() != Set.copyOf(keys).size()) {
             throw new BusinessException("labour.counts-duplicate-trade",
-                    "The same trade and contractor appear twice. Enter one line each and "
+                    "The same trade and supplier appear twice. Enter one line each and "
                             + "add the men together.");
         }
     }
@@ -201,21 +295,21 @@ public class SiteLabourCountService {
         Map<UUID, String> categoryNames = skillCategories.findAllById(
                         rows.stream().map(SiteLabourCount::getSkillCategoryId).collect(Collectors.toSet()))
                 .stream().collect(Collectors.toMap(SkillCategory::getId, SkillCategory::getName));
-        Map<UUID, String> contractorNames = contractors.findAllById(
-                        rows.stream().map(SiteLabourCount::getLabourContractorId)
+        Map<UUID, String> supplierNames = suppliers.findAllById(
+                        rows.stream().map(SiteLabourCount::getLabourSupplierId)
                                 .filter(Objects::nonNull).collect(Collectors.toSet()))
-                .stream().collect(Collectors.toMap(LabourContractor::getId, LabourContractor::getName));
+                .stream().collect(Collectors.toMap(Vendor::getId, Vendor::getName));
 
         List<CountResponse> responses = new ArrayList<>(rows.stream()
                 .map(row -> new CountResponse(row.getId(), row.getSkillCategoryId(),
                         categoryNames.get(row.getSkillCategoryId()),
-                        row.getLabourContractorId(),
-                        contractorNames.get(row.getLabourContractorId()),
+                        row.getLabourSupplierId(),
+                        supplierNames.get(row.getLabourSupplierId()),
                         row.getHeadCount(), row.getHours(), row.manHours(), row.getRemarks()))
                 .toList());
         responses.sort(Comparator.comparing((CountResponse r) -> r.skillCategoryName() == null
                         ? "" : r.skillCategoryName())
-                .thenComparing(r -> r.labourContractorName() == null ? "" : r.labourContractorName()));
+                .thenComparing(r -> r.labourSupplierName() == null ? "" : r.labourSupplierName()));
         return responses;
     }
 

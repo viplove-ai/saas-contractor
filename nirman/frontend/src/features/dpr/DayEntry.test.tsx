@@ -40,6 +40,7 @@ function counts(overrides: Partial<DayCounts> = {}): DayCounts {
     lines: [
       { id: 'row-1', skillCategoryId: MASON, skillCategoryName: 'Mason', headCount: 11 },
     ],
+    suppliers: [],
     ...overrides,
   };
 }
@@ -96,11 +97,13 @@ describe('OutsourcedLabourCard', () => {
         lines: [
           {
             skillCategoryId: MASON,
-            labourContractorId: undefined,
+            labourSupplierId: undefined,
             headCount: 11,
             hours: 8,
           },
         ],
+        // Nobody named a supplier, so there is nobody to ask about.
+        suppliers: [],
       }),
     );
   });
@@ -120,39 +123,103 @@ describe('OutsourcedLabourCard', () => {
     expect(screen.queryByText(/man-hours/)).not.toBeInTheDocument();
   });
 
-  /**
-   * A day recorded before the contractor picker was taken off the screen still names one.
-   * Re-saving must not quietly strip it.
-   */
+  /** A day that already names a supplier keeps him through a re-save. */
   it('carries an already-named supplier through a re-save untouched', async () => {
     const user = userEvent.setup();
-    get.mockImplementation((url: string) => {
-      if (url === '/labour-counts') {
-        return Promise.resolve({
-          data: counts({
-            lines: [
-              {
-                id: 'row-1',
-                skillCategoryId: MASON,
-                skillCategoryName: 'Mason',
-                labourContractorId: 'lc-1',
-                headCount: 11,
-              },
-            ],
-          }),
-        });
-      }
-      if (url === '/skill-categories') {
-        return Promise.resolve({ data: [{ id: MASON, code: 'MASON', name: 'Mason' }] });
-      }
-      return Promise.resolve({ data: [] });
-    });
+    mockWithSupplier();
 
     renderCard();
     await screen.findByLabelText('Hours each');
     await user.click(screen.getByRole('button', { name: 'Save counts' }));
 
     await waitFor(() => expect(put).toHaveBeenCalled());
-    expect(put.mock.calls[0]![1].lines[0].labourContractorId).toBe('lc-1');
+    expect(put.mock.calls[0]![1].lines[0].labourSupplierId).toBe('lc-1');
+  });
+
+  /**
+   * The question the site argues about a fortnight later. Asked once per supplier, not once
+   * per trade — the same man on three lines is one man.
+   */
+  it('asks whether the named supplier was on site, and sends the answer', async () => {
+    const user = userEvent.setup();
+    mockWithSupplier();
+
+    renderCard();
+    await screen.findByLabelText('Hours each');
+
+    const presence = await screen.findByRole('checkbox', {
+      name: 'Kausani Labour Co-operative · 11 men',
+    });
+    await user.click(presence);
+    await user.type(screen.getByLabelText('Who came'), 'Karam Singh');
+    await user.click(screen.getByRole('button', { name: 'Save counts' }));
+
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(put.mock.calls[0]![1].suppliers).toEqual([
+      {
+        labourSupplierId: 'lc-1',
+        supplierPresent: true,
+        representativeName: 'Karam Singh',
+      },
+    ]);
+  });
+
+  /** Nobody named is nobody to ask about: the question does not appear at all. */
+  it('does not ask about a supplier when the gang is unattributed', async () => {
+    renderCard();
+    await screen.findByLabelText('Hours each');
+
+    expect(screen.queryByText('Was the supplier on site today?')).not.toBeInTheDocument();
+  });
+
+  /** A name box beside an off switch is a question about a man who did not come. */
+  it('asks who came only once somebody says the supplier was there', async () => {
+    mockWithSupplier();
+    renderCard();
+    await screen.findByLabelText('Hours each');
+    await screen.findByRole('checkbox', { name: /Kausani Labour Co-operative/ });
+
+    expect(screen.queryByLabelText('Who came')).not.toBeInTheDocument();
   });
 });
+
+/** A day whose masons came from a registered supplier. */
+function mockWithSupplier() {
+  get.mockImplementation((url: string, config?: { params?: { type?: string } }) => {
+    if (url === '/labour-counts') {
+      return Promise.resolve({
+        data: counts({
+          lines: [
+            {
+              id: 'row-1',
+              skillCategoryId: MASON,
+              skillCategoryName: 'Mason',
+              labourSupplierId: 'lc-1',
+              labourSupplierName: 'Kausani Labour Co-operative',
+              headCount: 11,
+            },
+          ],
+          suppliers: [
+            {
+              labourSupplierId: 'lc-1',
+              labourSupplierName: 'Kausani Labour Co-operative',
+              supplierPresent: false,
+              headCount: 11,
+            },
+          ],
+        }),
+      });
+    }
+    if (url === '/skill-categories') {
+      return Promise.resolve({ data: [{ id: MASON, code: 'MASON', name: 'Mason' }] });
+    }
+    if (url === '/vendors' && config?.params?.type === 'SUBCONTRACTOR') {
+      return Promise.resolve({
+        data: {
+          content: [{ id: 'lc-1', code: 'LC-001', name: 'Kausani Labour Co-operative' }],
+        },
+      });
+    }
+    return Promise.resolve({ data: [] });
+  });
+}

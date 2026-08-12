@@ -12,6 +12,7 @@ import type {
   LabourCountLine,
   PageResponse,
   Site,
+  SupplierDayLine,
   UpdateDprInput,
 } from './types';
 
@@ -212,8 +213,12 @@ export function useLabourCounts(siteId: string | undefined, date: string) {
 export function useSaveLabourCounts() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { siteId: string; date: string; lines: LabourCountLine[] }) =>
-      (await apiClient.put<DayCounts>('/labour-counts', input)).data,
+    mutationFn: async (input: {
+      siteId: string;
+      date: string;
+      lines: LabourCountLine[];
+      suppliers: SupplierDayLine[];
+    }) => (await apiClient.put<DayCounts>('/labour-counts', input)).data,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: labourCountKeys.all });
       // The report reads the counts back through the prefill, so it has to be re-asked.
@@ -233,15 +238,21 @@ export function useSkillCategories() {
   });
 }
 
-export function useLabourContractors() {
+/**
+ * The men who bring gangs, off the one supplier register.
+ *
+ * <p>There is no separate contractor list any more (V23): a man who supplies labour is a
+ * supplier like the one who supplies cement, registered once and carrying one account. The
+ * type is what narrows the picker to the ones who send people rather than material.</p>
+ */
+export function useLabourSuppliers() {
   return useQuery({
-    queryKey: ['labour-contractors'],
+    queryKey: ['labour-suppliers'],
     queryFn: async () =>
       (
-        await apiClient.get<PageResponse<{ id: string; code: string; name: string }>>(
-          '/labour-contractors',
-          { params: { size: 100 } },
-        )
+        await apiClient.get<PageResponse<{ id: string; code: string; name: string }>>('/vendors', {
+          params: { type: 'SUBCONTRACTOR', active: true, size: 100 },
+        })
       ).data.content,
     staleTime: REFERENCE_STALE_TIME,
   });

@@ -134,7 +134,7 @@ public class AttendanceService {
                     AttendanceRecord record = existing.get(worker.getId());
                     return new RosterEntry(worker.getId(), worker.getWorkerCode(),
                             worker.getFullName(), worker.getSkillCategoryId(),
-                            worker.getLabourContractorId(),
+                            worker.getLabourSupplierId(),
                             rate == null ? null : rate.getNormalRate(),
                             rate == null ? null : rate.getOvertimeRate(),
                             record == null ? null : toResponse(record, worker.getFullName()));

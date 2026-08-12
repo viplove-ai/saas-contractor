@@ -78,8 +78,8 @@ public final class DprDtos {
     public record LabourLine(
             UUID skillCategoryId,
             String skillCategoryName,
-            UUID labourContractorId,
-            String labourContractorName,
+            UUID labourSupplierId,
+            String labourSupplierName,
             int headCount,
             BigDecimal regularHours,
             BigDecimal overtimeHours,
@@ -114,8 +114,8 @@ public final class DprDtos {
     public record OutsourcedLine(
             UUID skillCategoryId,
             String skillCategoryName,
-            UUID labourContractorId,
-            String labourContractorName,
+            UUID labourSupplierId,
+            String labourSupplierName,
             int headCount,
             BigDecimal hours,
             BigDecimal manHours) {

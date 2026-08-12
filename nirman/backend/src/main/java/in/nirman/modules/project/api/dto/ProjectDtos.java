@@ -121,7 +121,7 @@ public final class ProjectDtos {
             LocalDate startDate,
             BigDecimal standardShiftHours,
             int monthlyWageDays,
-            /** Work here is let to labour contractors, so the day is head counts per trade. */
+            /** Work here is let to labour suppliers, so the day is head counts per trade. */
             boolean usesOutsourcedLabour,
             Instant deletedAt,
             UUID deletedBy,

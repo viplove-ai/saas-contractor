@@ -19,7 +19,7 @@ import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount, formatQuantity } from '../../shared/formatters';
 import { useAuth } from '../auth/AuthContext';
 import { RecordAdvanceDialog } from './RecordAdvanceDialog';
-import { useVendorAccount, useVendorPayments, useVendorPurchases } from './api';
+import { useVendorAccount, useVendorLabour, useVendorPayments, useVendorPurchases } from './api';
 import type { VendorAccount } from './types';
 
 /**
@@ -37,6 +37,7 @@ export function VendorDetailPage() {
   const account = useVendorAccount(vendorId);
   const purchases = useVendorPurchases(vendorId);
   const payments = useVendorPayments(vendorId);
+  const labour = useVendorLabour(vendorId);
   const [advanceOpen, setAdvanceOpen] = useState(false);
 
   const canPay = hasPermission('payment:record');
@@ -166,6 +167,55 @@ export function VendorDetailPage() {
             </TableBody>
           </Table>
         </Paper>
+      )}
+
+      {/*
+        Where his men have worked. Nothing had to be set up for him to be "used" on a site:
+        he becomes used the moment a supervisor names him on a day's labour, and this is that
+        record read backwards. Only shown when there is something to show — a cement dealer
+        has no labour days and an empty table would imply he should.
+      */}
+      {labour.data && labour.data.length > 0 && (
+        <>
+          <Typography variant="h2" sx={{ fontSize: '1.25rem' }}>
+            Where his men have worked
+          </Typography>
+          <Paper elevation={0} sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Date</TableCell>
+                  <TableCell>Site</TableCell>
+                  <TableCell align="right">Men</TableCell>
+                  <TableCell align="right">Man-hours</TableCell>
+                  <TableCell>He was there</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {labour.data.map((day) => (
+                  <TableRow key={`${day.siteId}-${day.date}`} hover>
+                    <TableCell>{day.date}</TableCell>
+                    <TableCell>{day.siteCode ?? day.siteName ?? '—'}</TableCell>
+                    <TableCell align="right">{day.headCount}</TableCell>
+                    {/* Nobody noted hours is not nought hours, so it reads as a gap. */}
+                    <TableCell align="right">{day.manHours ?? '—'}</TableCell>
+                    <TableCell>
+                      {day.supplierPresent ? (
+                        <Chip
+                          size="small"
+                          color="success"
+                          label={day.representativeName ?? 'Yes'}
+                        />
+                      ) : (
+                        <Chip size="small" variant="outlined" label="No" />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Paper>
+        </>
       )}
 
       <Typography variant="h2" sx={{ fontSize: '1.25rem' }}>

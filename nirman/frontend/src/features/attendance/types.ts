@@ -73,7 +73,7 @@ export interface RosterEntry {
   workerCode: string;
   workerName: string;
   skillCategoryId?: string;
-  labourContractorId?: string;
+  labourSupplierId?: string;
   normalRate?: number;
   overtimeRate?: number;
   /** Absent from the payload entirely when the worker has not been marked yet. */

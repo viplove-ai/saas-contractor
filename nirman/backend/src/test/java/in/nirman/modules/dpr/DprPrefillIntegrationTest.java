@@ -103,7 +103,7 @@ class DprPrefillIntegrationTest extends AbstractIntegrationTest {
         int headCount = 0;
         for (JsonNode line : lines) {
             headCount += line.get("headCount").asInt();
-            assertThat(line.get("labourContractorName").asText())
+            assertThat(line.get("labourSupplierName").asText())
                     .isEqualTo("Kausani Labour Co-operative");
         }
         assertThat(headCount).as("every man on the muster appears on exactly one line")

@@ -107,7 +107,7 @@
     </tr>
     <tr th:each="line : ${dpr.labour()}">
         <td th:text="${line.skillCategoryName()} ?: 'Unclassified'">Trade</td>
-        <td th:text="${line.labourContractorName() ?: (line.outsourced() ? 'External' : 'Direct')}">Source</td>
+        <td th:text="${line.labourSupplierName() ?: (line.outsourced() ? 'External' : 'Direct')}">Source</td>
         <td class="num" th:text="${line.headCount()}">0</td>
         <td class="num" th:text="${line.regularHours()}">0</td>
         <td class="num" th:text="${line.overtimeHours()}">0</td>

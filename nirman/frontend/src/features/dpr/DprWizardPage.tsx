@@ -70,7 +70,7 @@ const LABOUR_COLUMNS: RecordColumn<LabourLine>[] = [
     key: 'source',
     header: 'Source',
     cell: (line) =>
-      line.labourContractorName ?? (line.outsourced ? 'External' : 'Direct'),
+      line.labourSupplierName ?? (line.outsourced ? 'External' : 'Direct'),
   },
   { key: 'men', header: 'Men', align: 'right', cell: (line) => line.headCount },
   {
@@ -917,7 +917,7 @@ function PrefillStep({
             columns={LABOUR_COLUMNS}
             rows={data.labour.lines}
             rowKey={(line) =>
-              `${line.skillCategoryId ?? 'none'}-${line.labourContractorId ?? 'direct'}`
+              `${line.skillCategoryId ?? 'none'}-${line.labourSupplierId ?? 'direct'}`
             }
             ariaLabel="Labour on site"
           />

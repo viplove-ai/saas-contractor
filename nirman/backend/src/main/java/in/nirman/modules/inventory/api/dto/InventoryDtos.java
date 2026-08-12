@@ -137,7 +137,7 @@ public final class InventoryDtos {
             UUID boqItemId,
             @Size(max = 300) String purpose,
             @Size(max = 150) String issuedToName,
-            UUID issuedToContractorId,
+            UUID issuedToSupplierId,
             @Size(max = 150) String workLocation,
             @NotEmpty @Valid List<IssueLine> lines) {
     }
@@ -167,7 +167,7 @@ public final class InventoryDtos {
             String storeName,
             LocalDate issueDate,
             String issuedToName,
-            UUID issuedToContractorId,
+            UUID issuedToSupplierId,
             UUID boqItemId,
             String workLocation,
             String purpose,

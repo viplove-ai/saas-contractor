@@ -148,7 +148,7 @@ public class MaterialIssueService {
         issue.setBoqItemId(request.boqItemId());
         issue.setPurpose(request.purpose());
         issue.setIssuedToName(request.issuedToName());
-        issue.setIssuedToContractorId(request.issuedToContractorId());
+        issue.setIssuedToSupplierId(request.issuedToSupplierId());
         issue.setWorkLocation(request.workLocation());
         issue.submit();
         // Header before lines: the lines carry a foreign key to it.

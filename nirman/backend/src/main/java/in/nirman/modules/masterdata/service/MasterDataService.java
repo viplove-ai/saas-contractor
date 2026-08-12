@@ -7,11 +7,9 @@ import in.nirman.common.PageResponse;
 import in.nirman.modules.audit.AuditService;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.AddFieldMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.ConversionResponse;
-import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateLabourContractorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateVendorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.ExpenseCategoryResponse;
-import in.nirman.modules.masterdata.api.dto.MasterDataDtos.LabourContractorResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.MaterialCategoryResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.MaterialResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveConversionRequest;
@@ -21,12 +19,10 @@ import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveSkillCategoryRequ
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveUnitRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SkillCategoryResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.UnitResponse;
-import in.nirman.modules.masterdata.api.dto.MasterDataDtos.UpdateLabourContractorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.UpdateMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.UpdateVendorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.VendorResponse;
 import in.nirman.modules.masterdata.domain.ExpenseCategory;
-import in.nirman.modules.masterdata.domain.LabourContractor;
 import in.nirman.modules.masterdata.domain.Material;
 import in.nirman.modules.masterdata.domain.MaterialCategory;
 import in.nirman.modules.masterdata.domain.MaterialUnitConversion;
@@ -35,7 +31,6 @@ import in.nirman.modules.masterdata.domain.Unit;
 import in.nirman.modules.masterdata.domain.Vendor;
 import in.nirman.modules.masterdata.mapper.MasterDataMapper;
 import in.nirman.modules.masterdata.repository.ExpenseCategoryRepository;
-import in.nirman.modules.masterdata.repository.LabourContractorRepository;
 import in.nirman.modules.masterdata.repository.MaterialCategoryRepository;
 import in.nirman.modules.masterdata.repository.MaterialRepository;
 import in.nirman.modules.masterdata.repository.MaterialUnitConversionRepository;
@@ -44,6 +39,7 @@ import in.nirman.modules.masterdata.repository.UnitRepository;
 import in.nirman.modules.masterdata.repository.VendorRepository;
 import in.nirman.security.CurrentUserProvider;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -53,6 +49,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * All master-data CRUD behind two permissions: {@code masterdata:read} for every role,
@@ -69,7 +66,6 @@ public class MasterDataService {
     private final SkillCategoryRepository skillCategories;
     private final MaterialCategoryRepository materialCategories;
     private final VendorRepository vendors;
-    private final LabourContractorRepository contractors;
     private final MaterialRepository materials;
     private final MaterialUnitConversionRepository conversions;
     private final ExpenseCategoryRepository expenseCategories;
@@ -82,7 +78,6 @@ public class MasterDataService {
                              SkillCategoryRepository skillCategories,
                              MaterialCategoryRepository materialCategories,
                              VendorRepository vendors,
-                             LabourContractorRepository contractors,
                              MaterialRepository materials,
                              MaterialUnitConversionRepository conversions,
                              ExpenseCategoryRepository expenseCategories,
@@ -94,7 +89,6 @@ public class MasterDataService {
         this.skillCategories = skillCategories;
         this.materialCategories = materialCategories;
         this.vendors = vendors;
-        this.contractors = contractors;
         this.materials = materials;
         this.conversions = conversions;
         this.expenseCategories = expenseCategories;
@@ -218,69 +212,47 @@ public class MasterDataService {
         return mapper.toResponse(vendor);
     }
 
-    // ------------------------------------------------------------------ labour contractors
-
-    @Transactional(readOnly = true)
-    public PageResponse<LabourContractorResponse> listContractors(String q, Pageable pageable) {
-        return PageResponse.from(contractors.search(orgId(), emptyToNull(q), pageable),
-                mapper::toResponse);
-    }
-
-    @Transactional(readOnly = true)
-    public LabourContractorResponse getContractor(UUID id) {
-        return mapper.toResponse(requireContractor(id));
-    }
-
-    @PreAuthorize("hasAuthority('masterdata:write')")
-    public LabourContractorResponse createContractor(CreateLabourContractorRequest request) {
-        requireFreeCode(contractors.existsByOrgIdAndCode(orgId(), request.code()),
-                "Labour contractor", request.code());
-        LabourContractor contractor = new LabourContractor(orgId(), request.code(), request.name());
-        contractor.setContactPerson(request.contactPerson());
-        contractor.setMobile(request.mobile());
-        contractor.setEmail(request.email());
-        contractor.setAddress(request.address());
-        contractor.setGstin(request.gstin());
-        contractor.setPan(request.pan());
-        contractor.setBankAccountNo(request.bankAccountNo());
-        contractor.setBankIfsc(request.bankIfsc());
-        contractors.save(contractor);
-        recordCreate("LABOUR_CONTRACTOR", contractor.getId(), contractor.getCode());
-        return mapper.toResponse(contractor);
-    }
-
-    @PreAuthorize("hasAuthority('masterdata:write')")
-    public LabourContractorResponse updateContractor(UUID id, UpdateLabourContractorRequest request) {
-        LabourContractor contractor = requireContractor(id);
-        requireVersion(contractor.getVersion(), request.version(), "Labour contractor", id);
-        contractor.setName(request.name());
-        contractor.setContactPerson(request.contactPerson());
-        contractor.setMobile(request.mobile());
-        contractor.setEmail(request.email());
-        contractor.setAddress(request.address());
-        contractor.setGstin(request.gstin());
-        contractor.setPan(request.pan());
-        contractor.setBankAccountNo(request.bankAccountNo());
-        contractor.setBankIfsc(request.bankIfsc());
-        contractor.setActive(request.active());
-        audit.record("LABOUR_CONTRACTOR", contractor.getId(), "UPDATE", null,
-                Map.of("name", contractor.getName(), "active", contractor.isActive()), null);
-        return mapper.toResponse(contractor);
-    }
-
     // ------------------------------------------------------------------ materials
 
     @Transactional(readOnly = true)
     public PageResponse<MaterialResponse> listMaterials(UUID categoryId, Boolean active, String q,
                                                         Pageable pageable) {
-        return PageResponse.from(
-                materials.search(orgId(), categoryId, active, emptyToNull(q), pageable),
-                mapper::toResponse);
+        Page<Material> page = materials.search(orgId(), categoryId, active, emptyToNull(q),
+                pageable);
+        // One query for every row's conversions rather than one per row. The picker on the
+        // receive screen needs them on every material it offers, not on the one chosen.
+        Map<UUID, List<UUID>> altUnits = altUnitsFor(page.getContent().stream()
+                .map(Material::getId).toList());
+        return PageResponse.from(page,
+                material -> mapper.toResponse(material,
+                        altUnits.getOrDefault(material.getId(), List.of())));
     }
 
     @Transactional(readOnly = true)
     public MaterialResponse getMaterial(UUID id) {
-        return mapper.toResponse(requireMaterial(id));
+        return toMaterialResponse(requireMaterial(id));
+    }
+
+    /**
+     * The units a material may be booked in besides its base one.
+     *
+     * <p>On the response because the alternative is a picker offering every unit in the
+     * system: {@code MaterialLookup.factorToBase} refuses anything with no conversion, and
+     * it refuses it after the storekeeper has typed the whole delivery.</p>
+     */
+    private Map<UUID, List<UUID>> altUnitsFor(List<UUID> materialIds) {
+        if (materialIds.isEmpty()) {
+            return Map.of();
+        }
+        return conversions.findByMaterialIdIn(materialIds).stream()
+                .collect(Collectors.groupingBy(MaterialUnitConversion::getMaterialId,
+                        Collectors.mapping(MaterialUnitConversion::getAltUnitId,
+                                Collectors.toList())));
+    }
+
+    private MaterialResponse toMaterialResponse(Material material) {
+        return mapper.toResponse(material, conversions.findByMaterialId(material.getId()).stream()
+                .map(MaterialUnitConversion::getAltUnitId).toList());
     }
 
     @PreAuthorize("hasAuthority('masterdata:write')")
@@ -297,7 +269,7 @@ public class MasterDataService {
                 request.consumable());
         materials.save(material);
         recordCreate("MATERIAL", material.getId(), material.getCode());
-        return mapper.toResponse(material);
+        return toMaterialResponse(material);
     }
 
     /**
@@ -323,7 +295,7 @@ public class MasterDataService {
         }
         List<Material> existing = materials.findByName(orgId(), name);
         if (!existing.isEmpty()) {
-            return mapper.toResponse(existing.get(0));
+            return toMaterialResponse(existing.get(0));
         }
         units.findById(request.baseUnitId())
                 .filter(u -> u.getOrgId().equals(orgId()))
@@ -335,7 +307,7 @@ public class MasterDataService {
         material.setProvisional(true);
         materials.save(material);
         recordCreate("MATERIAL", material.getId(), material.getCode());
-        return mapper.toResponse(material);
+        return toMaterialResponse(material);
     }
 
     @PreAuthorize("hasAuthority('masterdata:write')")
@@ -353,7 +325,7 @@ public class MasterDataService {
         material.setActive(request.active());
         audit.record("MATERIAL", material.getId(), "UPDATE", null,
                 Map.of("name", material.getName(), "active", material.isActive()), null);
-        return mapper.toResponse(material);
+        return toMaterialResponse(material);
     }
 
     @Transactional(readOnly = true)
@@ -438,10 +410,6 @@ public class MasterDataService {
                 .orElseThrow(() -> BusinessException.notFound("Vendor", id));
     }
 
-    private LabourContractor requireContractor(UUID id) {
-        return contractors.findByIdAndOrgIdAndDeletedAtIsNull(id, orgId())
-                .orElseThrow(() -> BusinessException.notFound("Labour contractor", id));
-    }
 
     private Material requireMaterial(UUID id) {
         return materials.findByIdAndOrgIdAndDeletedAtIsNull(id, orgId())

@@ -75,6 +75,24 @@ export interface VendorPurchase {
   received: boolean;
 }
 
+/**
+ * One day this supplier's men were on a site.
+ *
+ * <p>There is nothing to set up to "use" a supplier on a project: he becomes used the moment
+ * a supervisor names him on a day's labour, and this is that record read backwards.</p>
+ */
+export interface SupplierEngagement {
+  siteId: string;
+  siteCode?: string;
+  siteName?: string;
+  date: string;
+  headCount: number;
+  /** Absent on a day nobody noted hours. No money follows from it — he bills for the work. */
+  manHours?: number;
+  supplierPresent: boolean;
+  representativeName?: string;
+}
+
 export interface VendorPayment {
   id: string;
   paymentNumber: string;

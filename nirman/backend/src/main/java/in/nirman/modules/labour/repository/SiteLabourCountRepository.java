@@ -13,4 +13,7 @@ public interface SiteLabourCountRepository extends JpaRepository<SiteLabourCount
 
     /** For a period roll-up: the report reads a month at a time, not a day at a time. */
     List<SiteLabourCount> findBySiteIdAndCountDateBetween(UUID siteId, LocalDate from, LocalDate to);
+
+    /** Every count attributed to one supplier, anywhere — his engagement, read backwards. */
+    List<SiteLabourCount> findByLabourSupplierIdOrderByCountDateDesc(UUID labourSupplierId);
 }

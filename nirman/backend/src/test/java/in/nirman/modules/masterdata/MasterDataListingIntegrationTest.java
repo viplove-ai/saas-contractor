@@ -42,7 +42,7 @@ class MasterDataListingIntegrationTest extends AbstractIntegrationTest {
     private ObjectMapper objectMapper;
 
     @ParameterizedTest(name = "GET /{0} with no search term")
-    @ValueSource(strings = {"vendors", "labour-contractors", "materials"})
+    @ValueSource(strings = {"vendors", "materials"})
     @DisplayName("a master-data list loads with no search term")
     void listsLoadWithoutASearchTerm(String path) throws Exception {
         mockMvc.perform(get("/api/v1/" + path)
@@ -54,7 +54,7 @@ class MasterDataListingIntegrationTest extends AbstractIntegrationTest {
 
     /** The path that always worked, kept alongside so the cast cannot silently break it. */
     @ParameterizedTest(name = "GET /{0} with a search term")
-    @ValueSource(strings = {"vendors", "labour-contractors", "materials"})
+    @ValueSource(strings = {"vendors", "materials"})
     @DisplayName("a master-data list still filters when a search term is given")
     void listsStillFilterWithASearchTerm(String path) throws Exception {
         mockMvc.perform(get("/api/v1/" + path)
@@ -68,7 +68,7 @@ class MasterDataListingIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("an empty search term is treated as no filter rather than as a literal")
     void anEmptySearchTermListsEverything() throws Exception {
-        mockMvc.perform(get("/api/v1/labour-contractors")
+        mockMvc.perform(get("/api/v1/vendors")
                         .param("q", "")
                         .header("Authorization", "Bearer " + loginToken("viplove")))
                 .andExpect(status().isOk())

@@ -59,8 +59,8 @@ public interface LabourLookup {
     record LabourGroup(
             UUID skillCategoryId,
             String skillCategoryName,
-            UUID labourContractorId,
-            String labourContractorName,
+            UUID labourSupplierId,
+            String labourSupplierName,
             int headCount,
             BigDecimal regularHours,
             BigDecimal overtimeHours,
@@ -121,8 +121,8 @@ public interface LabourLookup {
     record OutsourcedGroup(
             UUID skillCategoryId,
             String skillCategoryName,
-            UUID labourContractorId,
-            String labourContractorName,
+            UUID labourSupplierId,
+            String labourSupplierName,
             int headCount,
             BigDecimal hours,
             BigDecimal manHours) {
@@ -146,4 +146,35 @@ public interface LabourLookup {
 
     /** Dates in the range with no live attendance row at all — a data-quality question. */
     List<LocalDate> daysWithoutAttendance(UUID siteId, LocalDate from, LocalDate to);
+
+    /**
+     * One day a labour supplier had men on one site.
+     *
+     * <p>The answer to "where have I used him", which is the question the supplier register
+     * cannot answer on its own — the record of use is made by the supervisor's day, not by
+     * anything on the supplier.</p>
+     *
+     * @param manHours head count times hours each, or null on a day nobody noted hours.
+     *                 Null is not zero, and no money follows from it either way: the
+     *                 supplier bills for the work.
+     */
+    record SupplierEngagement(
+            UUID siteId,
+            String siteCode,
+            String siteName,
+            LocalDate date,
+            int headCount,
+            BigDecimal manHours,
+            boolean supplierPresent,
+            String representativeName) {
+    }
+
+    /**
+     * Every day this supplier's men were on any site, newest first.
+     *
+     * <p>Unnarrowed by site assignment on purpose: this is a question about a supplier's
+     * engagement rather than about a site's work, and the permission that reaches it
+     * ({@code vendor:balance:manage}) belongs to roles that see the whole company anyway.</p>
+     */
+    List<SupplierEngagement> supplierEngagements(UUID labourSupplierId);
 }

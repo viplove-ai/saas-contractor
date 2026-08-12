@@ -24,7 +24,7 @@ public interface SiteLookup {
      * @param monthlyWageDays    the divisor turning a monthly wage into a daily one
      * @param usesOutsourcedLabour the day here is recorded as head counts per trade rather
      *                             than as a muster roll, because the work is let to labour
-     *                             contractors. The labour module asks before it offers the
+     *                             suppliers. The labour module asks before it offers the
      *                             counts screen, and the DPR asks before it prints the
      *                             section.
      */

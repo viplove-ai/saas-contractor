@@ -42,7 +42,7 @@ const SITES: AdminSite[] = [
     code: 'KSN-A',
     name: 'Kausani Main Block',
     siteEngineerIds: ['u-eng'],
-    supervisorIds: ['u-sup'],
+    supervisorIds: ['u-sup', 'u-sup2'],
     status: 'ACTIVE',
     standardShiftHours: 7,
     monthlyWageDays: 26,
@@ -114,6 +114,42 @@ describe('SitesPage', () => {
     const row = table().getByText('KSN-A').closest('tr') as HTMLElement;
     expect(within(row).getByText('Uttam Rana')).toBeInTheDocument();
     expect(within(row).getByText('Vivek Aggarwal')).toBeInTheDocument();
+  });
+
+  /**
+   * Three names run together as one string do not answer the question the column is for —
+   * how many people are watching this site. The number answers it before the names are read.
+   */
+  it('numbers the supervisors down the cell instead of running them together', async () => {
+    renderPage();
+    await screen.findAllByText('KSN-A');
+    const row = table().getByText('KSN-A').closest('tr') as HTMLElement;
+
+    const list = within(row).getByRole('list');
+    const entries = within(list).getAllByRole('listitem');
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toHaveTextContent('1.Vivek Aggarwal');
+    expect(entries[1]).toHaveTextContent('2.Ramesh Negi');
+  });
+
+  /** One name is not a list. "1. Uttam Rana" implies a second entry that does not exist. */
+  it('leaves a lone engineer unnumbered', async () => {
+    renderPage();
+    await screen.findAllByText('KSN-A');
+    const row = table().getByText('KSN-A').closest('tr') as HTMLElement;
+
+    const engineerCell = within(row).getByText('Uttam Rana').closest('td') as HTMLElement;
+    expect(within(engineerCell).queryByRole('list')).not.toBeInTheDocument();
+  });
+
+  /** The card counts them in the heading, because it has no column header to lean on. */
+  it('counts the supervisors in the card’s heading', async () => {
+    renderPage();
+    await screen.findAllByText('KSN-A');
+    const card = cards().getByText('KSN-A').closest('li') as HTMLElement;
+
+    expect(within(card).getByText('Supervisors (2)')).toBeInTheDocument();
+    expect(within(card).getByText('Site engineer')).toBeInTheDocument();
   });
 
   /** The phone list is the same register, not a summary of it: every fact and both buttons. */
@@ -193,8 +229,9 @@ describe('SitesPage', () => {
     const row = table().getByText('KSN-A').closest('tr') as HTMLElement;
     await user.click(within(row).getByRole('button', { name: 'Edit' }));
 
-    // Ticked because he is named on the site; untick is how he is taken off it.
+    // Ticked because they are named on the site; unticking is how they come off it.
     await user.click(await screen.findByRole('checkbox', { name: 'Vivek Aggarwal (vivek)' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Ramesh Negi (ramesh)' }));
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(put).toHaveBeenCalledOnce());

@@ -11,6 +11,7 @@ import in.nirman.modules.expense.api.dto.CashDtos.RecordPaymentRequest;
 import in.nirman.modules.expense.api.dto.CashDtos.RecordVendorAdvanceRequest;
 import in.nirman.modules.expense.api.dto.CashDtos.SettlementResponse;
 import in.nirman.modules.expense.api.dto.CashDtos.SubmitSettlementRequest;
+import in.nirman.modules.expense.api.dto.CashDtos.SupplierEngagementRow;
 import in.nirman.modules.expense.api.dto.CashDtos.VendorAccountResponse;
 import in.nirman.modules.expense.api.dto.CashDtos.VendorBalanceRow;
 import in.nirman.modules.expense.api.dto.CashDtos.VendorPurchaseRow;
@@ -113,6 +114,13 @@ public class CashController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return vendorAccounts.purchases(id, from, to);
+    }
+
+    @GetMapping("/vendors/{id}/labour")
+    @Operation(summary = "Where this supplier's men have worked, day by day, and whether he "
+            + "was on site with them")
+    public List<SupplierEngagementRow> vendorLabour(@PathVariable UUID id) {
+        return vendorAccounts.labourSupplied(id);
     }
 
     @GetMapping("/vendors/balances")

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../shared/apiClient';
 import type {
   PageResponse,
+  SupplierEngagement,
   Vendor,
   VendorAccount,
   VendorPayment,
@@ -14,6 +15,7 @@ export const vendorKeys = {
   list: (q: string, type: string) => ['vendors', 'list', q, type] as const,
   account: (id: string) => ['vendors', 'account', id] as const,
   purchases: (id: string) => ['vendors', 'purchases', id] as const,
+  labour: (id: string) => ['vendors', 'labour', id] as const,
   payments: (id: string) => ['vendors', 'payments', id] as const,
 };
 
@@ -92,6 +94,16 @@ export function useVendorPurchases(vendorId: string | undefined) {
     queryKey: vendorKeys.purchases(vendorId ?? ''),
     queryFn: async () =>
       (await apiClient.get<VendorPurchase[]>(`/vendors/${vendorId}/purchases`)).data,
+    enabled: Boolean(vendorId),
+  });
+}
+
+/** Where his men have worked. Empty for a dealer who only sends material. */
+export function useVendorLabour(vendorId: string | undefined) {
+  return useQuery({
+    queryKey: vendorKeys.labour(vendorId ?? ''),
+    queryFn: async () =>
+      (await apiClient.get<SupplierEngagement[]>(`/vendors/${vendorId}/labour`)).data,
     enabled: Boolean(vendorId),
   });
 }

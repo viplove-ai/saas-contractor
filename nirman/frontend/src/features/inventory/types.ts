@@ -31,6 +31,11 @@ export interface Material {
   code: string;
   name: string;
   baseUnitId: string;
+  /**
+   * The other units this material may be booked in — the ones it has a conversion for.
+   * The server refuses anything else, so the picker offers the base unit and these.
+   */
+  altUnitIds?: string[];
   minStockLevel: number;
   gstPercent: number;
   active: boolean;

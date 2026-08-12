@@ -38,8 +38,8 @@ public class SiteLabourCount extends BaseEntity {
     @Column(name = "skill_category_id", nullable = false, updatable = false)
     private UUID skillCategoryId;
 
-    @Column(name = "labour_contractor_id", updatable = false)
-    private UUID labourContractorId;
+    @Column(name = "labour_supplier_id", updatable = false)
+    private UUID labourSupplierId;
 
     @Column(name = "head_count", nullable = false)
     private int headCount;
@@ -63,13 +63,13 @@ public class SiteLabourCount extends BaseEntity {
     }
 
     public SiteLabourCount(UUID orgId, UUID siteId, LocalDate countDate, UUID skillCategoryId,
-                           UUID labourContractorId, int headCount, BigDecimal hours,
+                           UUID labourSupplierId, int headCount, BigDecimal hours,
                            String remarks) {
         this.orgId = orgId;
         this.siteId = siteId;
         this.countDate = countDate;
         this.skillCategoryId = skillCategoryId;
-        this.labourContractorId = labourContractorId;
+        this.labourSupplierId = labourSupplierId;
         this.headCount = headCount;
         this.hours = hours;
         this.remarks = remarks;
@@ -91,8 +91,8 @@ public class SiteLabourCount extends BaseEntity {
         return skillCategoryId;
     }
 
-    public UUID getLabourContractorId() {
-        return labourContractorId;
+    public UUID getLabourSupplierId() {
+        return labourSupplierId;
     }
 
     public int getHeadCount() {

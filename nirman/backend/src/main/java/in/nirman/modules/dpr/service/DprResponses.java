@@ -16,9 +16,9 @@ import in.nirman.modules.dpr.repository.DprMachineryRepository;
 import in.nirman.modules.dpr.repository.DprPhotoRepository;
 import in.nirman.modules.dpr.repository.DprWorkItemRepository;
 import in.nirman.modules.identity.repository.UserRepository;
-import in.nirman.modules.masterdata.domain.LabourContractor;
+import in.nirman.modules.masterdata.domain.Vendor;
 import in.nirman.modules.masterdata.domain.SkillCategory;
-import in.nirman.modules.masterdata.repository.LabourContractorRepository;
+import in.nirman.modules.masterdata.repository.VendorRepository;
 import in.nirman.modules.masterdata.repository.SkillCategoryRepository;
 import in.nirman.modules.project.repository.BoqProgressEntryRepository;
 import in.nirman.modules.project.service.BoqLookup;
@@ -52,7 +52,7 @@ public class DprResponses {
     private final AttachmentRepository attachments;
     private final UserRepository users;
     private final SkillCategoryRepository skillCategories;
-    private final LabourContractorRepository contractors;
+    private final VendorRepository suppliers;
     private final BoqLookup boqItems;
     private final SiteLookup sites;
 
@@ -61,7 +61,7 @@ public class DprResponses {
                         BoqProgressEntryRepository progressEntries,
                         AttachmentRepository attachments, UserRepository users,
                         SkillCategoryRepository skillCategories,
-                        LabourContractorRepository contractors, BoqLookup boqItems,
+                        VendorRepository suppliers, BoqLookup boqItems,
                         SiteLookup sites) {
         this.workItems = workItems;
         this.labourLines = labourLines;
@@ -71,7 +71,7 @@ public class DprResponses {
         this.attachments = attachments;
         this.users = users;
         this.skillCategories = skillCategories;
-        this.contractors = contractors;
+        this.suppliers = suppliers;
         this.boqItems = boqItems;
         this.sites = sites;
     }
@@ -147,14 +147,14 @@ public class DprResponses {
             return List.of();
         }
         Map<UUID, String> skillNames = skillNames(lines);
-        Map<UUID, String> contractorNames = contractorNames(lines);
+        Map<UUID, String> supplierNames = supplierNames(lines);
         return lines.stream()
                 .map(line -> new LabourLine(line.getSkillCategoryId(),
                         line.getSkillCategoryId() == null
                                 ? null : skillNames.get(line.getSkillCategoryId()),
-                        line.getLabourContractorId(),
-                        line.getLabourContractorId() == null
-                                ? null : contractorNames.get(line.getLabourContractorId()),
+                        line.getLabourSupplierId(),
+                        line.getLabourSupplierId() == null
+                                ? null : supplierNames.get(line.getLabourSupplierId()),
                         line.getHeadCount(), line.getRegularHours(), line.getOvertimeHours(),
                         line.isOutsourced()))
                 // Ours first, then the contractor's, each alphabetical by trade: the report
@@ -173,13 +173,13 @@ public class DprResponses {
                         .collect(Collectors.toMap(SkillCategory::getId, SkillCategory::getName));
     }
 
-    private Map<UUID, String> contractorNames(List<DprLabour> lines) {
-        Set<UUID> ids = lines.stream().map(DprLabour::getLabourContractorId)
+    private Map<UUID, String> supplierNames(List<DprLabour> lines) {
+        Set<UUID> ids = lines.stream().map(DprLabour::getLabourSupplierId)
                 .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
         return ids.isEmpty() ? Map.of()
-                : contractors.findAllById(ids).stream()
-                        .collect(Collectors.toMap(LabourContractor::getId,
-                                LabourContractor::getName));
+                : suppliers.findAllById(ids).stream()
+                        .collect(Collectors.toMap(Vendor::getId,
+                                Vendor::getName));
     }
 
     private List<PhotoResponse> photosFor(UUID dprId) {

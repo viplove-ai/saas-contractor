@@ -48,8 +48,8 @@ public class Worker extends BaseEntity {
     @Column(name = "employment_type", nullable = false, length = 20)
     private EmploymentType employmentType = EmploymentType.CONTRACT;
 
-    @Column(name = "labour_contractor_id")
-    private UUID labourContractorId;
+    @Column(name = "labour_supplier_id")
+    private UUID labourSupplierId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "wage_type", nullable = false, length = 10)
@@ -138,12 +138,12 @@ public class Worker extends BaseEntity {
         this.employmentType = employmentType;
     }
 
-    public UUID getLabourContractorId() {
-        return labourContractorId;
+    public UUID getLabourSupplierId() {
+        return labourSupplierId;
     }
 
-    public void setLabourContractorId(UUID labourContractorId) {
-        this.labourContractorId = labourContractorId;
+    public void setLabourSupplierId(UUID labourSupplierId) {
+        this.labourSupplierId = labourSupplierId;
     }
 
     public WageType getWageType() {

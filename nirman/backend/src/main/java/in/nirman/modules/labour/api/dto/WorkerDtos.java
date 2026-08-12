@@ -27,7 +27,7 @@ public final class WorkerDtos {
             UUID photoAttachmentId,
             UUID skillCategoryId,
             Worker.EmploymentType employmentType,
-            UUID labourContractorId,
+            UUID labourSupplierId,
             WageType wageType,
             LocalDate joiningDate,
             LocalDate exitDate,
@@ -61,7 +61,7 @@ public final class WorkerDtos {
             UUID skillCategoryId,
             /** Defaults to {@code CONTRACT}. */
             Worker.EmploymentType employmentType,
-            UUID labourContractorId,
+            UUID labourSupplierId,
             /** Defaults to {@code DAILY}. */
             WageType wageType,
             LocalDate joiningDate,
@@ -87,7 +87,7 @@ public final class WorkerDtos {
             @Size(max = 20) String mobile,
             UUID skillCategoryId,
             @NotNull Worker.EmploymentType employmentType,
-            UUID labourContractorId,
+            UUID labourSupplierId,
             @NotNull WageType wageType,
             LocalDate joiningDate,
             LocalDate exitDate,
