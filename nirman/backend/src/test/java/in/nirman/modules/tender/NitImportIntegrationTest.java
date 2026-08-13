@@ -140,6 +140,96 @@ class NitImportIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("Schedule F survives the round trip from preview to stored tender")
+    void scheduleTermsAreReadPreviewedAndStored() throws Exception {
+        assumeThat(Files.exists(FIXTURE)).as("fixture PDF present").isTrue();
+        String token = loginToken("viplove");
+
+        JsonNode preview = preview(token);
+        JsonNode terms = preview.get("scheduleTerms");
+
+        // This notice allows six months, reckons the start ten days after the acceptance
+        // letter, and stipulates six milestones at 15% intervals of the tendered amount.
+        assertThat(terms.get("completionValue").asInt()).isEqualTo(6);
+        assertThat(terms.get("completionUnit").asText()).isEqualTo("MONTHS");
+        assertThat(terms.get("startReckoningDays").asInt()).isEqualTo(10);
+        assertThat(terms.get("clause7aApplicable").asBoolean()).isTrue();
+        assertThat(terms.get("milestones")).hasSize(6);
+        assertThat(terms.get("milestones").get(0).get("financialPercent").asDouble())
+                .isEqualTo(15.0);
+        assertThat(terms.get("milestones").get(5).get("financialPercent").asDouble())
+                .isEqualTo(100.0);
+
+        // Clause 7: no running account bill below seven lakh of gross work.
+        assertThat(terms.get("interimMinimums")).hasSize(1);
+        assertThat(new BigDecimal(terms.get("interimMinimums").get(0).get("amount").asText()))
+                .isEqualByComparingTo("700000");
+
+        String code = "NIT-SF-" + UUID.randomUUID().toString().substring(0, 8);
+        MvcResult created = mockMvc.perform(post("/api/v1/nit-imports")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(confirmRequest(preview, code))))
+                .andExpect(status().isCreated())
+                .andReturn();
+        UUID projectId = UUID.fromString(objectMapper
+                .readTree(created.getResponse().getContentAsString())
+                .get("project").get("id").asText());
+
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM nit_milestones m JOIN nit_documents d ON d.id = "
+                        + "m.nit_document_id WHERE d.project_id = ?", Long.class, projectId))
+                .isEqualTo(6);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM nit_interim_minimums i JOIN nit_documents d ON d.id = "
+                        + "i.nit_document_id WHERE d.project_id = ?", Long.class, projectId))
+                .isEqualTo(1);
+
+        // Read back through the API, in the order the milestones fall due.
+        mockMvc.perform(get("/api/v1/nit-imports/projects/" + projectId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scheduleTerms.completionValue").value(6))
+                .andExpect(jsonPath("$.scheduleTerms.completionUnit").value("MONTHS"))
+                .andExpect(jsonPath("$.scheduleTerms.startReckoningDays").value(10))
+                .andExpect(jsonPath("$.scheduleTerms.milestones.length()").value(6))
+                .andExpect(jsonPath("$.scheduleTerms.milestones[0].sequence").value(1))
+                .andExpect(jsonPath("$.scheduleTerms.milestones[5].sequence").value(6))
+                .andExpect(jsonPath("$.scheduleTerms.milestones[5].timeAllowedValue").value(6));
+    }
+
+    @Test
+    @DisplayName("a repeated milestone in the confirm payload is dropped, not fatal")
+    void repeatedMilestonesAreDeduplicated() throws Exception {
+        assumeThat(Files.exists(FIXTURE)).as("fixture PDF present").isTrue();
+        String token = loginToken("viplove");
+
+        JsonNode preview = preview(token);
+        ObjectNode request = confirmRequest(preview,
+                "NIT-MS-" + UUID.randomUUID().toString().substring(0, 8));
+        // A client echoing the list back twice must not lose the whole import to a unique
+        // index; the second copy of a milestone is a client bug, not a reason to refuse a
+        // tender somebody has just spent ten minutes reviewing.
+        ArrayNode milestones = (ArrayNode) request.get("scheduleTerms").get("milestones");
+        milestones.add(milestones.get(0).deepCopy());
+
+        MvcResult created = mockMvc.perform(post("/api/v1/nit-imports")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        UUID projectId = UUID.fromString(objectMapper
+                .readTree(created.getResponse().getContentAsString())
+                .get("project").get("id").asText());
+
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM nit_milestones m JOIN nit_documents d ON d.id = "
+                        + "m.nit_document_id WHERE d.project_id = ?", Long.class, projectId))
+                .isEqualTo(6);
+    }
+
+    @Test
     @DisplayName("two lines claiming the same item number are refused")
     void duplicateItemNumbersAreRejected() throws Exception {
         assumeThat(Files.exists(FIXTURE)).as("fixture PDF present").isTrue();
@@ -207,6 +297,7 @@ class NitImportIntegrationTest extends AbstractIntegrationTest {
         request.put("attachmentId", preview.get("attachmentId").asText());
         request.put("pageCount", preview.get("pageCount").asInt());
         request.set("fields", preview.get("fields"));
+        request.set("scheduleTerms", preview.get("scheduleTerms"));
         request.set("warnings", preview.get("warnings"));
 
         ObjectNode project = objectMapper.createObjectNode();

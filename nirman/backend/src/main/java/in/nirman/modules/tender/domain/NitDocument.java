@@ -1,10 +1,13 @@
 package in.nirman.modules.tender.domain;
 
 import in.nirman.common.BaseEntity;
+import in.nirman.modules.tender.parser.AllowedTime;
 import in.nirman.modules.tender.parser.NitExtraction;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
@@ -114,6 +117,25 @@ public class NitDocument extends BaseEntity {
     @Column(name = "electrical_cost_index_percent", precision = 7, scale = 3)
     private BigDecimal electricalCostIndexPercent;
 
+    /**
+     * The time allowed, as a number rather than as the words {@link #completionPeriod} keeps.
+     * The unit is stored rather than folded into days because a CPWD month is a calendar month,
+     * and the drift matters on a date that decides whether a milestone was met.
+     */
+    @Column(name = "completion_value")
+    private Integer completionValue;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "completion_unit", length = 10)
+    private AllowedTime.Unit completionUnit;
+
+    @Column(name = "start_reckoning_days")
+    private Integer startReckoningDays;
+
+    /** Null where the notice defers the answer. A gate on being paid at all, not a deduction. */
+    @Column(name = "clause_7a_applicable")
+    private Boolean clause7aApplicable;
+
     @Column(name = "boq_total", precision = 18, scale = 2)
     private BigDecimal boqTotal;
 
@@ -193,6 +215,37 @@ public class NitDocument extends BaseEntity {
         this.boqTotal = boqTotal;
         this.extractedItemCount = extractedItemCount;
         this.warnings = warnings == null ? List.of() : List.copyOf(warnings);
+    }
+
+    /**
+     * The contractual terms, which unlike {@link #applyFields} are taken from the reader rather
+     * than from the user.
+     *
+     * <p>These are not fields anybody retypes: the milestone table is copied out of Schedule F
+     * whole, and a person correcting it row by row would be transcribing the contract rather
+     * than reviewing an extraction. Where the reader found nothing, nothing is stored, and the
+     * warning list says so.</p>
+     */
+    public void applyScheduleTerms(AllowedTime completionTime, Integer startReckoningDays,
+                                   Boolean clause7aApplicable) {
+        this.completionValue = completionTime == null ? null : completionTime.value();
+        this.completionUnit = completionTime == null ? null : completionTime.unit();
+        this.startReckoningDays = startReckoningDays;
+        this.clause7aApplicable = clause7aApplicable;
+    }
+
+    /** @return the time allowed, or null where the notice did not say in a form we could read */
+    public AllowedTime getCompletionTime() {
+        return completionValue == null || completionUnit == null
+                ? null : new AllowedTime(completionValue, completionUnit);
+    }
+
+    public Integer getStartReckoningDays() {
+        return startReckoningDays;
+    }
+
+    public Boolean getClause7aApplicable() {
+        return clause7aApplicable;
     }
 
     public void attachTo(UUID attachmentId, String checksumSha256) {

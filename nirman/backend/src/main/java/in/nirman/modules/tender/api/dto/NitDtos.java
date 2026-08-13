@@ -2,6 +2,7 @@ package in.nirman.modules.tender.api.dto;
 
 import in.nirman.modules.project.api.dto.ProjectDtos.CreateProjectRequest;
 import in.nirman.modules.project.api.dto.ProjectDtos.ProjectResponse;
+import in.nirman.modules.tender.parser.AllowedTime;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -52,6 +53,65 @@ public final class NitDtos {
     }
 
     /**
+     * One milestone, as read from Schedule F.
+     *
+     * <p>Both percentages are nullable, which is a reading rather than a gap: a milestone may
+     * state a share of the tendered value, or name the work expected finished, or both joined by
+     * "or". {@code physical} says which — and the physical descriptions are the half a plan is
+     * built from, because they are the department's own phasing of the work.</p>
+     *
+     * @param withheldPercent of the accepted tendered value, held back on a miss and released
+     *                        when a later milestone is met. A timing event, never a cost.
+     */
+    public record MilestoneTerm(
+            @Positive int sequence,
+            @NotBlank String description,
+            @Positive Integer timeAllowedValue,
+            AllowedTime.Unit timeAllowedUnit,
+            @Digits(integer = 3, fraction = 3) BigDecimal financialPercent,
+            @Digits(integer = 3, fraction = 3) BigDecimal withheldPercent,
+            boolean physical) {
+    }
+
+    /**
+     * Clause 7's threshold for one work part, or for the whole contract when {@code workPart} is
+     * null. Civil and E&amp;M carry different figures and therefore bill on different rhythms.
+     */
+    public record InterimMinimumTerm(
+            @Size(max = 40) String workPart,
+            @NotNull @DecimalMin("0") @Digits(integer = 16, fraction = 2) BigDecimal amount) {
+    }
+
+    /**
+     * The contractual terms a plan is built on: when the work must reach which stage, when the
+     * clock starts, and how much work must exist before a bill may be raised.
+     *
+     * <p>Round-tripped through the client like {@link NitFields}, because the server holds no
+     * draft between preview and confirm. Unlike the fields, these are not expected to be edited
+     * — a person correcting a milestone table row by row would be retyping the contract, not
+     * reviewing a reading — but they travel the same path so there is one shape to the flow.</p>
+     */
+    public record ScheduleTerms(
+            @Positive Integer completionValue,
+            AllowedTime.Unit completionUnit,
+            Integer startReckoningDays,
+            Boolean clause7aApplicable,
+            @Valid @Size(max = 20) List<MilestoneTerm> milestones,
+            @Valid @Size(max = 6) List<InterimMinimumTerm> interimMinimums) {
+
+        public static final ScheduleTerms EMPTY =
+                new ScheduleTerms(null, null, null, null, List.of(), List.of());
+
+        public List<MilestoneTerm> milestonesOrEmpty() {
+            return milestones == null ? List.of() : milestones;
+        }
+
+        public List<InterimMinimumTerm> interimMinimumsOrEmpty() {
+            return interimMinimums == null ? List.of() : interimMinimums;
+        }
+    }
+
+    /**
      * One schedule row as the preview shows it.
      *
      * @param amount        what the tender printed
@@ -97,6 +157,7 @@ public final class NitDtos {
             String tenderReference,
             BigDecimal contractValue,
             NitFields fields,
+            ScheduleTerms scheduleTerms,
             List<PreviewBoqLine> boqLines,
             BigDecimal boqTotal,
             BigDecimal derivedTotal,
@@ -130,6 +191,7 @@ public final class NitDtos {
             @Positive int pageCount,
             @Valid @NotNull CreateProjectRequest project,
             @Valid NitFields fields,
+            @Valid ScheduleTerms scheduleTerms,
             @Valid @Size(max = 2000) List<ConfirmedBoqLine> boqLines,
             /** Echoed back from the preview, so the record keeps what the reader was unsure of. */
             List<String> warnings) {
@@ -151,6 +213,7 @@ public final class NitDtos {
             int pageCount,
             String parserVersion,
             NitFields fields,
+            ScheduleTerms scheduleTerms,
             BigDecimal boqTotal,
             int extractedItemCount,
             List<String> warnings) {

@@ -517,28 +517,47 @@ Stated in the output, not buried here:
 
 Additive only, and Flyway owns the schema. Latest applied is `V28`.
 
-### 8.1 `V29__nit_commercial_terms.sql`
+### 8.1 `V29__nit_commercial_terms.sql` — *built*
 
-Additive columns on `nit_documents` for §2.2 — `completion_days`, `start_reckoning_days`
-(10 in all ten notices), `defect_liability_months`, `clause_7a_applicable`,
-`mobilisation_advance_percent` / `_interest_percent` / `_recovery_basis`,
-`secured_advance_allowed`, `escalation_clause_applicable`, `contract_type`. All nullable,
-because a tender that does not say must not be made to say — and per §2.3, several of these
-will be null on most notices, which is a correct reading rather than a failed one.
+Additive columns on `nit_documents`: `completion_value` + `completion_unit`,
+`start_reckoning_days`, `clause_7a_applicable`. All nullable, because a tender that does not say
+must not be made to say.
 
-`nit_interim_minimums` — `nit_document_id`, `work_part`, `minimum_value`. A child table because
-civil and E&M carry different thresholds and a single column cannot hold both.
+**The time allowed is stored as a value and a unit rather than as days.** A CPWD month is a
+calendar month: twelve months from a 15th is the following year's 15th, where 360 days is five
+days short — and five days is the difference between meeting a milestone and having 1.25% of the
+contract withheld. `AllowedTime.approximateDays()` exists for ordering and coarse comparison and
+is explicitly not for computing a date.
 
-`nit_milestones` — `nit_document_id`, `sequence`, `description`, `time_allowed_days`
-(normalised from mixed days/months), `work_percent` **nullable**, `financial_percent`
-**nullable**, `withheld_percent`, `work_part`. Both percentage columns are nullable because a
-milestone may be physical, financial, or physical *or* financial, and flattening the three into
-one number would throw away the description that makes §6.3 possible.
+`nit_milestones` — `nit_document_id`, `sequence_no`, `description`, `time_allowed_value` +
+`time_allowed_unit` (one table mixes "15 Days" and "02 Month" in adjacent rows),
+`financial_percent`, `withheld_percent`, `physical`.
 
-Deductions that are statutory rather than tendered — labour cess, TDS rates, and a water and
-electricity recovery defaulting to zero — belong on an **org settings** row beside
-`expense_settings`, not on the tender. They do not vary per notice and a column that is null in
-every row is a column that will be reported as a missing extraction forever.
+Two departures from the sketch above, both forced by the documents:
+
+- **One `financial_percent`, plus a `physical` flag** — not the two percentage columns first
+  proposed. A milestone states a share of the tendered value, or names the work expected
+  finished, or both joined by "or". The percentage is one number in all three cases; what varies
+  is whether a description accompanies it, and that is a boolean.
+- **No `work_part` on a milestone.** Where a notice splits civil and E&M it does so *inside* one
+  milestone's description, and one states outright that the milestones apply to both. A column
+  would have been null in every row.
+
+`financial_percent` is nullable and that is a reading rather than a miss: chaura's final
+milestone is defined entirely by handing over, as-built drawings and defect rectification, and
+states no percentage at all.
+
+`nit_interim_minimums` — `nit_document_id`, `work_part` (null = the whole contract), `amount`.
+
+**Deliberately deferred.** `defect_liability_months`, the mobilisation-advance columns,
+`secured_advance_allowed`, `escalation_clause_applicable` and `contract_type` are *not* in V29.
+Per §2.3 not one of the ten notices grants an advance or applies escalation, so those columns
+would be null in every row — and a null column is one the preview reports as a missing
+extraction forever. They arrive with the extractors that can fill them, which is one more small
+additive migration and cheap.
+
+Statutory deductions — labour cess, TDS rates, water and electricity recovery — belong on an
+**org settings** row beside `expense_settings`, not on the tender. They do not vary per notice.
 
 ### 8.2 `V30__planning_norms.sql`
 
@@ -644,10 +663,12 @@ one.
 
 Each step ends with working code, migrations, tests and seed data, per `docs/08-roadmap.md`.
 
-1. **`V29` + parser extensions, driven by the corpus in `docs/NIT documents/` (§2.6).**
-   Milestones, `completion_days`, `start_reckoning_days`, the per-work-part Clause 7 minimums.
-   Target ten of ten on those four. Testable against real notices on its own, and useful on its
-   own — the tender record gets better whether or not the planner ships.
+1. ~~**`V29` + parser extensions, driven by the corpus in `docs/NIT documents/` (§2.6).**~~
+   **Done.** `ScheduleFExtractor` reads the milestone table, the time allowed, the date-of-start
+   reckoning, the per-work-part Clause 7 minimums and Clause 7A; `V29` stores them; the preview
+   shows them and the confirm persists them. Seven of seven on every field across the checked-in
+   fixtures, held there by `ScheduleFCorpusTest`. Useful on its own — the tender record is better
+   whether or not the planner ships.
 2. **`V30` + norms, seeded and editable.** Also standalone value: `material_estimates` can be
    derived from norms the moment the norms exist.
 3. **The engine, pure, against hand-written inputs.** No persistence, no endpoints. This is

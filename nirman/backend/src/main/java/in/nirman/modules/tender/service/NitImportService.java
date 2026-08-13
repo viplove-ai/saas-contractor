@@ -13,14 +13,23 @@ import in.nirman.modules.tender.api.dto.NitDtos.NitDocumentResponse;
 import in.nirman.modules.tender.api.dto.NitDtos.NitFields;
 import in.nirman.modules.tender.api.dto.NitDtos.NitImportResponse;
 import in.nirman.modules.tender.api.dto.NitDtos.NitPreviewResponse;
+import in.nirman.modules.tender.api.dto.NitDtos.InterimMinimumTerm;
+import in.nirman.modules.tender.api.dto.NitDtos.MilestoneTerm;
 import in.nirman.modules.tender.api.dto.NitDtos.PreviewBoqLine;
+import in.nirman.modules.tender.api.dto.NitDtos.ScheduleTerms;
 import in.nirman.modules.tender.domain.NitDocument;
+import in.nirman.modules.tender.domain.NitInterimMinimum;
+import in.nirman.modules.tender.domain.NitMilestone;
+import in.nirman.modules.tender.parser.AllowedTime;
 import in.nirman.modules.tender.parser.BoqClassifier;
 import in.nirman.modules.tender.parser.BoqLine;
 import in.nirman.modules.tender.parser.BoqReconciler;
 import in.nirman.modules.tender.parser.NitExtraction;
 import in.nirman.modules.tender.parser.NitPdfParser;
+import in.nirman.modules.tender.parser.ScheduleFExtractor;
 import in.nirman.modules.tender.repository.NitDocumentRepository;
+import in.nirman.modules.tender.repository.NitInterimMinimumRepository;
+import in.nirman.modules.tender.repository.NitMilestoneRepository;
 import in.nirman.security.CurrentUserProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -60,16 +69,22 @@ public class NitImportService {
 
     private final ProjectProvisioning projects;
     private final NitDocumentRepository nitDocuments;
+    private final NitMilestoneRepository nitMilestones;
+    private final NitInterimMinimumRepository interimMinimums;
     private final AttachmentService attachments;
     private final BoqUnitResolver unitResolver;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
 
     public NitImportService(ProjectProvisioning projects, NitDocumentRepository nitDocuments,
+                            NitMilestoneRepository nitMilestones,
+                            NitInterimMinimumRepository interimMinimums,
                             AttachmentService attachments, BoqUnitResolver unitResolver,
                             CurrentUserProvider currentUser, AuditService audit) {
         this.projects = projects;
         this.nitDocuments = nitDocuments;
+        this.nitMilestones = nitMilestones;
+        this.interimMinimums = interimMinimums;
         this.attachments = attachments;
         this.unitResolver = unitResolver;
         this.currentUser = currentUser;
@@ -120,6 +135,7 @@ public class NitImportService {
                 truncate(extraction.nitNo(), 120),
                 extraction.estimatedCost(),
                 toFields(extraction),
+                toScheduleTerms(extraction.scheduleF()),
                 lines,
                 extraction.boqTotal(),
                 derivedTotal,
@@ -185,6 +201,7 @@ public class NitImportService {
                         document.getSecurityDepositPercent(), document.getCivilDsrYear(),
                         document.getCivilCostIndexPercent(), document.getElectricalDsrYear(),
                         document.getElectricalCostIndexPercent()),
+                storedTerms(document),
                 document.getBoqTotal(), document.getExtractedItemCount(), document.getWarnings());
     }
 
@@ -211,9 +228,99 @@ public class NitImportService {
                     fields.civilDsrYear(), fields.civilCostIndexPercent(),
                     fields.electricalDsrYear(), fields.electricalCostIndexPercent());
         }
+        ScheduleTerms terms = request.scheduleTerms() == null
+                ? ScheduleTerms.EMPTY : request.scheduleTerms();
+        document.applyScheduleTerms(
+                terms.completionValue() == null || terms.completionUnit() == null ? null
+                        : new AllowedTime(terms.completionValue(), terms.completionUnit()),
+                terms.startReckoningDays(), terms.clause7aApplicable());
+
         document.recordSchedule(provisioned.boqValue(), provisioned.lineCount(),
                 request.warnings());
-        return nitDocuments.save(document);
+        NitDocument saved = nitDocuments.save(document);
+        saveScheduleTerms(saved.getId(), terms);
+        return saved;
+    }
+
+    /**
+     * The milestone table and the Clause 7 thresholds, written as the document's children.
+     *
+     * <p>Deduplicated on the way in by sequence and by work part. The unique indexes would
+     * refuse a repeat anyway, but a client echoing a list back is the wrong place to discover
+     * that through a constraint violation — and a repeated milestone is a reading error, not a
+     * reason to lose the whole import.</p>
+     */
+    private void saveScheduleTerms(UUID documentId, ScheduleTerms terms) {
+        Map<Integer, NitMilestone> milestones = new LinkedHashMap<>();
+        for (MilestoneTerm milestone : terms.milestonesOrEmpty()) {
+            AllowedTime time = milestone.timeAllowedValue() == null
+                    || milestone.timeAllowedUnit() == null ? null
+                    : new AllowedTime(milestone.timeAllowedValue(), milestone.timeAllowedUnit());
+            milestones.putIfAbsent(milestone.sequence(), new NitMilestone(documentId,
+                    milestone.sequence(), milestone.description(), time,
+                    milestone.financialPercent(), milestone.withheldPercent(),
+                    milestone.physical()));
+        }
+        if (!milestones.isEmpty()) {
+            nitMilestones.saveAll(milestones.values());
+        }
+
+        Map<String, NitInterimMinimum> minimums = new LinkedHashMap<>();
+        for (InterimMinimumTerm minimum : terms.interimMinimumsOrEmpty()) {
+            String workPart = truncate(minimum.workPart(), 40);
+            minimums.putIfAbsent(workPart == null ? "" : workPart,
+                    new NitInterimMinimum(documentId, workPart, minimum.amount()));
+        }
+        if (!minimums.isEmpty()) {
+            interimMinimums.saveAll(minimums.values());
+        }
+    }
+
+    /** The stored contractual terms, reassembled from the document and its two child tables. */
+    private ScheduleTerms storedTerms(NitDocument document) {
+        List<MilestoneTerm> milestones =
+                nitMilestones.findByNitDocumentIdOrderBySequenceNoAsc(document.getId()).stream()
+                        .map(milestone -> new MilestoneTerm(milestone.getSequenceNo(),
+                                milestone.getDescription(),
+                                milestone.getTimeAllowed() == null
+                                        ? null : milestone.getTimeAllowed().value(),
+                                milestone.getTimeAllowed() == null
+                                        ? null : milestone.getTimeAllowed().unit(),
+                                milestone.getFinancialPercent(), milestone.getWithheldPercent(),
+                                milestone.isPhysical()))
+                        .toList();
+        List<InterimMinimumTerm> minimums =
+                interimMinimums.findByNitDocumentId(document.getId()).stream()
+                        .map(minimum -> new InterimMinimumTerm(minimum.getWorkPart(),
+                                minimum.getAmount()))
+                        .toList();
+        AllowedTime completion = document.getCompletionTime();
+        return new ScheduleTerms(
+                completion == null ? null : completion.value(),
+                completion == null ? null : completion.unit(),
+                document.getStartReckoningDays(), document.getClause7aApplicable(),
+                milestones, minimums);
+    }
+
+    private static ScheduleTerms toScheduleTerms(ScheduleFExtractor.ScheduleF scheduleF) {
+        if (scheduleF == null) {
+            return ScheduleTerms.EMPTY;
+        }
+        List<MilestoneTerm> milestones = scheduleF.milestones().stream()
+                .map(milestone -> new MilestoneTerm(milestone.sequence(), milestone.description(),
+                        milestone.timeAllowed() == null ? null : milestone.timeAllowed().value(),
+                        milestone.timeAllowed() == null ? null : milestone.timeAllowed().unit(),
+                        milestone.financialPercent(), milestone.withheldPercent(),
+                        milestone.physical()))
+                .toList();
+        List<InterimMinimumTerm> minimums = scheduleF.interimMinimums().stream()
+                .map(minimum -> new InterimMinimumTerm(minimum.workPart(), minimum.amount()))
+                .toList();
+        return new ScheduleTerms(
+                scheduleF.completionTime() == null ? null : scheduleF.completionTime().value(),
+                scheduleF.completionTime() == null ? null : scheduleF.completionTime().unit(),
+                scheduleF.startReckoningDays(), scheduleF.clause7aApplicable(),
+                milestones, minimums);
     }
 
     /**
@@ -299,6 +406,26 @@ public class NitImportService {
         }
         if (extraction.estimatedCost() == null) {
             warnings.add("No contract value was found, so it has been left blank.");
+        }
+
+        /*
+          Schedule F is reported here rather than by the parser because the parser's own warning
+          list is held field for field against the Python reference, which never read Schedule F.
+          These are the three absences that stop a plan being built from the contract instead of
+          from assumptions, so each says what is lost rather than merely what is missing.
+        */
+        ScheduleFExtractor.ScheduleF scheduleF = extraction.scheduleF();
+        if (scheduleF.milestones().isEmpty()) {
+            warnings.add("No table of milestones was found. Work can still be planned, but "
+                    + "against a default phasing rather than the one this contract is judged on.");
+        }
+        if (scheduleF.completionTime() == null) {
+            warnings.add("The time allowed for completion was not found in Schedule F. "
+                    + "Check it before planning any dates.");
+        }
+        if (scheduleF.interimMinimums().isEmpty()) {
+            warnings.add("The Clause 7 minimum value of work for an interim bill was not found, "
+                    + "so the billing rhythm cannot be worked out. Check Schedule F.");
         }
     }
 
