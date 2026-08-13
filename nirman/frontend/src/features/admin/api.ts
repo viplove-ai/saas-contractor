@@ -13,6 +13,7 @@ import type {
   PageResponse,
   ProjectStatus,
   RoleOption,
+  ScheduleTerms,
   SiteStatus,
   UnitOption,
 } from './types';
@@ -474,6 +475,7 @@ export interface NitImportInput {
   pageCount: number;
   project: ProjectInput;
   fields: NitFields;
+  scheduleTerms: ScheduleTerms;
   boqLines: ConfirmedBoqLine[];
   warnings: string[];
 }

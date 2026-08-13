@@ -161,6 +161,46 @@ export interface PreviewBoqLine {
   renumbered: boolean;
 }
 
+/**
+ * One row of the tender's table of milestones.
+ *
+ * Both percentages may be null, and that is a reading rather than a gap: a milestone states a
+ * share of the tendered value, or names the work expected finished, or both joined by "or".
+ * `physical` says which — and a physical description is the department's own phasing of the
+ * work, which is what a plan is built from.
+ */
+export interface MilestoneTerm {
+  sequence: number;
+  description: string;
+  timeAllowedValue: number | null;
+  timeAllowedUnit: 'DAYS' | 'MONTHS' | null;
+  financialPercent: number | null;
+  /** Held back on a miss, released when a later milestone is met. A timing event, not a cost. */
+  withheldPercent: number | null;
+  physical: boolean;
+}
+
+/** Clause 7's threshold for one work part, or for the whole contract when `workPart` is null. */
+export interface InterimMinimumTerm {
+  workPart: string | null;
+  amount: number;
+}
+
+/**
+ * The contractual terms read out of Schedule F, round-tripped through the client because the
+ * server holds no draft between preview and confirm. Not edited here — correcting a milestone
+ * table row by row would be retyping the contract rather than reviewing a reading — but it must
+ * travel back on confirm or none of it is stored.
+ */
+export interface ScheduleTerms {
+  completionValue: number | null;
+  completionUnit: 'DAYS' | 'MONTHS' | null;
+  startReckoningDays: number | null;
+  clause7aApplicable: boolean | null;
+  milestones: MilestoneTerm[];
+  interimMinimums: InterimMinimumTerm[];
+}
+
 export interface NitPreview {
   attachmentId: string;
   fileName: string;
@@ -171,6 +211,7 @@ export interface NitPreview {
   tenderReference: string | null;
   contractValue: number | null;
   fields: NitFields;
+  scheduleTerms: ScheduleTerms;
   boqLines: PreviewBoqLine[];
   boqTotal: number | null;
   derivedTotal: number | null;
@@ -226,6 +267,7 @@ export interface NitDocument {
   pageCount: number;
   parserVersion: string;
   fields: NitFields;
+  scheduleTerms: ScheduleTerms;
   boqTotal: number | null;
   extractedItemCount: number;
   warnings: string[];

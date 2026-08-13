@@ -258,6 +258,9 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
           pageCount: preview.pageCount,
           project: payload,
           fields: preview.fields,
+          // Echoed back untouched. Nothing on screen edits the milestone table, but without
+          // this the whole of Schedule F is dropped on the way to the server.
+          scheduleTerms: preview.scheduleTerms,
           warnings: preview.warnings,
           boqLines: preview.boqLines.map((line) => ({
             itemNumber: line.itemNumber,

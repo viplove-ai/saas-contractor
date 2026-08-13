@@ -33,6 +33,16 @@ vi.mock('../auth/AuthContext', () => ({
 }));
 
 const PREVIEW: NitPreview = {
+  // This panel shows the schedule of quantities, not Schedule F, so the terms are present
+  // and empty: enough to satisfy the shape without implying the panel reads them.
+  scheduleTerms: {
+    completionValue: null,
+    completionUnit: null,
+    startReckoningDays: null,
+    clause7aApplicable: null,
+    milestones: [],
+    interimMinimums: [],
+  },
   attachmentId: 'att-1',
   fileName: 'almora-30-tile-work.pdf',
   pageCount: 134,

@@ -89,6 +89,14 @@ const BOQ: BoqItem[] = [
 ];
 
 const NIT: NitDocument = {
+  scheduleTerms: {
+    completionValue: 6,
+    completionUnit: 'MONTHS',
+    startReckoningDays: 10,
+    clause7aApplicable: true,
+    milestones: [],
+    interimMinimums: [],
+  },
   id: 'n1',
   projectId: 'p1',
   attachmentId: 'a1',
