@@ -41,6 +41,22 @@ public class UnitLookupService implements UnitLookup {
                 .map(Unit::getId);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.Map<UUID, String> codesByIds(java.util.Collection<UUID> unitIds) {
+        if (unitIds == null || unitIds.isEmpty()) {
+            return java.util.Map.of();
+        }
+        UUID orgId = currentUser.currentOrgId();
+        java.util.Map<UUID, String> codes = new java.util.LinkedHashMap<>();
+        for (Unit unit : units.findAllById(unitIds)) {
+            if (orgId.equals(unit.getOrgId())) {
+                codes.put(unit.getId(), unit.getCode());
+            }
+        }
+        return codes;
+    }
+
     /**
      * {@inheritDoc}
      *

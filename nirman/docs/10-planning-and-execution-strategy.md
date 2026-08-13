@@ -559,11 +559,35 @@ additive migration and cheap.
 Statutory deductions — labour cess, TDS rates, water and electricity recovery — belong on an
 **org settings** row beside `expense_settings`, not on the tender. They do not vary per notice.
 
-### 8.2 `V30__planning_norms.sql`
+### 8.2 `V30__planning_norms.sql` — *built*
 
-`work_type_profiles`, `labour_productivity_norms`, `work_sequence_norms`,
-`material_lead_times` — §3 and §4. Org-scoped, seeded by the same `WHERE NOT EXISTS` guard
-`V14` uses so an organisation's own numbers are never overwritten.
+`work_type_profiles`, `labour_productivity_norms`, `work_sequence_norms` and
+`material_lead_times` — §3 and §4. Org-scoped, seeded by the same `WHERE NOT EXISTS` guard `V14`
+uses, so an organisation's own numbers are never overwritten.
+
+Three things worth knowing before editing it:
+
+- **The seed joins rather than looks up.** Each productivity row joins to `units` and
+  `skill_categories` by code, so a row whose vocabulary an organisation does not have is silently
+  skipped instead of failing the migration for everybody. `V14` is what guarantees the eight
+  trades and ten units exist in the first place.
+- **`V904` is the dev half of the same problem `V14` has.** `V30` gives its catalogue to every
+  organisation that lacks one, which in dev and test is none of them — the organisation itself
+  only arrives in `V900`, afterwards. So the identical guarded inserts are repeated in the seed,
+  where they run once the organisation exists.
+- **`max_concurrent_gangs` is the working-front cap of §6.2**, and it is stored rather than
+  derived because it is a fact about a site, not about arithmetic.
+
+Only two permissions ship: `planning:read` and `planning:norms:write`. `planning:generate` and
+`planning:baseline` arrive with the engine that can honour them — a permission nothing checks is
+a permission nobody can rely on.
+
+`PATCH` is deliberately narrow. The figures and the active flag may move; the category, the trade
+and the unit may not. Those are what a norm *is*, and letting them change would silently turn one
+norm into another that some earlier plan had already been built on. A norm wrong in that way is
+deactivated and replaced. A hand-corrected productivity figure also drops to `source = INTERNAL`
+whatever it was before: it is now this organisation's number, and a plan that went on citing the
+Analysis of Rates for a figure somebody overwrote would be citing the wrong authority.
 
 ### 8.3 `V31__execution_plans.sql`
 
@@ -669,8 +693,10 @@ Each step ends with working code, migrations, tests and seed data, per `docs/08-
    shows them and the confirm persists them. Seven of seven on every field across the checked-in
    fixtures, held there by `ScheduleFCorpusTest`. Useful on its own — the tender record is better
    whether or not the planner ships.
-2. **`V30` + norms, seeded and editable.** Also standalone value: `material_estimates` can be
-   derived from norms the moment the norms exist.
+2. ~~**`V30` + norms, seeded and editable.**~~ **Done.** The four tables, a starter catalogue
+   every organisation gets, and `/api/v1/planning/norms` to read and correct it. The figures
+   shipped are round numbers an estimator would recognise, marked `INTERNAL` rather than
+   `CPWD_AOR` because they are a place to start from and not a citation.
 3. **The engine, pure, against hand-written inputs.** No persistence, no endpoints. This is
    where the arithmetic earns trust and it should be the most heavily tested code in the repo.
 4. **`V31`, persistence, baselining, and the write-forward to `boq_items`.**

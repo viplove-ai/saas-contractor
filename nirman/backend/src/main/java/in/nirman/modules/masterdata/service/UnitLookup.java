@@ -16,6 +16,12 @@ public interface UnitLookup {
 
     Optional<UUID> byCode(String code);
 
+    /**
+     * Codes for a set of unit ids, for the callers that hold ids and have to show a person a
+     * label. Ids belonging to another organisation are simply absent from the map.
+     */
+    java.util.Map<UUID, String> codesByIds(java.util.Collection<UUID> unitIds);
+
     /** Resolves a unit by code for the current organisation, creating it if it has none. */
     UUID resolveOrCreate(String code, String name, int decimalPlaces);
 }
