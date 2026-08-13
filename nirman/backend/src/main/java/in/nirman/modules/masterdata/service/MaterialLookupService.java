@@ -108,6 +108,6 @@ public class MaterialLookupService implements MaterialLookup {
     private static MaterialInfo toInfo(Material material, String baseUnitCode) {
         return new MaterialInfo(material.getId(), material.getCode(), material.getName(),
                 material.getBaseUnitId(), baseUnitCode, material.getMinStockLevel(),
-                material.getGstPercent(), material.isActive());
+                material.getGstPercent(), material.getStandardRate(), material.isActive());
     }
 }

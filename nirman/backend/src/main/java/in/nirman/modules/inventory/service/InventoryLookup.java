@@ -145,4 +145,25 @@ public interface InventoryLookup {
      *                 supplier believes he delivered it either way.
      */
     List<VendorPurchase> vendorPurchases(UUID vendorId, LocalDate from, LocalDate to);
+    /**
+     * Every material consumption norm the organisation holds, with the material and unit named
+     * and the catalogue rate attached.
+     *
+     * <p>Planning needs the whole set at once, because it turns a schedule of quantities into a
+     * procurement calendar in one pass. Shaped for that caller rather than exposing the entity:
+     * a norm is inventory's, and what planning wants is a priced line.</p>
+     */
+    List<ConsumptionNormInfo> consumptionNorms();
+
+    /** @param standardRate null where the organisation keeps no catalogue rate; not zero. */
+    record ConsumptionNormInfo(
+            String workCategory,
+            String workSubType,
+            String materialCode,
+            String materialName,
+            String workUnitCode,
+            java.math.BigDecimal qtyPerWorkUnit,
+            java.math.BigDecimal standardRate) {
+    }
+
 }

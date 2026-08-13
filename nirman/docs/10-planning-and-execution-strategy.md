@@ -697,11 +697,23 @@ Each step ends with working code, migrations, tests and seed data, per `docs/08-
    every organisation gets, and `/api/v1/planning/norms` to read and correct it. The figures
    shipped are round numbers an estimator would recognise, marked `INTERNAL` rather than
    `CPWD_AOR` because they are a place to start from and not a citation.
-3. **The engine, pure, against hand-written inputs.** No persistence, no endpoints. This is
-   where the arithmetic earns trust and it should be the most heavily tested code in the repo.
-4. **`V31`, persistence, baselining, and the write-forward to `boq_items`.**
-5. **The project button.**
-6. **The standalone bid screen and the scenario controls.**
+3. ~~**The engine, pure, against hand-written inputs.**~~ **Done.** `PlanEngine` takes a
+   `PlanInput` record and returns phases, packages, a labour histogram, both material curves, a
+   cash flow and the working-capital summary. No Spring, no repository, no clock. 14 tests
+   written as statements about construction rather than snapshots — a mason lays about a cubic
+   metre a day, cement is ordered before it is poured, retention comes off every bill.
+4. ~~**`V31`, persistence, baselining, and the write-forward to `boq_items`.**~~ **Done.**
+   Seven tables, `POST .../preview` (keeps nothing), `POST .../plans` (a draft) and
+   `POST /plans/{id}/baseline` (the irreversible act, which supersedes the previous baseline and
+   stamps `planned_start_date` onto the schedule of quantities through `PlanBaselineWriter` —
+   the project module writes its own table, planning only asks).
+5. ~~**The project button.**~~ **Done.** `/projects/:id/planning`, opening with a plan already
+   generated rather than a form, and built around the peak funding requirement.
+6. **The standalone bid screen.** *Not built.* The scenario controls exist on the project page
+   (quoted percentage, payment lag, work type), but planning from an uploaded NIT with no project
+   behind it does not. `execution_plans.project_id` is already nullable and
+   `ExecutionPlan.attachTo` is already there for it; what is missing is a second assembler that
+   builds a `PlanInput` from a transient `NitExtraction`, and the upload screen itself.
 7. **The submission document (§6.3.1)** — the contractor's phasing printed against the
    department's milestone table, for filing with the bid.
 8. **Variance**, once a baselined plan and real ledger data coexist.

@@ -54,13 +54,19 @@ public class InventoryLookupService implements InventoryLookup {
     private final MaterialLookup materials;
     private final SiteLookup sites;
     private final CurrentUserProvider currentUser;
+    private final in.nirman.modules.inventory.repository.MaterialConsumptionNormRepository norms;
+    private final in.nirman.modules.masterdata.service.UnitLookup units;
 
     public InventoryLookupService(StockTransactionRepository transactions,
                                  StockBalanceRepository balances,
                                  GoodsReceiptRepository goodsReceipts,
                                  GoodsReceiptItemRepository goodsReceiptLines,
                                  MaterialLookup materials,
+                                 in.nirman.modules.inventory.repository.MaterialConsumptionNormRepository norms,
+                                 in.nirman.modules.masterdata.service.UnitLookup units,
                                  SiteLookup sites, CurrentUserProvider currentUser) {
+        this.norms = norms;
+        this.units = units;
         this.transactions = transactions;
         this.balances = balances;
         this.goodsReceipts = goodsReceipts;
@@ -68,6 +74,34 @@ public class InventoryLookupService implements InventoryLookup {
         this.materials = materials;
         this.sites = sites;
         this.currentUser = currentUser;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Resolved in bulk. A full catalogue is a few hundred norms over a few dozen materials,
+     * and naming them one at a time would be several hundred queries to build one plan.</p>
+     */
+    @Override
+    public List<ConsumptionNormInfo> consumptionNorms() {
+        var rows = norms.findByOrgIdAndActiveTrueOrderByWorkCategoryAscWorkSubTypeAsc(orgId());
+        Map<UUID, MaterialInfo> byMaterial = materials.byIds(rows.stream()
+                .map(in.nirman.modules.inventory.domain.MaterialConsumptionNorm::getMaterialId)
+                .toList());
+        Map<UUID, String> unitCodes = units.codesByIds(rows.stream()
+                .map(in.nirman.modules.inventory.domain.MaterialConsumptionNorm::getWorkUnitId)
+                .toList());
+        List<ConsumptionNormInfo> infos = new ArrayList<>(rows.size());
+        for (var row : rows) {
+            MaterialInfo material = byMaterial.get(row.getMaterialId());
+            if (material == null) {
+                continue;
+            }
+            infos.add(new ConsumptionNormInfo(row.getWorkCategory(), row.getWorkSubType(),
+                    material.code(), material.name(), unitCodes.get(row.getWorkUnitId()),
+                    row.getQtyPerWorkUnit(), material.standardRate()));
+        }
+        return infos;
     }
 
     @Override

@@ -32,6 +32,8 @@ public interface MaterialLookup {
             String baseUnitCode,
             BigDecimal minStockLevel,
             BigDecimal gstPercent,
+            /** The catalogue rate, where the organisation keeps one. Null is not zero. */
+            BigDecimal standardRate,
             boolean active) {
     }
 

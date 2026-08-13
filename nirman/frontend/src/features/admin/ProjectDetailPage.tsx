@@ -1,9 +1,11 @@
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import InsightsIcon from '@mui/icons-material/Insights';
 import DescriptionIcon from '@mui/icons-material/Description';
 import {
   Alert,
   AlertTitle,
   Box,
+  Button,
   Chip,
   CircularProgress,
   Divider,
@@ -190,6 +192,20 @@ export function ProjectDetailPage() {
           </Stack>
           <Typography color="text.secondary">{p.name}</Typography>
         </Box>
+        {/*
+          The one action this page offers. It sits beside the contract rather than under the
+          BOQ because the plan is about the whole job — the time allowed, the money to find —
+          and not about any one priced line.
+        */}
+        <Button
+          component={Link}
+          to={`/projects/${p.id}/planning`}
+          variant="outlined"
+          startIcon={<InsightsIcon />}
+          sx={{ flexShrink: 0 }}
+        >
+          Planning &amp; execution strategy
+        </Button>
       </Stack>
 
       <Paper variant="outlined" sx={{ p: 2 }}>

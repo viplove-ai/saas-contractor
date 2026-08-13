@@ -27,8 +27,11 @@ public interface BoqLookup {
             String itemNumber,
             String description,
             String category,
+            /** Civil Works or E&M Works. The two bill and sequence on their own rhythms. */
+            String workPart,
             BigDecimal contractQuantity,
             UUID unitId,
+            BigDecimal contractAmount,
             boolean synthetic) {
     }
 

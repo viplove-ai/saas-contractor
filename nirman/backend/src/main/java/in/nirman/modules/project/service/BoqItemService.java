@@ -203,7 +203,8 @@ public class BoqItemService implements BoqLookup {
     private static BoqItemInfo toInfo(BoqItem item) {
         return new BoqItemInfo(item.getId(), item.getProjectId(), item.getSiteId(),
                 item.getItemNumber(), item.getDescription(), item.getCategory(),
-                item.getContractQuantity(), item.getUnitId(), item.isSynthetic());
+                item.getWorkPart(), item.getContractQuantity(), item.getUnitId(),
+                item.getContractAmount(), item.isSynthetic());
     }
 
     private static BoqItemResponse toResponse(BoqItem item) {
