@@ -96,12 +96,17 @@ public final class NitPdfParser {
 
         BoqScheduleParser.Result boq = BoqScheduleParser.parse(pageTexts, estimated);
 
+        // Schedule F is read from the whole document rather than the front matter: it sits two
+        // hundred pages in, and in three of the ten corpus notices the milestone table is an
+        // annexure behind the schedule of quantities.
+        ScheduleFExtractor.ScheduleF scheduleF = ScheduleFExtractor.extract(text, completion);
+
         return new NitExtraction(fileName, pageTexts.size(), nitNo, workName, estimated, civil,
                 electrical, emd, completion,
                 DeadlineExtractor.submissionClosing(front), DeadlineExtractor.bidOpening(front),
                 division, location, bidType, eligibility, similar, performance, security,
                 civilDsrYear, civilCostIndex, electricalDsrYear, electricalCostIndex,
-                boq.items(), boq.total(),
+                boq.items(), boq.total(), scheduleF,
                 warnings(nitNo, workName, estimated, similar, boq));
     }
 
@@ -159,6 +164,13 @@ public final class NitPdfParser {
         return "Specialized-work definitions: " + String.join("; ", unique);
     }
 
+    /**
+     * Note that nothing here reports on Schedule F, deliberately. This list is held to the
+     * Python reference's output field for field by {@code NitPdfParserFixtureTest}, and the
+     * reference never read Schedule F. Warnings about a missing milestone table are added a
+     * layer up, in {@code NitImportService}, which already exists to carry warnings the parser
+     * itself could not have produced.
+     */
     private static List<String> warnings(String nitNo, String workName, BigDecimal estimated,
                                          String similar, BoqScheduleParser.Result boq) {
         List<String> warnings = new ArrayList<>();

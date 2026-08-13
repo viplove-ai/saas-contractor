@@ -230,6 +230,164 @@ final class NitPatterns {
             Pattern.compile("^\\s*GRAND\\s+TOTAL\\s+of\\s+[^\\d\\n]*\\n\\s*"
                     + "([\\d,]+(?:\\.\\d{1,2})?)\\s*$", IM));
 
+    // ---------------------------------------------------------------- Schedule F
+    /*
+     * These have no Python counterpart. They were written against the ten notices in
+     * `docs/NIT documents/`, and each shape below is one a real notice actually uses — the
+     * corpus disagrees with itself far more than the summary page does, because Schedule F is
+     * retyped per division rather than generated.
+     */
+
+    /**
+     * Where the milestone table starts. Two headings, because four of the ten notices announce
+     * the table one way and the rest the other; {@code dehradun-01} uses neither phrase in
+     * capitals and is caught by the second.
+     */
+    static final Pattern MILESTONE_TABLE = Pattern.compile(
+            "TABLE\\s+OF\\s+MILE\\s*STONES?"
+                    + "|Mile\\s*stones?\\s+as\\s+per\\s+table\\s+given\\s+below", I);
+
+    /**
+     * Where it stops. The notes below the table are numbered "1." and "2." and would otherwise
+     * be read as two more milestones.
+     */
+    static final Pattern MILESTONE_TABLE_END = Pattern.compile(
+            "\\bNotes?\\s*:|Authority\\s+to\\s+decide|\\bClause\\s*[-\\s]*[89]\\b", I);
+
+    /**
+     * The end of the table's column headings, and so the start of its first row.
+     *
+     * <p>All four layouts in the corpus close their heading row with the withholding column,
+     * whose title always ends on the word milestone — "Amount to be withheld in case of
+     * non-achievement of milestone", "Withheld amount for non-achievement of mile stone.",
+     * "... of each Mile stone(s)". Without cutting there, the whole heading is read as the
+     * description of milestone 1, which then reports itself as a physical milestone naming
+     * work that is really a set of column titles.</p>
+     */
+    static final Pattern MILESTONE_HEADER_END = Pattern.compile(
+            "(?:Amount\\s+to\\s+be\\s+withheld|Withheld\\s+amount)[\\s\\S]{0,200}?"
+                    + "(?:mile\\s*stones?|milestones?)\\s*(?:\\(\\s*s\\s*\\))?\\s*\\.?", I);
+
+    /**
+     * A page break inside the milestone table. Bare page numbers are deliberately not listed:
+     * one notice prints each milestone's sequence number alone on its own line, and a rule that
+     * dropped lone numbers would delete the row numbering along with the page numbering.
+     */
+    static final Pattern MILESTONE_FURNITURE = Pattern.compile(
+            "^(?:Corrections?\\b|Insertions?\\b|Omissions?\\b|Overwriting\\b|Page\\s*\\d+\\b"
+                    + "|A\\s*E\\s*\\(\\s*P\\s*\\)|E\\s*E\\s*\\(\\s*P\\s*\\)).*$", I);
+
+    /**
+     * One row, matched against the table region with its line breaks collapsed.
+     *
+     * <p>Flattening first is what lets one pattern read all four layouts: a row may occupy one
+     * line ({@code 1 15% of Tendered Amount 01 Month 0.5%}) or twenty, with the description
+     * wrapped across a column and the time and withholding trailing it. Every layout in the
+     * corpus ends the row the same way — a duration, then a percentage — so the row is
+     * recognised by its tail rather than by its shape.</p>
+     *
+     * <p>The description is lazy and capped: unbounded, a failed match on one row swallows the
+     * rest of the table into the row before it.</p>
+     */
+    static final Pattern MILESTONE_ROW = Pattern.compile(
+            "(\\d{1,2})\\s*[.)]?\\s+(.{5,1600}?)\\s+(\\d{1,3})\\s*(Days?|Months?)\\b"
+                    + "\\s+(\\d{1,3}(?:\\.\\d+)?)\\s*%", IS);
+
+    /**
+     * A percentage of the contract, inside a milestone description. Anchored on the word
+     * {@code tender} within the same phrase, which is what tells "10% of tendered Value" apart
+     * from the "100% RRM/Retaining Wall" and "25% other development works" printed beside it —
+     * only one of the three is the milestone's financial test.
+     */
+    static final Pattern MILESTONE_FINANCIAL = Pattern.compile(
+            "(\\d{1,3}(?:\\.\\d+)?)\\s*%\\s*(?:of\\s+)?(?:the\\s+)?(?:accepted\\s+)?tender", I);
+
+    /**
+     * The last milestone of one notice reads "100% Physically completion of Work done" and
+     * never says "tender", so the pattern above correctly declines it — and a final milestone
+     * with no percentage leaves the cumulative curve short of 100 at the completion date.
+     * Anchored on the word complete so it cannot pick up the "100% RRM/Retaining Wall" and
+     * "25% other development works" that sit inside a physical description.
+     */
+    static final Pattern MILESTONE_COMPLETION_PERCENT = Pattern.compile(
+            "(\\d{1,3}(?:\\.\\d+)?)\\s*%\\s*(?:physical(?:ly)?\\s+)?complet(?:ion|ed|e)\\b", I);
+
+    /**
+     * The financial phrasing, removed from a description to see whether anything is left. What
+     * remains is the physical milestone — the activities the department expects finished — and
+     * it is the most valuable thing in the document, because it is the department's own phasing
+     * of the work in the vocabulary {@link BoqClassifier} already sorts BOQ lines into.
+     */
+    static final Pattern MILESTONE_FINANCIAL_CLAUSE = Pattern.compile(
+            "(?:Financially\\s+)?(?:Gross\\s+value\\s+of\\s+work\\s+done\\s*:?\\s*)?"
+                    + "\\d{1,3}(?:\\.\\d+)?\\s*%\\s*(?:of\\s+)?(?:the\\s+)?(?:accepted\\s+)?"
+                    + "tender(?:ed)?\\s+(?:amount|value)(?:\\s+of\\s+work)?", I);
+
+    /** Filler left behind once the financial clause is gone; not evidence of physical scope. */
+    static final Pattern MILESTONE_RESIDUE_NOISE = Pattern.compile(
+            "\\b(?:or|and|of\\s+work|completed\\s+in\\s+all\\s+respects?|"
+                    + "Work\\s+done\\s+amounting\\s+to)\\b|[.,:;&]", I);
+
+    // ---------------------------------------------------------------- Clause 7 and 7A
+    /** Clause 7's own words, and the anchor the interim minimums are read after. */
+    static final Pattern INTERIM_PAYMENT_ANCHOR =
+            Pattern.compile("being\\s+eligible\\s+to\\s+interim\\s+payment", I);
+
+    /** {@code Civil Works Rs. 21 Lakhs} — the label leads. */
+    static final Pattern INTERIM_CIVIL_LABELLED = Pattern.compile(
+            "Civil\\s+Works?\\s*:?\\s*(?:Rs\\.?|₹)?\\s*([\\d,]+(?:\\.\\d+)?)"
+                    + "\\s*(Lakhs?|Lacs?|Crores?)?", I);
+    /** {@code Electrical Works Rs 05 Lakhs for E&M works} — the same, one row down. */
+    static final Pattern INTERIM_ELECTRICAL_LABELLED = Pattern.compile(
+            "(?:Electrical|E\\s*&\\s*M)\\s+Works?\\s*:?\\s*(?:Rs\\.?|₹)?\\s*([\\d,]+(?:\\.\\d+)?)"
+                    + "\\s*(Lakhs?|Lacs?|Crores?)?", I);
+    /** {@code Rs. 150 lakh (civil)} — the label trails instead. */
+    static final Pattern INTERIM_CIVIL_BRACKETED = Pattern.compile(
+            "(?:Rs\\.?|₹)?\\s*([\\d,]+(?:\\.\\d+)?)\\s*(Lakhs?|Lacs?|Crores?)?\\s*\\(\\s*civil\\s*\\)", I);
+    /** {@code Rs. 35 lakh (electrical)}. */
+    static final Pattern INTERIM_ELECTRICAL_BRACKETED = Pattern.compile(
+            "(?:Rs\\.?|₹)?\\s*([\\d,]+(?:\\.\\d+)?)\\s*(Lakhs?|Lacs?|Crores?)?"
+                    + "\\s*\\(\\s*(?:electrical|e\\s*&\\s*m)\\s*\\)", I);
+    /** A non-composite notice states one figure and no label: {@code 3.50 Lacs}. */
+    static final Pattern INTERIM_BARE = Pattern.compile(
+            "(?:Rs\\.?|₹)?\\s*([\\d,]+(?:\\.\\d+)?)\\s*(Lakhs?|Lacs?|Crores?)", I);
+
+    /**
+     * Whether Clause 7A bites — no running account bill until the EPFO, ESIC and BOCW
+     * registrations are filed.
+     *
+     * <p>The negative lookahead is load-bearing and had to be widened once. The clause states
+     * itself before it is answered, in two phrasings — "No Running Account Bill shall be paid"
+     * and "(No RA bill shall be paid till submission of EPFO …) Yes" — so a bare
+     * {@code (Yes|No)} reads the clause's own first word as the answer and reports Clause 7A as
+     * <i>not</i> applying on documents where it plainly does. Getting this backwards would tell
+     * a contractor his first bill is unconditional when in fact nothing is payable until three
+     * registrations are filed.</p>
+     */
+    static final Pattern CLAUSE_7A = Pattern.compile(
+            "Clause\\s*[-\\s]*7\\s*A\\s*:?[\\s\\S]{0,400}?"
+                    + "\\b(Yes|No)\\b(?!\\s+(?:RA\\b|Running\\s+Account))", I);
+
+    // ---------------------------------------------------------------- time allowed
+    /** Schedule F's own statement of the time allowed, which is where the planner reads it. */
+    static final Pattern TIME_ALLOWED = Pattern.compile(
+            "Time\\s+allowed\\s+for\\s+(?:execution|completion)(?:\\s+of\\s+work)?\\s*:?\\s*"
+                    + "(\\d{1,3})\\s*(?:\\([^)]*\\)\\s*)?(Days?|Months?|Years?)", I);
+
+    /**
+     * The gap between the acceptance letter and the date work is reckoned to start. Ten days in
+     * all ten notices, which is consistent enough to default and far too load-bearing to
+     * hardcode — the entire plan calendar hangs off it.
+     */
+    static final Pattern START_RECKONING_DAYS = Pattern.compile(
+            "Numbers?\\s+of\\s+days\\s+from\\s+(?:the\\s+)?date\\s+of\\s+issue\\s+of\\s+letter"
+                    + "\\s+of\\s+acceptance\\s+for\\s+reckoning\\s+date\\s+of\\s+start\\s*:?\\s*"
+                    + "(\\d{1,3})", I);
+
+    /** Reads the duration out of the free-text completion period the summary page prints. */
+    static final Pattern DURATION_IN_TEXT =
+            Pattern.compile("(\\d{1,3})\\s*(?:\\([^)]*\\)\\s*)?(Days?|Months?|Years?)", I);
+
     // ---------------------------------------------------------------- warnings
     /** Words that betray an eligibility clause pasted from an unrelated tender. (py:360) */
     static final Pattern WORD = Pattern.compile("[a-z]{4,}");
