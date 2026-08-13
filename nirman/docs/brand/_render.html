@@ -1,0 +1,42 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#EDE8DC;display:flex;flex-wrap:wrap;gap:24px;padding:24px;font-family:"IBM Plex Sans",sans-serif}
+  .tile{position:relative;display:grid;place-items:center;overflow:hidden}
+  .glyph{font-family:Kalam,cursive;font-weight:700;line-height:1;color:#14181D}
+  .bar{position:absolute;background:#C2410C;border-radius:3px}
+</style></head>
+<body>
+  <!-- 512 app icon: paper field, inked wobbly frame -->
+  <div id="icon" class="tile" style="width:512px;height:512px;background:#F7F3E9;border:26px solid #14181D;border-radius:112px 80px 128px 88px/88px 128px 80px 112px;box-sizing:border-box">
+    <span class="glyph" style="font-size:320px;margin:-34px 34px 0 0">न</span>
+    <span class="bar" style="left:112px;right:112px;bottom:104px;height:17px"></span>
+  </div>
+
+  <!-- 512 maskable: terracotta bleed, mark inside safe circle -->
+  <div id="maskable" class="tile" style="width:512px;height:512px;background:#C2410C">
+    <span class="glyph" style="font-size:250px;color:#FFFDF7;margin:-26px 26px 0 0">न</span>
+    <span class="bar" style="left:176px;right:176px;bottom:136px;height:13px;background:#FFFDF7;opacity:.9"></span>
+  </div>
+
+  <!-- 512 favicon master: heavier frame, larger glyph, no fine detail -->
+  <div id="favicon" class="tile" style="width:512px;height:512px;background:#F7F3E9;border:36px solid #14181D;border-radius:104px;box-sizing:border-box">
+    <span class="glyph" style="font-size:376px;margin:-30px 40px 0 0">न</span>
+    <span class="bar" style="left:104px;right:104px;bottom:74px;height:24px"></span>
+  </div>
+
+  <!-- lockup -->
+  <div id="lockup" style="flex:none;width:max-content;display:flex;align-items:center;gap:26px;padding:28px 34px;background:#FFFDF7">
+    <div class="tile" style="width:104px;height:104px;background:#F7F3E9;border:5.4px solid #14181D;border-radius:23px 16px 26px 18px/18px 26px 16px 23px;box-sizing:border-box">
+      <span class="glyph" style="font-size:64px;margin:-7px 7px 0 0">न</span>
+      <span class="bar" style="left:23px;right:23px;bottom:21px;height:3.4px"></span>
+    </div>
+    <div>
+      <div style="font-family:Kalam,cursive;font-weight:700;font-size:56px;line-height:1;color:#14181D">Nirman</div>
+      <div style="font-weight:600;font-size:19px;letter-spacing:.22em;color:#C2410C;margin-top:7px">CONSTRUCTIONS</div>
+    </div>
+  </div>
+</body></html>

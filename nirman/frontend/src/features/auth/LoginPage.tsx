@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
-import { Wordmark } from '../../app/AppNav';
 import { figure, graphPaper, inkEdge, marginNote } from '../../app/sketch';
 import { tokens } from '../../app/theme';
 import { useAuth } from './AuthContext';
@@ -93,7 +92,24 @@ export function LoginPage() {
         <form onSubmit={onSubmit} noValidate>
           <Stack spacing={3}>
             <Stack spacing={2.5}>
-              <Wordmark />
+              {/*
+                The full lockup rather than the rail's mark, and it stays inside the card: the
+                image carries its own paper-white bed, so on the graph-paper ground behind the
+                card the edge of that bed shows as a pale rectangle.
+              */}
+              {/*
+                Centred with `alignSelf`, not `mx: 'auto'`. Stack resets the margins of every
+                child it lays out — `& > :not(style):not(style) { margin: 0 }`, which outranks
+                this element's own class — so auto margins here are silently dropped and the
+                lockup sits left. The gap beneath it is the Stack's `spacing`, for the same
+                reason: a `mb` would be reset too.
+              */}
+              <Box
+                component="img"
+                src="/brand/logo-lockup.png"
+                alt="Nirman Constructions"
+                sx={{ width: 240, height: 'auto', display: 'block', alignSelf: 'center' }}
+              />
               <Box>
                 <Typography variant="h1">Good morning.</Typography>
                 <Typography color="text.secondary" sx={{ mt: 0.5 }}>

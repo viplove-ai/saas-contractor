@@ -11,24 +11,21 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt', // a supervisor mid-entry must never be reloaded out from under
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
-      manifest: {
-        name: 'Nirman Constructions',
-        short_name: 'Nirman',
-        description: 'Attendance, materials, expenses and daily reports for construction sites',
-        theme_color: '#14181D',
-        background_color: '#FFFFFF',
-        display: 'standalone',
-        orientation: 'portrait',
-        start_url: '/',
-        icons: [
-          { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-        ],
-      },
+      /*
+        `public/brand/manifest.webmanifest` is the manifest, and index.html links it directly.
+        `manifest: false` stops the plugin generating a second one: two manifests is not a
+        merge, it is whichever link tag the browser reads last, and the branded icon set
+        would lose that coin toss silently. `manifestFilename` only tells the plugin where
+        the real file sits so it precaches that path rather than a root one that has nothing
+        behind it.
+      */
+      manifest: false,
+      manifestFilename: 'brand/manifest.webmanifest',
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // `webmanifest` is on the list so an installed app can still read its own manifest
+        // with no signal; the icons it names are already covered by `png` and `svg`.
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,webmanifest}'],
+        navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/],
         /*
           Read caching is an allow-list, and everything not named here stays uncached: a

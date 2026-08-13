@@ -61,7 +61,8 @@ test('the app boots without console errors', async ({ page }) => {
  * on a phone, which is silent in every other test we run.
  */
 test('the PWA manifest is served with every icon it declares', async ({ page, request }) => {
-  const response = await request.get('/manifest.webmanifest');
+  // public/brand/ is the source of truth; the plugin generates no manifest of its own.
+  const response = await request.get('/brand/manifest.webmanifest');
   expect(response.ok()).toBeTruthy();
 
   const manifest = await response.json();
@@ -81,6 +82,13 @@ test('the PWA manifest is served with every icon it declares', async ({ page, re
   );
 
   // Referenced by index.html, so a 404 here shows up as a broken tab icon everywhere.
-  const favicon = await page.request.get('/favicon.svg');
-  expect(favicon.ok()).toBeTruthy();
+  for (const href of [
+    '/brand/favicon.svg',
+    '/brand/favicon-32.png',
+    '/brand/favicon-16.png',
+    '/brand/apple-touch-icon.png',
+  ]) {
+    const asset = await page.request.get(href);
+    expect(asset.ok(), `head asset missing: ${href}`).toBeTruthy();
+  }
 });

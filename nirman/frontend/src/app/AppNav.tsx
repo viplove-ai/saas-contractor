@@ -272,24 +272,22 @@ export function SideRail({ signoffCount = 0 }: { signoffCount?: number }) {
 export function Wordmark({ compact = false }: { compact?: boolean }) {
   return (
     <Stack direction="row" alignItems="center" spacing={1.25} sx={{ textDecoration: 'none' }}>
+      {/*
+        The brand mark itself, not a crop of the lockup — the lockup's bed and wordmark would
+        both have to be cut away, and what survives the crop is this file anyway.
+      */}
       <Box
+        component="img"
+        src="/brand/icon-512.png"
+        /* Decorative beside the name; the only label in the compact rail, so named there. */
+        alt={compact ? 'Nirman' : ''}
         sx={{
           width: compact ? 34 : 38,
           height: compact ? 34 : 38,
           flexShrink: 0,
-          display: 'grid',
-          placeItems: 'center',
-          bgcolor: 'secondary.main',
-          border: `1.8px solid ${tokens.ink}`,
-          borderRadius: '13px 6px 14px 7px / 7px 14px 6px 13px',
-          fontFamily: '"Kalam", cursive',
-          fontWeight: 700,
-          fontSize: compact ? '1.05rem' : '1.2rem',
-          color: tokens.surface,
+          borderRadius: '9px 6px 10px 7px/7px 10px 6px 9px',
         }}
-      >
-        न
-      </Box>
+      />
       {!compact && (
         <Box>
           <Typography sx={{ fontFamily: '"Kalam", cursive', fontWeight: 700, fontSize: '0.95rem', lineHeight: 1.1 }}>
