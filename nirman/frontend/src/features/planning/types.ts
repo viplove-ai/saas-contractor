@@ -71,6 +71,10 @@ export interface WorkingCapitalView {
   peakFundingRequired: number | null;
   peakMonth: string | null;
   moneyBeforeDayOne: number | null;
+  /** Anchored to the estimate, so bidding low does not shrink it. */
+  performanceGuarantee: number | null;
+  /** Zero unless the bid fell below the notice's threshold — and it can dwarf the PG. */
+  additionalPerformanceGuarantee: number | null;
   breakEvenMonth: string | null;
   totalRetentionHeld: number | null;
   retentionReleasedOn: string | null;

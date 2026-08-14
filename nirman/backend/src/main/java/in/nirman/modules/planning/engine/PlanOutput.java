@@ -133,6 +133,11 @@ public record PlanOutput(
             BigDecimal peakFundingRequirement,
             YearMonth peakMonth,
             BigDecimal moneyBeforeDayOne,
+            /** 5% of the estimate or the contract, whichever is higher. Bidding low does not
+             *  shrink it. */
+            BigDecimal performanceGuarantee,
+            /** Due only on a bid below the notice's threshold, and it can dwarf the PG. */
+            BigDecimal additionalPerformanceGuarantee,
             YearMonth breakEvenMonth,
             BigDecimal totalRetentionHeld,
             LocalDate retentionReleasedOn,

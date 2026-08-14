@@ -111,7 +111,30 @@ public record PlanInput(
             BigDecimal labourCessPercent,
             BigDecimal waterElectricityPercent,
             int defectLiabilityMonths,
-            BigDecimal emdAmount) {
+            BigDecimal emdAmount,
+            /**
+             * The estimated cost put to tender. Distinct from {@code contractValue}, and the
+             * distinction is the point: the performance guarantee is a share of the estimate
+             * <b>or</b> the contract, whichever is higher, so bidding low does not shrink it.
+             */
+            BigDecimal estimatedCostPutToTender,
+            /** Null where the notice states no additional-guarantee clause. */
+            AdditionalGuarantee additionalGuarantee) {
+    }
+
+    /**
+     * The second guarantee a low bid has to raise, as the notice stated it.
+     *
+     * @param method {@code DIFFERENCE} is the CPWD form's own arithmetic — the threshold share
+     *               of the estimate less what was bid. It grows far faster than a percentage:
+     *               thirty percent below a one-crore estimate is ten lakh of extra guarantee.
+     *               {@code PERCENT_OF_BID} is the flat levy other departments use.
+     */
+    public record AdditionalGuarantee(BigDecimal thresholdPercent, String method,
+                                      BigDecimal percent) {
+
+        public static final String DIFFERENCE = "DIFFERENCE";
+        public static final String PERCENT_OF_BID = "PERCENT_OF_BID";
     }
 
     /**

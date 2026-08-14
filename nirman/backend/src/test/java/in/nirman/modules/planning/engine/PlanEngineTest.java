@@ -255,6 +255,60 @@ class PlanEngineTest {
         }
 
         @Test
+        @DisplayName("the guarantee is anchored to the estimate, so a low bid does not shrink it")
+        void guaranteeDoesNotFollowTheBidDown() {
+            BigDecimal atPar = PlanEngine.plan(input(List.of(masonry("300")), List.of(), 365, "0"))
+                    .workingCapital().performanceGuarantee();
+            BigDecimal wayBelow = PlanEngine.plan(
+                            input(List.of(masonry("300")), List.of(), 365, "-30"))
+                    .workingCapital().performanceGuarantee();
+
+            // 5% of the estimate, both times. "Whichever is higher" is what stops a deep bid
+            // buying a smaller guarantee, and it is the half that catches people out.
+            assertThat(wayBelow).as("bidding 30% below leaves the guarantee where it was")
+                    .isEqualByComparingTo(atPar);
+            assertThat(atPar).isEqualByComparingTo(
+                    new BigDecimal("1800000").multiply(new BigDecimal("0.05")));
+        }
+
+        @Test
+        @DisplayName("a bid below 80% of the estimate raises the shortfall as a second guarantee")
+        void additionalGuaranteeIsTheShortfall() {
+            // Estimate ₹18,00,000. Bid 30% below is ₹12,60,000, and 80% of the estimate is
+            // ₹14,40,000 — so the additional guarantee is the ₹1,80,000 between them.
+            PlanOutput deep = PlanEngine.plan(
+                    input(List.of(masonry("300")), List.of(), 365, "-30", CPWD_APG));
+            assertThat(deep.workingCapital().additionalPerformanceGuarantee())
+                    .isEqualByComparingTo("180000.00");
+
+            // And it is money found before anything is billable.
+            assertThat(deep.workingCapital().moneyBeforeDayOne())
+                    .isGreaterThan(deep.workingCapital().performanceGuarantee()
+                            .add(deep.workingCapital().additionalPerformanceGuarantee()));
+            assertThat(deep.findings())
+                    .anyMatch(f -> f.message().contains("additional performance guarantee"));
+        }
+
+        @Test
+        @DisplayName("a bid just above the threshold raises none of it")
+        void noAdditionalGuaranteeAboveTheThreshold() {
+            PlanOutput shallow = PlanEngine.plan(
+                    input(List.of(masonry("300")), List.of(), 365, "-15", CPWD_APG));
+            assertThat(shallow.workingCapital().additionalPerformanceGuarantee())
+                    .isEqualByComparingTo("0");
+        }
+
+        @Test
+        @DisplayName("a notice with no such clause raises none of it, however deep the bid")
+        void silenceMeansNoAdditionalGuarantee() {
+            PlanOutput deep = PlanEngine.plan(
+                    input(List.of(masonry("300")), List.of(), 365, "-40", null));
+            assertThat(deep.workingCapital().additionalPerformanceGuarantee())
+                    .as("inventing one would ask for lakhs nobody demanded")
+                    .isEqualByComparingTo("0");
+        }
+
+        @Test
         @DisplayName("Clause 7A is reported, because until it is met the inflow is zero")
         void clause7aIsSurfaced() {
             PlanOutput plan = PlanEngine.plan(input(
@@ -338,6 +392,17 @@ class PlanEngineTest {
 
     private static PlanInput input(List<WorkItem> items, List<Milestone> milestones,
                                    int allowedDays, String quotedPercent) {
+        return input(items, milestones, allowedDays, quotedPercent, null);
+    }
+
+    /** The CPWD form's clause: below 80% of the estimate, the shortfall becomes a guarantee. */
+    private static final PlanInput.AdditionalGuarantee CPWD_APG =
+            new PlanInput.AdditionalGuarantee(new BigDecimal("80"),
+                    PlanInput.AdditionalGuarantee.DIFFERENCE, null);
+
+    private static PlanInput input(List<WorkItem> items, List<Milestone> milestones,
+                                   int allowedDays, String quotedPercent,
+                                   PlanInput.AdditionalGuarantee apg) {
         BigDecimal contractValue = items.stream().map(WorkItem::amount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         return new PlanInput(
@@ -347,7 +412,8 @@ class PlanEngineTest {
                 new CommercialTerms(contractValue, new BigDecimal("5"), new BigDecimal("2.5"),
                         Map.of("Civil Works", new BigDecimal("500000")), true, 30, 45,
                         new BigDecimal("2"), new BigDecimal("2"), new BigDecimal("1"),
-                        BigDecimal.ZERO, 6, new BigDecimal("50000")),
+                        BigDecimal.ZERO, 6, new BigDecimal("50000"),
+                        contractValue, apg),
                 new CostBasis(Map.of("MASON", new BigDecimal("800"),
                         "HELPER", new BigDecimal("500"),
                         "CARPENTER", new BigDecimal("800")),

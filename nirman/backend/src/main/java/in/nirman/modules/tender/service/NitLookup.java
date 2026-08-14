@@ -31,7 +31,19 @@ public interface NitLookup {
             Integer startReckoningDays,
             Boolean clause7aApplicable,
             Map<String, BigDecimal> interimMinimums,
-            List<MilestoneTerm> milestones) {
+            List<MilestoneTerm> milestones,
+            /** Null where the notice states no additional-guarantee clause. */
+            AdditionalGuaranteeTerm additionalGuarantee) {
+    }
+
+    /**
+     * The extra guarantee a low bid triggers, as the notice stated it.
+     *
+     * @param method {@code DIFFERENCE} — the threshold share of the estimate less what was bid,
+     *               which is the CPWD form's own arithmetic — or {@code PERCENT_OF_BID}.
+     */
+    record AdditionalGuaranteeTerm(BigDecimal thresholdPercent, String method,
+                                   BigDecimal percent) {
     }
 
     /** @param dueDays from commencement; null where the notice's wording defeated the reader */

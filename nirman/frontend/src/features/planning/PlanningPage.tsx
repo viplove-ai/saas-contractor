@@ -294,6 +294,18 @@ export function PlanningPage() {
                 note="EMD, guarantee commission, site setup"
               />
               <Headline
+                label="Guarantees"
+                value={lakh(
+                  (plan.workingCapital.performanceGuarantee ?? 0) +
+                    (plan.workingCapital.additionalPerformanceGuarantee ?? 0),
+                )}
+                note={
+                  plan.workingCapital.additionalPerformanceGuarantee
+                    ? `includes ${lakh(plan.workingCapital.additionalPerformanceGuarantee)} extra for bidding low`
+                    : 'performance guarantee, on the estimate not the bid'
+                }
+              />
+              <Headline
                 label="Turns positive"
                 value={plan.workingCapital.breakEvenMonth ?? 'not within the plan'}
                 note="cumulative receipts overtake spend"

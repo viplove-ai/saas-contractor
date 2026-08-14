@@ -96,11 +96,16 @@ public final class NitDtos {
             AllowedTime.Unit completionUnit,
             Integer startReckoningDays,
             Boolean clause7aApplicable,
+            /** Bid below this share of the estimate and a second guarantee falls due. */
+            @Digits(integer = 3, fraction = 3) BigDecimal apgThresholdPercent,
+            @Size(max = 20) String apgMethod,
+            @Digits(integer = 3, fraction = 3) BigDecimal apgPercent,
             @Valid @Size(max = 20) List<MilestoneTerm> milestones,
             @Valid @Size(max = 6) List<InterimMinimumTerm> interimMinimums) {
 
         public static final ScheduleTerms EMPTY =
-                new ScheduleTerms(null, null, null, null, List.of(), List.of());
+                new ScheduleTerms(null, null, null, null, null, null, null,
+                        List.of(), List.of());
 
         public List<MilestoneTerm> milestonesOrEmpty() {
             return milestones == null ? List.of() : milestones;

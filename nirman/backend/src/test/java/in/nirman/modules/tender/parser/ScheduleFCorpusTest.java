@@ -187,6 +187,37 @@ class ScheduleFCorpusTest {
         });
     }
 
+    /**
+     * The additional-guarantee clause, which one notice carries and nine do not.
+     *
+     * <p>Both halves matter. Reading it where it exists is what tells a contractor that bidding
+     * thirty percent below a one-crore estimate asks for ten lakh of extra bank guarantee before
+     * the work order. <b>Not</b> reading it into the nine that are silent matters just as much:
+     * an invented clause would put lakhs of imaginary guarantee in front of somebody deciding
+     * how deep to bid.</p>
+     */
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("fixtures")
+    void additionalGuaranteeIsReadOnlyWhereItIsStated(String fixture) throws IOException {
+        Path pdf = PDF_DIR.resolve(fixture + ".pdf");
+        assumeThat(Files.exists(pdf)).as("fixture %s is present", fixture).isTrue();
+
+        var guarantee = NitPdfParser.parse(Files.readAllBytes(pdf), fixture + ".pdf")
+                .scheduleF().additionalGuarantee();
+
+        if ("dehradun-01-hostel-balance".equals(fixture)) {
+            assertThat(guarantee).as("this notice states the clause").isNotNull();
+            assertThat(guarantee.thresholdPercent()).isEqualByComparingTo("80");
+            // The CPWD form's own arithmetic: the shortfall against the threshold, not a
+            // percentage of anything. Its worked example is "if ECPT is A and quoted amount is
+            // 0.7A then the amount of APG shall be 0.8A - 0.7A".
+            assertThat(guarantee.method()).isEqualTo("DIFFERENCE");
+        } else {
+            assertThat(guarantee).as("%s states no such clause, so none is applied", fixture)
+                    .isNull();
+        }
+    }
+
     private static String encode(MilestoneLine milestone) {
         return "%s %s|%s|%s|%s".formatted(
                 milestone.timeAllowed() == null ? "-" : milestone.timeAllowed().value(),

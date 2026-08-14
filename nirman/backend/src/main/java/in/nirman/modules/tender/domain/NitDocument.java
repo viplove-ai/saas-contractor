@@ -136,6 +136,20 @@ public class NitDocument extends BaseEntity {
     @Column(name = "clause_7a_applicable")
     private Boolean clause7aApplicable;
 
+    /**
+     * The additional performance guarantee clause. Null where the notice is silent, which is
+     * nine of the ten read so far — and applying one anyway would ask a contractor for lakhs of
+     * bank guarantee that nobody demanded.
+     */
+    @Column(name = "apg_threshold_percent", precision = 6, scale = 3)
+    private BigDecimal apgThresholdPercent;
+
+    @Column(name = "apg_method", length = 20)
+    private String apgMethod;
+
+    @Column(name = "apg_percent", precision = 6, scale = 3)
+    private BigDecimal apgPercent;
+
     @Column(name = "boq_total", precision = 18, scale = 2)
     private BigDecimal boqTotal;
 
@@ -246,6 +260,25 @@ public class NitDocument extends BaseEntity {
 
     public Boolean getClause7aApplicable() {
         return clause7aApplicable;
+    }
+
+    public void applyGuaranteeTerms(BigDecimal apgThresholdPercent, String apgMethod,
+                                    BigDecimal apgPercent) {
+        this.apgThresholdPercent = apgThresholdPercent;
+        this.apgMethod = apgMethod;
+        this.apgPercent = apgPercent;
+    }
+
+    public BigDecimal getApgThresholdPercent() {
+        return apgThresholdPercent;
+    }
+
+    public String getApgMethod() {
+        return apgMethod;
+    }
+
+    public BigDecimal getApgPercent() {
+        return apgPercent;
     }
 
     public void attachTo(UUID attachmentId, String checksumSha256) {

@@ -63,7 +63,10 @@ public class NitLookupService implements NitLookup {
                 document.getEmdAmount(), document.getPerformanceGuaranteePercent(),
                 document.getSecurityDepositPercent(), days(document.getCompletionTime()),
                 document.getStartReckoningDays(), document.getClause7aApplicable(),
-                thresholds, terms);
+                thresholds, terms,
+                document.getApgThresholdPercent() == null ? null
+                        : new AdditionalGuaranteeTerm(document.getApgThresholdPercent(),
+                                document.getApgMethod(), document.getApgPercent()));
     }
 
     /**

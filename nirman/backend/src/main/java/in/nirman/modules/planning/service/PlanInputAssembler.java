@@ -212,7 +212,16 @@ public class PlanInputAssembler {
                         ? DEFAULT_PAYMENT_LAG_DAYS : overrides.paymentLagDays(),
                 INCOME_TAX_TDS, GST_TDS, LABOUR_CESS, BigDecimal.ZERO,
                 DEFAULT_DEFECT_LIABILITY_MONTHS,
-                terms == null ? BigDecimal.ZERO : orDefault(terms.emdAmount(), BigDecimal.ZERO));
+                terms == null ? BigDecimal.ZERO : orDefault(terms.emdAmount(), BigDecimal.ZERO),
+                // The estimate is what the guarantees are measured against, and it is not the
+                // BOQ's own total once a bid has been applied to it.
+                terms == null || terms.estimatedCost() == null ? contractValue
+                        : terms.estimatedCost(),
+                terms == null || terms.additionalGuarantee() == null ? null
+                        : new PlanInput.AdditionalGuarantee(
+                                terms.additionalGuarantee().thresholdPercent(),
+                                terms.additionalGuarantee().method(),
+                                terms.additionalGuarantee().percent()));
     }
 
     private static PlanInput.CostBasis costs(Overrides overrides) {

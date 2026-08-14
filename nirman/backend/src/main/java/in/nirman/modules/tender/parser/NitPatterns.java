@@ -368,6 +368,30 @@ final class NitPatterns {
             "Clause\\s*[-\\s]*7\\s*A\\s*:?[\\s\\S]{0,400}?"
                     + "\\b(Yes|No)\\b(?!\\s+(?:RA\\b|Running\\s+Account))", I);
 
+    // ---------------------------------------------------------------- guarantees
+    /**
+     * The threshold below which a second guarantee is due: "If the quoted bid amount is lesser
+     * than 80% of the estimated cost put to tender ...". Written against the one notice in the
+     * corpus that carries the clause; the other nine are silent, and silence is a reading.
+     */
+    static final Pattern APG_THRESHOLD = Pattern.compile(
+            "quoted\\s+bid\\s+amount\\s+is\\s+lesser\\s+than\\s*(\\d{1,3}(?:\\.\\d+)?)\\s*%"
+                    + "[\\s\\S]{0,120}?estimated\\s+cost\\s+put\\s+to\\s+tender", I);
+
+    /**
+     * The CPWD form's arithmetic: the guarantee is the <i>difference</i> between the threshold
+     * share of the estimate and what was bid, not a percentage of anything. Bid 30% below a
+     * ₹1 crore estimate and the additional guarantee is ₹10 lakh.
+     */
+    static final Pattern APG_DIFFERENCE = Pattern.compile(
+            "difference\\s+between\\s+the\\s*(\\d{1,3})\\s*%\\s*amount\\s+of\\s+ECPT"
+                    + "\\s+and\\s+quoted\\s+amount", I);
+
+    /** Other departments levy a flat share of the tendered amount instead. */
+    static final Pattern APG_PERCENT_OF_BID = Pattern.compile(
+            "[Aa]dditional\\s+[Pp]erformance\\s+(?:[Ss]ecurity|[Gg]uarantee)\\s*(?:@|of)?\\s*"
+                    + "(\\d{1,3}(?:\\.\\d+)?)\\s*%\\s*of\\s+the\\s+tendered\\s+amount", I);
+
     // ---------------------------------------------------------------- time allowed
     /** Schedule F's own statement of the time allowed, which is where the planner reads it. */
     static final Pattern TIME_ALLOWED = Pattern.compile(

@@ -53,10 +53,32 @@ public final class ScheduleFExtractor {
             Integer startReckoningDays,
             List<MilestoneLine> milestones,
             List<InterimMinimum> interimMinimums,
-            Boolean clause7aApplicable) {
+            Boolean clause7aApplicable,
+            AdditionalGuarantee additionalGuarantee) {
 
         public static final ScheduleF EMPTY =
-                new ScheduleF(null, null, List.of(), List.of(), null);
+                new ScheduleF(null, null, List.of(), List.of(), null, null);
+    }
+
+    /**
+     * The second guarantee a low bid has to raise.
+     *
+     * <p>Null where the notice says nothing, and that is a reading: nine of the ten in the corpus
+     * carry no such clause, and applying one anyway would invent a lakh of bank guarantee that
+     * nobody asked the contractor for.</p>
+     *
+     * @param thresholdPercent the bid must fall below this share of the estimate before any of
+     *                         it is due
+     * @param method           {@link #DIFFERENCE} is the CPWD form's own arithmetic — the
+     *                         threshold share of the estimate <i>less</i> what was bid, which
+     *                         grows far faster than a percentage. {@link #PERCENT_OF_BID} is the
+     *                         flat levy other departments use.
+     */
+    public record AdditionalGuarantee(BigDecimal thresholdPercent, String method,
+                                      BigDecimal percent) {
+
+        public static final String DIFFERENCE = "DIFFERENCE";
+        public static final String PERCENT_OF_BID = "PERCENT_OF_BID";
     }
 
     public static ScheduleF extract(String text, String completionPeriodText) {
@@ -68,7 +90,8 @@ public final class ScheduleFExtractor {
                 startReckoningDays(text),
                 milestones(text),
                 interimMinimums(text),
-                clause7aApplicable(text));
+                clause7aApplicable(text),
+                additionalGuarantee(text));
     }
 
     // ------------------------------------------------------------------ time allowed
@@ -410,6 +433,37 @@ public final class ScheduleFExtractor {
             return value.multiply(CRORE);
         }
         return lower.startsWith("lakh") || lower.startsWith("lac") ? value.multiply(LAKH) : value;
+    }
+
+    /**
+     * The additional performance guarantee clause, where the notice carries one.
+     *
+     * <p>The threshold and the arithmetic are read separately because they are stated in separate
+     * sentences, and a notice that names a threshold without saying how the amount is worked out
+     * is worth nothing to a plan — so both must be found or neither is returned.</p>
+     */
+    static AdditionalGuarantee additionalGuarantee(String text) {
+        Matcher threshold = NitPatterns.APG_THRESHOLD.matcher(text);
+        if (threshold.find()) {
+            BigDecimal at = percent(threshold.group(1));
+            Matcher difference = NitPatterns.APG_DIFFERENCE.matcher(text);
+            if (at != null && difference.find()) {
+                return new AdditionalGuarantee(at,
+                        AdditionalGuarantee.DIFFERENCE, null);
+            }
+            Matcher flat = NitPatterns.APG_PERCENT_OF_BID.matcher(text);
+            if (at != null && flat.find()) {
+                return new AdditionalGuarantee(at,
+                        AdditionalGuarantee.PERCENT_OF_BID, percent(flat.group(1)));
+            }
+        }
+        Matcher flat = NitPatterns.APG_PERCENT_OF_BID.matcher(text);
+        if (flat.find()) {
+            // A flat levy stated without its threshold: the standard trigger is 80%.
+            return new AdditionalGuarantee(new BigDecimal("80"),
+                    AdditionalGuarantee.PERCENT_OF_BID, percent(flat.group(1)));
+        }
+        return null;
     }
 
     /** @return null where the notice defers the answer, rather than a guessed false */

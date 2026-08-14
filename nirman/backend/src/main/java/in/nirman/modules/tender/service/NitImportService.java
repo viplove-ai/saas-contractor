@@ -230,6 +230,8 @@ public class NitImportService {
         }
         ScheduleTerms terms = request.scheduleTerms() == null
                 ? ScheduleTerms.EMPTY : request.scheduleTerms();
+        document.applyGuaranteeTerms(terms.apgThresholdPercent(), terms.apgMethod(),
+                terms.apgPercent());
         document.applyScheduleTerms(
                 terms.completionValue() == null || terms.completionUnit() == null ? null
                         : new AllowedTime(terms.completionValue(), terms.completionUnit()),
@@ -299,7 +301,8 @@ public class NitImportService {
                 completion == null ? null : completion.value(),
                 completion == null ? null : completion.unit(),
                 document.getStartReckoningDays(), document.getClause7aApplicable(),
-                milestones, minimums);
+                document.getApgThresholdPercent(), document.getApgMethod(),
+                document.getApgPercent(), milestones, minimums);
     }
 
     private static ScheduleTerms toScheduleTerms(ScheduleFExtractor.ScheduleF scheduleF) {
@@ -316,10 +319,14 @@ public class NitImportService {
         List<InterimMinimumTerm> minimums = scheduleF.interimMinimums().stream()
                 .map(minimum -> new InterimMinimumTerm(minimum.workPart(), minimum.amount()))
                 .toList();
+        var guarantee = scheduleF.additionalGuarantee();
         return new ScheduleTerms(
                 scheduleF.completionTime() == null ? null : scheduleF.completionTime().value(),
                 scheduleF.completionTime() == null ? null : scheduleF.completionTime().unit(),
                 scheduleF.startReckoningDays(), scheduleF.clause7aApplicable(),
+                guarantee == null ? null : guarantee.thresholdPercent(),
+                guarantee == null ? null : guarantee.method(),
+                guarantee == null ? null : guarantee.percent(),
                 milestones, minimums);
     }
 

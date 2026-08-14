@@ -290,7 +290,7 @@ public class ExecutionPlanService {
                         .sorted(java.util.Comparator.comparing(PlanCashFlow::getYearMonth))
                         .map(ExecutionPlanService::toView).toList(),
                 new WorkingCapitalView(plan.getPeakFundingRequired(), plan.getPeakMonth(),
-                        plan.getMoneyBeforeDayOne(), plan.getBreakEvenMonth(),
+                        plan.getMoneyBeforeDayOne(), null, null, plan.getBreakEvenMonth(),
                         plan.getTotalRetentionHeld(), plan.getRetentionReleasedOn(),
                         plan.getTotalOutflow(), plan.getTotalNetReceipts()),
                 notes.findByPlanId(plan.getId()).stream()
@@ -349,6 +349,8 @@ public class ExecutionPlanService {
                 new WorkingCapitalView(output.workingCapital().peakFundingRequirement(),
                         month(output.workingCapital().peakMonth()),
                         output.workingCapital().moneyBeforeDayOne(),
+                        output.workingCapital().performanceGuarantee(),
+                        output.workingCapital().additionalPerformanceGuarantee(),
                         month(output.workingCapital().breakEvenMonth()),
                         output.workingCapital().totalRetentionHeld(),
                         output.workingCapital().retentionReleasedOn(),

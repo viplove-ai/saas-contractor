@@ -122,6 +122,10 @@ public final class PlanDtos {
             BigDecimal peakFundingRequired,
             String peakMonth,
             BigDecimal moneyBeforeDayOne,
+            /** Anchored to the estimate, so bidding low does not shrink it. */
+            BigDecimal performanceGuarantee,
+            /** Zero unless the bid fell below the notice's threshold. */
+            BigDecimal additionalPerformanceGuarantee,
             String breakEvenMonth,
             BigDecimal totalRetentionHeld,
             LocalDate retentionReleasedOn,
