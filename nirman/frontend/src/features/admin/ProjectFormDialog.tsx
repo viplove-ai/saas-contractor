@@ -54,6 +54,7 @@ const EMPTY: ProjectForm = {
   nitNumber: '',
   tenderReference: '',
   contractValue: '',
+  quotedPercent: '',
   budgetAmount: '',
   startDate: '',
   expectedCompletionDate: '',
@@ -171,6 +172,7 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
             nitNumber: project.nitNumber ?? '',
             tenderReference: project.tenderReference ?? '',
             contractValue: project.contractValue?.toString() ?? '',
+            quotedPercent: project.quotedPercent?.toString() ?? '',
             budgetAmount: project.budgetAmount?.toString() ?? '',
             startDate: project.startDate ?? '',
             expectedCompletionDate: project.expectedCompletionDate ?? '',
@@ -217,6 +219,7 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
       nitNumber: values.nitNumber || undefined,
       tenderReference: values.tenderReference || undefined,
       contractValue: toAmount(values.contractValue),
+      quotedPercent: toAmount(values.quotedPercent),
       budgetAmount: toAmount(values.budgetAmount),
       startDate: values.startDate || undefined,
       expectedCompletionDate: values.expectedCompletionDate || undefined,
@@ -422,6 +425,16 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
               error={!!errors.contractValue}
               helperText={errors.contractValue?.message ?? 'What the client pays, in rupees.'}
               {...register('contractValue')}
+            />
+            <TextField
+              label="Quoted % (optional)"
+              InputLabelProps={FLOATING_LABEL}
+              error={!!errors.quotedPercent}
+              helperText={
+                errors.quotedPercent?.message ??
+                'Above (+) or below (−) the estimate. The planner reads it.'
+              }
+              {...register('quotedPercent')}
             />
             <TextField
               label="Budget (optional)"

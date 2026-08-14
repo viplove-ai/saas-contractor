@@ -183,6 +183,7 @@ public class ProjectService implements ProjectProvisioning {
         project.setNitNumber(request.nitNumber());
         project.setTenderReference(request.tenderReference());
         project.setContractValue(request.contractValue());
+        project.setQuotedPercent(request.quotedPercent());
         project.setBudgetAmount(request.budgetAmount());
         project.setStartDate(request.startDate());
         project.setExpectedCompletionDate(request.expectedCompletionDate());
@@ -209,6 +210,7 @@ public class ProjectService implements ProjectProvisioning {
         project.setNitNumber(request.nitNumber());
         project.setTenderReference(request.tenderReference());
         project.setContractValue(request.contractValue());
+        project.setQuotedPercent(request.quotedPercent());
         project.setBudgetAmount(request.budgetAmount());
         project.setStartDate(request.startDate());
         project.setExpectedCompletionDate(request.expectedCompletionDate());

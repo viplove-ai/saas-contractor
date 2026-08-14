@@ -56,7 +56,10 @@ import java.util.UUID;
 public class ExecutionPlanService {
 
     /** Bumped when the arithmetic changes, so two plans of the same tender can be compared. */
-    public static final String ENGINE_VERSION = "1.0.0";
+    public static final String ENGINE_VERSION = "1.1.0";
+
+    /** Mirrors the assembler's default, for reading back a plan stored before the column existed. */
+    private static final int DEFAULT_BILLING_CYCLE_DAYS = 30;
 
     private final ExecutionPlanRepository plans;
     private final PlanPhaseRepository phases;
@@ -103,14 +106,15 @@ public class ExecutionPlanService {
     @Transactional(readOnly = true)
     @PreAuthorize("hasAuthority('planning:generate')")
     public PlanResponse preview(UUID projectId, GeneratePlanRequest request) {
-        PlanInput input = input(projectId, request);
-        return toResponse(null, projectId, name(request), scenario(request), input,
-                PlanEngine.plan(input), false, 1);
+        PlanInputAssembler.Assembled assembled = input(projectId, request);
+        return toResponse(null, projectId, name(request), scenario(request), assembled,
+                PlanEngine.plan(assembled.input()), false, 1);
     }
 
     @PreAuthorize("hasAuthority('planning:generate')")
     public PlanResponse create(UUID projectId, GeneratePlanRequest request) {
-        PlanInput input = input(projectId, request);
+        PlanInputAssembler.Assembled assembled = input(projectId, request);
+        PlanInput input = assembled.input();
         PlanOutput output = PlanEngine.plan(input);
 
         int previous = plans.findByProjectIdAndOrgIdAndDeletedAtIsNullOrderByRevisionDesc(
@@ -122,7 +126,7 @@ public class ExecutionPlanService {
                 input.commencementDate(), input.allowedDays(), input.quotedPercent(),
                 input.terms().contractValue(), input.terms().paymentLagDays(), ENGINE_VERSION);
         plan.nextRevisionAfter(previous);
-        plan.describe(null, request.workTypeProfileId());
+        plan.describe(null, assembled.profile() == null ? null : assembled.profile().getId());
         PlanOutput.WorkingCapital capital = output.workingCapital();
         plan.recordOutcome(capital.peakFundingRequirement(), month(capital.peakMonth()),
                 capital.moneyBeforeDayOne(), month(capital.breakEvenMonth()),
@@ -135,7 +139,7 @@ public class ExecutionPlanService {
                 Map.of("projectId", String.valueOf(projectId),
                         "revision", String.valueOf(plan.getRevision()),
                         "peakFunding", String.valueOf(capital.peakFundingRequirement())), null);
-        return toResponse(plan.getId(), projectId, plan.getName(), plan.getScenario(), input,
+        return toResponse(plan.getId(), projectId, plan.getName(), plan.getScenario(), assembled,
                 output, false, plan.getRevision());
     }
 
@@ -199,16 +203,14 @@ public class ExecutionPlanService {
 
     // ------------------------------------------------------------------ internals
 
-    private PlanInput input(UUID projectId, GeneratePlanRequest request) {
-        WorkTypeProfile profile = request.workTypeProfileId() == null ? null
-                : profiles.findById(request.workTypeProfileId())
-                        .filter(row -> row.getOrgId().equals(currentUser.currentOrgId()))
-                        .orElse(null);
-        return assembler.forProject(projectId, profile, new PlanInputAssembler.Overrides(
-                request.commencementDate(), request.allowedDays(), request.quotedPercent(),
-                request.paymentLagDays(), request.defaultDailyWage(), request.dailyWageByTrade(),
-                request.workingDaysPerMonth(), request.monthlyStaffCost(), request.siteSetupCost(),
-                request.monthlyPlantAndTransport()));
+    private PlanInputAssembler.Assembled input(UUID projectId, GeneratePlanRequest request) {
+        return assembler.forProject(projectId, request.workTypeProfileId(),
+                new PlanInputAssembler.Overrides(
+                        request.commencementDate(), request.allowedDays(), request.quotedPercent(),
+                        request.billingCycleDays(), request.paymentLagDays(),
+                        request.defaultDailyWage(), request.dailyWageByTrade(),
+                        request.workingDaysPerMonth(), request.monthlyStaffCost(),
+                        request.siteSetupCost(), request.monthlyPlantAndTransport()));
     }
 
     private void writeChildren(UUID planId, PlanOutput output) {
@@ -255,8 +257,13 @@ public class ExecutionPlanService {
     private PlanResponse read(ExecutionPlan plan) {
         return new PlanResponse(plan.getId(), plan.getProjectId(), plan.getName(),
                 plan.getScenario(), plan.getCommencementDate(), plan.getAllowedDays(),
-                plan.getQuotedPercent(), plan.getContractValue(), plan.isBaselined(),
-                plan.getRevision(),
+                plan.getQuotedPercent(), plan.getContractValue(),
+                plan.getWorkTypeProfileId(),
+                plan.getWorkTypeProfileId() == null ? null
+                        : profiles.findById(plan.getWorkTypeProfileId())
+                                .map(WorkTypeProfile::getName).orElse(null),
+                DEFAULT_BILLING_CYCLE_DAYS, plan.getPaymentLagDays(),
+                plan.isBaselined(), plan.getRevision(),
                 phases.findByPlanId(plan.getId()).stream()
                         .sorted(java.util.Comparator.comparingInt(PlanPhase::getSequenceNo))
                         .map(row -> new PhaseView(row.getSequenceNo(), row.getDescription(),
@@ -302,10 +309,15 @@ public class ExecutionPlanService {
     }
 
     private static PlanResponse toResponse(UUID id, UUID projectId, String name, String scenario,
-                                           PlanInput input, PlanOutput output, boolean baselined,
-                                           int revision) {
+                                           PlanInputAssembler.Assembled assembled,
+                                           PlanOutput output, boolean baselined, int revision) {
+        PlanInput input = assembled.input();
+        WorkTypeProfile profile = assembled.profile();
         return new PlanResponse(id, projectId, name, scenario, input.commencementDate(),
                 input.allowedDays(), input.quotedPercent(), input.terms().contractValue(),
+                profile == null ? null : profile.getId(),
+                profile == null ? null : profile.getName(),
+                input.terms().billingCycleDays(), input.terms().paymentLagDays(),
                 baselined, revision,
                 output.phases().stream()
                         .map(phase -> new PhaseView(phase.sequence(), phase.description(),

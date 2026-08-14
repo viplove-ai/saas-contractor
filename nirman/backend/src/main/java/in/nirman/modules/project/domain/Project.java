@@ -43,6 +43,17 @@ public class Project extends BaseEntity {
     @Column(name = "contract_value", precision = 18, scale = 2)
     private BigDecimal contractValue;
 
+    /**
+     * The bid: a percentage above (+) or below (-) the estimated cost.
+     *
+     * <p>Every rupee a plan predicts moves with this, and it is the one figure no reading of the
+     * notice can supply — when the tender is read the quote has not been decided. Null on a
+     * project created before the column existed; a zero would be a claim that the work was bid
+     * at par, which is a different statement from not knowing.</p>
+     */
+    @Column(name = "quoted_percent", precision = 7, scale = 3)
+    private BigDecimal quotedPercent;
+
     @Column(name = "budget_amount", precision = 18, scale = 2)
     private BigDecimal budgetAmount;
 
@@ -137,6 +148,14 @@ public class Project extends BaseEntity {
 
     public void setContractValue(BigDecimal contractValue) {
         this.contractValue = contractValue;
+    }
+
+    public BigDecimal getQuotedPercent() {
+        return quotedPercent;
+    }
+
+    public void setQuotedPercent(BigDecimal quotedPercent) {
+        this.quotedPercent = quotedPercent;
     }
 
     public BigDecimal getBudgetAmount() {

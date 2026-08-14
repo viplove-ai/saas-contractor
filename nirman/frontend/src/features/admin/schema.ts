@@ -84,6 +84,14 @@ const optionalAmount = z
   .optional()
   .or(z.literal(''));
 
+/** Signed, and small. Bidding below the estimate is the ordinary case, not an error. */
+const optionalPercent = z
+  .string()
+  .trim()
+  .regex(/^-?\d{1,3}(\.\d{1,3})?$/, 'A percentage, up to three decimals')
+  .optional()
+  .or(z.literal(''));
+
 const optionalDate = z.string().optional().or(z.literal(''));
 
 export const projectSchema = z
@@ -100,6 +108,7 @@ export const projectSchema = z
     nitNumber: z.string().trim().max(80, 'At most 80 characters').optional(),
     tenderReference: z.string().trim().max(120, 'At most 120 characters').optional(),
     contractValue: optionalAmount,
+    quotedPercent: optionalPercent,
     budgetAmount: optionalAmount,
     startDate: optionalDate,
     expectedCompletionDate: optionalDate,

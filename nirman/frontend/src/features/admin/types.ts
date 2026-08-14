@@ -87,6 +87,8 @@ export interface AdminProject {
   nitNumber?: string;
   tenderReference?: string;
   contractValue?: number;
+  /** The bid: above (+) or below (-) the estimate. Every rupee of a plan moves with it. */
+  quotedPercent?: number;
   budgetAmount?: number;
   startDate?: string;
   expectedCompletionDate?: string;

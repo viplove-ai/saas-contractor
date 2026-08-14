@@ -34,6 +34,8 @@ public final class ProjectDtos {
             String nitNumber,
             String tenderReference,
             BigDecimal contractValue,
+            /** Above (+) or below (-) the estimate. Null means nobody has said. */
+            BigDecimal quotedPercent,
             BigDecimal budgetAmount,
             LocalDate startDate,
             LocalDate expectedCompletionDate,
@@ -67,6 +69,8 @@ public final class ProjectDtos {
             @Size(max = 80) String nitNumber,
             @Size(max = 120) String tenderReference,
             @PositiveOrZero @Digits(integer = 16, fraction = 2) BigDecimal contractValue,
+            /** Not @PositiveOrZero: bidding below the estimate is the ordinary case. */
+            @Digits(integer = 4, fraction = 3) BigDecimal quotedPercent,
             @PositiveOrZero @Digits(integer = 16, fraction = 2) BigDecimal budgetAmount,
             LocalDate startDate,
             LocalDate expectedCompletionDate,
@@ -81,6 +85,7 @@ public final class ProjectDtos {
             @Size(max = 80) String nitNumber,
             @Size(max = 120) String tenderReference,
             @PositiveOrZero @Digits(integer = 16, fraction = 2) BigDecimal contractValue,
+            @Digits(integer = 4, fraction = 3) BigDecimal quotedPercent,
             @PositiveOrZero @Digits(integer = 16, fraction = 2) BigDecimal budgetAmount,
             LocalDate startDate,
             LocalDate expectedCompletionDate,

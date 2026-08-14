@@ -217,6 +217,7 @@ export interface ProjectInput {
   nitNumber?: string | undefined;
   tenderReference?: string | undefined;
   contractValue?: number | undefined;
+  quotedPercent?: number | undefined;
   budgetAmount?: number | undefined;
   startDate?: string | undefined;
   expectedCompletionDate?: string | undefined;

@@ -99,6 +99,12 @@ public record PlanInput(
             BigDecimal securityDepositPercent,
             Map<String, BigDecimal> interimMinimums,
             Boolean clause7aApplicable,
+            /**
+             * How often a bill is raised, in days. A contractor bills on a rhythm — most bill
+             * monthly — and the Clause 7 minimum is the floor beneath it, not the trigger: a
+             * cycle that comes round on work worth less than the threshold waits.
+             */
+            int billingCycleDays,
             int paymentLagDays,
             BigDecimal incomeTaxTdsPercent,
             BigDecimal gstTdsPercent,

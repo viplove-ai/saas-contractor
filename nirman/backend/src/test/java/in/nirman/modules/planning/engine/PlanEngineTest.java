@@ -100,6 +100,31 @@ class PlanEngineTest {
         }
 
         @Test
+        @DisplayName("work with no norm gets a share of the time, not a day per unit")
+        void unnormedWorkDoesNotInventAProgramme() {
+            // 8,000 sqm of something no productivity norm covers. The fallback of one unit per
+            // gang-day would make this an 8,000-day programme and the plan would then call a
+            // one-year tender impossible — on the strength of work it has admitted it cannot
+            // schedule. It gets its share of the year instead.
+            WorkItem unknown = new WorkItem("9.1", "Specialist cladding", "Miscellaneous",
+                    "Civil Works", new BigDecimal("8000"), "SQM",
+                    new BigDecimal("4000000"), false);
+            PlanOutput plan = PlanEngine.plan(input(
+                    List.of(masonry("100"), unknown), List.of(), 365, "0"));
+
+            PlanOutput.Package block = packageFor(plan, "Miscellaneous");
+            assertThat(block.normed()).as("and it is marked as carrying no men").isFalse();
+            long days = java.time.temporal.ChronoUnit.DAYS.between(
+                    block.startDate(), block.endDate());
+            assertThat(days).as("its window fits inside the time allowed")
+                    .isLessThanOrEqualTo(365L);
+            assertThat(plan.findings())
+                    .filteredOn(finding -> finding.severity() == Finding.Severity.BLOCKING)
+                    .as("and no impossibility is claimed on account of it")
+                    .isEmpty();
+        }
+
+        @Test
         @DisplayName("a reconciliation placeholder is paid for but never scheduled")
         void syntheticLinesCarryValueAndNoWork() {
             WorkItem placeholder = new WorkItem("UNALLOCATED-1", "Unallocated BOQ balance",
@@ -320,7 +345,7 @@ class PlanEngineTest {
                         new BigDecimal("8"), Map.of()),
                 START, allowedDays, new BigDecimal(quotedPercent), items, milestones,
                 new CommercialTerms(contractValue, new BigDecimal("5"), new BigDecimal("2.5"),
-                        Map.of("Civil Works", new BigDecimal("500000")), true, 45,
+                        Map.of("Civil Works", new BigDecimal("500000")), true, 30, 45,
                         new BigDecimal("2"), new BigDecimal("2"), new BigDecimal("1"),
                         BigDecimal.ZERO, 6, new BigDecimal("50000")),
                 new CostBasis(Map.of("MASON", new BigDecimal("800"),

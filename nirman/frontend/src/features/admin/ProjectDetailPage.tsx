@@ -173,7 +173,17 @@ export function ProjectDetailPage() {
 
   return (
     <Stack spacing={3}>
-      <Stack direction="row" spacing={1} alignItems="flex-start">
+      {/*
+        Column on a phone. The button's label is six words long and there is no room beside a
+        project name on a 360px screen — squeezed into a row it wraps to three lines and pushes
+        the heading off the left. Below the heading it is a full-width tap target instead.
+      */}
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1}
+        alignItems={{ xs: 'stretch', sm: 'flex-start' }}
+      >
+        <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ minWidth: 0, flexGrow: 1 }}>
         <Tooltip title="Back to all projects">
           <IconButton component={Link} to="/projects" aria-label="Back to all projects" edge="start">
             <ArrowBackIcon />
@@ -192,6 +202,7 @@ export function ProjectDetailPage() {
           </Stack>
           <Typography color="text.secondary">{p.name}</Typography>
         </Box>
+        </Stack>
         {/*
           The one action this page offers. It sits beside the contract rather than under the
           BOQ because the plan is about the whole job — the time allowed, the money to find —
@@ -202,9 +213,9 @@ export function ProjectDetailPage() {
           to={`/projects/${p.id}/planning`}
           variant="outlined"
           startIcon={<InsightsIcon />}
-          sx={{ flexShrink: 0 }}
+          sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
         >
-          Planning &amp; execution strategy
+          Planning &amp; execution
         </Button>
       </Stack>
 

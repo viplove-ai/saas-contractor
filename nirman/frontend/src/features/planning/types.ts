@@ -96,6 +96,11 @@ export interface Plan {
   allowedDays: number;
   quotedPercent: number;
   contractValue: number | null;
+  /** What the plan was built on, whether the user chose it or the schedule said so. */
+  workTypeProfileId: string | null;
+  workTypeProfileName: string | null;
+  billingCycleDays: number;
+  paymentLagDays: number;
   baselined: boolean;
   revision: number;
   phases: PhaseView[];
@@ -113,6 +118,7 @@ export interface GeneratePlanInput {
   commencementDate?: string;
   allowedDays?: number;
   quotedPercent?: number;
+  billingCycleDays?: number;
   paymentLagDays?: number;
   defaultDailyWage?: number;
   workingDaysPerMonth?: number;

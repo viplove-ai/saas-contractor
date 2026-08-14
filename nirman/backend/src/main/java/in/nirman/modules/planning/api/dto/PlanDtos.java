@@ -18,21 +18,25 @@ public final class PlanDtos {
     }
 
     /**
-     * What the user chose, which always beats what was extracted.
+     * What the user chose, which always beats what was read.
      *
-     * <p>Every field is optional. The screen shows what the tender said and the plan's own
-     * defaults; what comes back is only what somebody deliberately changed, so a blank is "use
-     * what you read" rather than "use zero".</p>
+     * <p>Every field is optional, and most are meant to stay empty. The kind of work is detected
+     * from the schedule, the bid is held on the project, and the rest have defaults — so a blank
+     * means "use what you worked out" rather than "use zero", and a screen only has to ask about
+     * the one or two things a person genuinely varies.</p>
      *
-     * @param quotedPercent the bid, above (positive) or below (negative) the estimate. Not
-     *                      extractable — at the time the notice is read it has not been decided
-     *                      — and the single number a bid case exists to move.
+     * @param workTypeProfileId overrides the detection, which reads the BOQ's own categories
+     * @param quotedPercent     overrides {@code projects.quoted_percent}, which is where the bid
+     *                          lives — it is a property of the contract, not of a plan
+     * @param billingCycleDays  how often a bill is raised. The Clause 7 minimum is the floor
+     *                          beneath it: a cycle due on less than the threshold waits.
      */
     public record GeneratePlanRequest(
             UUID workTypeProfileId,
             LocalDate commencementDate,
             @Min(1) @Max(3650) Integer allowedDays,
             @Digits(integer = 3, fraction = 3) BigDecimal quotedPercent,
+            @Min(7) @Max(365) Integer billingCycleDays,
             @Min(0) @Max(365) Integer paymentLagDays,
             @Digits(integer = 8, fraction = 2) BigDecimal defaultDailyWage,
             Map<String, BigDecimal> dailyWageByTrade,
@@ -139,6 +143,11 @@ public final class PlanDtos {
             int allowedDays,
             BigDecimal quotedPercent,
             BigDecimal contractValue,
+            /** What the plan was built on, whether the user chose it or the schedule said so. */
+            UUID workTypeProfileId,
+            String workTypeProfileName,
+            int billingCycleDays,
+            int paymentLagDays,
             boolean baselined,
             int revision,
             List<PhaseView> phases,

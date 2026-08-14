@@ -10,6 +10,7 @@ import in.nirman.modules.planning.repository.LabourProductivityNormRepository;
 import in.nirman.modules.planning.repository.MaterialLeadTimeRepository;
 import in.nirman.modules.planning.repository.WorkSequenceNormRepository;
 import in.nirman.modules.project.service.BoqLookup;
+import in.nirman.modules.project.service.ProjectLookup;
 import in.nirman.modules.tender.service.NitLookup;
 import in.nirman.security.CurrentUserProvider;
 import org.springframework.stereotype.Component;
@@ -38,10 +39,13 @@ public class PlanInputAssembler {
     static final BigDecimal GST_TDS = new BigDecimal("2");
     static final BigDecimal LABOUR_CESS = new BigDecimal("1");
     static final BigDecimal BG_COMMISSION = new BigDecimal("1.2");
+    /** Most contractors bill monthly, so that is where the cycle starts. */
+    static final int DEFAULT_BILLING_CYCLE_DAYS = 30;
     static final int DEFAULT_PAYMENT_LAG_DAYS = 45;
     static final int DEFAULT_DEFECT_LIABILITY_MONTHS = 6;
 
     private final BoqLookup boq;
+    private final ProjectLookup projects;
     private final NitLookup tenders;
     private final InventoryLookup inventory;
     private final MaterialLookup materials;
@@ -50,16 +54,21 @@ public class PlanInputAssembler {
     private final LabourProductivityNormRepository productivity;
     private final WorkSequenceNormRepository sequence;
     private final MaterialLeadTimeRepository leadTimes;
+    private final in.nirman.modules.planning.repository.WorkTypeProfileRepository profiles;
     private final CurrentUserProvider currentUser;
 
-    public PlanInputAssembler(BoqLookup boq, NitLookup tenders, InventoryLookup inventory,
+    public PlanInputAssembler(BoqLookup boq, ProjectLookup projects, NitLookup tenders,
+                              InventoryLookup inventory,
                               MaterialLookup materials, SkillLookup skills,
                               UnitLookup units,
                               LabourProductivityNormRepository productivity,
                               WorkSequenceNormRepository sequence,
                               MaterialLeadTimeRepository leadTimes,
+                              in.nirman.modules.planning.repository.WorkTypeProfileRepository profiles,
                               CurrentUserProvider currentUser) {
+        this.profiles = profiles;
         this.boq = boq;
+        this.projects = projects;
         this.tenders = tenders;
         this.inventory = inventory;
         this.materials = materials;
@@ -74,8 +83,9 @@ public class PlanInputAssembler {
     /**
      * @param overrides what the user chose on the screen, which always beats what was extracted
      */
-    public PlanInput forProject(UUID projectId, WorkTypeProfile profile, Overrides overrides) {
+    public Assembled forProject(UUID projectId, UUID requestedProfileId, Overrides overrides) {
         NitLookup.TenderTerms terms = tenders.forProject(projectId).orElse(null);
+        ProjectLookup.ProjectContract contract = projects.contract(projectId).orElse(null);
 
         List<PlanInput.WorkItem> items = boq.forProject(projectId).stream()
                 .map(line -> new PlanInput.WorkItem(line.itemNumber(), line.description(),
@@ -95,10 +105,44 @@ public class PlanInputAssembler {
                 .filter(java.util.Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        return new PlanInput(toProfile(profile), commencement, allowedDays,
-                overrides.quotedPercent() == null ? BigDecimal.ZERO : overrides.quotedPercent(),
+        WorkTypeProfile profile = resolveProfile(requestedProfileId, items,
+                contract == null ? null : contract.name());
+
+        // The bid belongs to the contract, not to the plan. Two plans of one project that
+        // disagreed about what was actually quoted would both be wrong about the money.
+        BigDecimal quoted = overrides.quotedPercent() != null ? overrides.quotedPercent()
+                : contract != null && contract.quotedPercent() != null ? contract.quotedPercent()
+                : BigDecimal.ZERO;
+
+        PlanInput input = new PlanInput(toProfile(profile), commencement, allowedDays, quoted,
                 items, milestones(terms, allowedDays),
                 terms(terms, contractValue, overrides), costs(overrides), norms());
+        return new Assembled(input, profile);
+    }
+
+    /** The input, and which profile it was built on — detected unless the user named one. */
+    public record Assembled(PlanInput input, WorkTypeProfile profile) {
+    }
+
+    /**
+     * The user's choice if there is one, otherwise what the schedule says the job is.
+     *
+     * <p>Asking somebody to pick from a list of seven when the tender in front of them answers it
+     * is a question with a right answer, and those are the ones a screen should not ask. The
+     * detected profile is still shown and still changeable.</p>
+     */
+    private WorkTypeProfile resolveProfile(UUID requestedProfileId,
+                                           List<PlanInput.WorkItem> items, String projectName) {
+        UUID orgId = currentUser.currentOrgId();
+        if (requestedProfileId != null) {
+            WorkTypeProfile chosen = profiles.findById(requestedProfileId)
+                    .filter(row -> row.getOrgId().equals(orgId)).orElse(null);
+            if (chosen != null) {
+                return chosen;
+            }
+        }
+        return profiles.findByOrgIdAndCode(orgId, WorkTypeDetector.detect(items, projectName))
+                .orElse(null);
     }
 
     /** The choices a plan cannot read out of a document, with the engine's own defaults. */
@@ -106,6 +150,7 @@ public class PlanInputAssembler {
             LocalDate commencementDate,
             Integer allowedDays,
             BigDecimal quotedPercent,
+            Integer billingCycleDays,
             Integer paymentLagDays,
             BigDecimal defaultDailyWage,
             Map<String, BigDecimal> dailyWageByTrade,
@@ -115,7 +160,7 @@ public class PlanInputAssembler {
             BigDecimal monthlyPlantAndTransport) {
 
         public static Overrides empty() {
-            return new Overrides(null, null, null, null, null, null, null, null, null, null);
+            return new Overrides(null, null, null, null, null, null, null, null, null, null, null);
         }
     }
 
@@ -161,6 +206,8 @@ public class PlanInputAssembler {
                         terms.securityDepositPercent(), new BigDecimal("2.5")),
                 thresholds,
                 terms == null ? null : terms.clause7aApplicable(),
+                overrides.billingCycleDays() == null
+                        ? DEFAULT_BILLING_CYCLE_DAYS : overrides.billingCycleDays(),
                 overrides.paymentLagDays() == null
                         ? DEFAULT_PAYMENT_LAG_DAYS : overrides.paymentLagDays(),
                 INCOME_TAX_TDS, GST_TDS, LABOUR_CESS, BigDecimal.ZERO,
