@@ -23,3 +23,9 @@ backend/.mvn/wrapper/maven-wrapper.jar
 
 # Local dev runtime: logs and the generated dev JWT signing key.
 .dev/
+
+# Tenders collected to read and to test the NIT parser against. They are somebody else's
+# published documents, they are tens of megabytes of scanned PDF, and git keeps every version
+# of a binary for good — so a folder that grows by a tender a week would be paid for on every
+# clone, forever. The parser's own fixtures live with its tests; this is a working pile.
+docs/NIT documents/

@@ -1,0 +1,7 @@
+# Repository-wide ignores. `nirman/.gitignore` covers the application itself; this one exists
+# for everything beside it — the design shell, the workflows, and the repository root, none of
+# which were covered by an ignore file at all.
+
+# macOS writes one of these into every folder somebody opens in Finder. nirman/.gitignore has
+# ignored them since the start; the root and the design shell were simply outside its reach.
+.DS_Store
