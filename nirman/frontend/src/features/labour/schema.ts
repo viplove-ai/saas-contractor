@@ -44,30 +44,34 @@ export type OnboardWorkerForm = z.infer<typeof onboardWorkerSchema>;
  *
  * <p>Pay is not here at all. A rate is revised, never edited, so it cannot sit in a form
  * whose whole nature is to overwrite what was there.</p>
+ *
+ * <p>Whether he is still here is the one field on it that is routinely changed twice: a man
+ * is stood down and taken back on, so both directions have to be as cheap as each other.</p>
  */
-export const editWorkerSchema = z
-  .object({
-    fullName: z.string().trim().min(1, 'Enter his full name').max(150, 'At most 150 characters'),
-    mobile: z
-      .string()
-      .trim()
-      .min(1, 'Enter his mobile number')
-      .max(20, 'At most 20 characters')
-      .refine((value) => value.replace(/\D/g, '').length >= 10, 'At least ten digits'),
-    skillCategoryId: z.string().optional(),
-    employmentType: z.enum(['PERMANENT', 'CONTRACT', 'CASUAL']),
-    /** Only editable by someone who may set pay; passed through unchanged for everyone else. */
-    wageType: z.enum(['DAILY', 'HOURLY', 'MONTHLY']),
-    joiningDate: z.string().optional(),
-    active: z.enum(['working', 'left']),
-    exitDate: z.string().optional(),
-  })
-  // A man marked Left with no last day leaves the muster roll on a date nobody can name, and
-  // that date is what every question about his final wages is asked against.
-  .refine((values) => values.active === 'working' || Boolean(values.exitDate), {
-    path: ['exitDate'],
-    message: 'Give his last day',
-  });
+export const editWorkerSchema = z.object({
+  fullName: z.string().trim().min(1, 'Enter his full name').max(150, 'At most 150 characters'),
+  mobile: z
+    .string()
+    .trim()
+    .min(1, 'Enter his mobile number')
+    .max(20, 'At most 20 characters')
+    .refine((value) => value.replace(/\D/g, '').length >= 10, 'At least ten digits'),
+  skillCategoryId: z.string().optional(),
+  employmentType: z.enum(['PERMANENT', 'CONTRACT', 'CASUAL']),
+  /** Only editable by someone who may set pay; passed through unchanged for everyone else. */
+  wageType: z.enum(['DAILY', 'HOURLY', 'MONTHLY']),
+  joiningDate: z.string().optional(),
+  /**
+   * Whether he is on the roll. This said Working or Left, and the last day below it was
+   * required, because Left meant one thing: gone for good. Inactive covers the commoner
+   * case as well — a man off for a fortnight, a man the site stands down between pours —
+   * and demanding a last day for him would put a leaving date on somebody who has not
+   * left. It stays optional and stays asked for, because for a man who really has gone it
+   * is the date his final settlement is reckoned against.
+   */
+  active: z.enum(['active', 'inactive']),
+  exitDate: z.string().optional(),
+});
 
 export type EditWorkerForm = z.infer<typeof editWorkerSchema>;
 

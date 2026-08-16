@@ -28,8 +28,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>Two acts that look alike and are not. A supervisor <b>edits</b>: he took the man on at
  * the gate, and a name or a number he typed wrongly is his own to fix. Only the engineer and
  * the office <b>delete</b>, and only a row that should never have existed — the same man
- * entered twice, a name typed into the wrong site. A man who actually worked is marked Left,
- * because his days carry wages that have already been reported.</p>
+ * entered twice, a name typed into the wrong site. A man who actually worked is marked
+ * Inactive, because his days carry wages that have already been reported.</p>
  *
  * <p>Vivek is a supervisor at KSN-A and nothing else, which is what makes his refusals worth
  * asserting. Viplove holds ADMIN. Uttam holds ENGINEER — and ADMIN as well, so his success
@@ -212,7 +212,7 @@ class WorkerEditDeleteIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.detail").value(
                         org.hamcrest.Matchers.containsString("1 attendance record")))
                 .andExpect(jsonPath("$.detail").value(
-                        org.hamcrest.Matchers.containsString("mark him Left instead")));
+                        org.hamcrest.Matchers.containsString("mark him Inactive instead")));
 
         // Still on the register, and still markable tomorrow.
         mockMvc.perform(get("/api/v1/workers/" + workerId)

@@ -39,9 +39,12 @@ interface Props {
  * month decides what the number beside it means, so changing it is a pay decision even
  * though it is not a number.</p>
  *
- * <p>Marked Left is the ordinary end of a man's time here and is not deletion: his months
- * keep their wages and still count towards what the site cost. So it asks for his last day,
- * which is the date every question about his final settlement is asked against.</p>
+ * <p>Marked Inactive takes him off the roll and is not deletion: his months keep their wages
+ * and still count towards what the site cost. It is also not permanent — a man stood down
+ * between pours and a man who has gone for good are the same act here, undone by putting the
+ * field back to Active — which is why the last day beside it is asked for and not required.
+ * For a man who really has gone it is the date his final settlement is reckoned against; for
+ * a man back on Monday there is no such date to give.</p>
  */
 export function EditWorkerDialog({ worker, onClose }: Props) {
   const { hasPermission } = useAuth();
@@ -65,7 +68,7 @@ export function EditWorkerDialog({ worker, onClose }: Props) {
       employmentType: 'CONTRACT',
       wageType: 'DAILY',
       joiningDate: '',
-      active: 'working',
+      active: 'active',
       exitDate: '',
     },
   });
@@ -85,7 +88,7 @@ export function EditWorkerDialog({ worker, onClose }: Props) {
       employmentType: worker.employmentType,
       wageType: worker.wageType,
       joiningDate: worker.joiningDate ?? '',
-      active: worker.active ? 'working' : 'left',
+      active: worker.active ? 'active' : 'inactive',
       exitDate: worker.exitDate ?? '',
     });
   }, [worker, reset]);
@@ -95,7 +98,7 @@ export function EditWorkerDialog({ worker, onClose }: Props) {
       return;
     }
     setServerError(null);
-    const working = values.active === 'working';
+    const working = values.active === 'active';
     try {
       await update.mutateAsync({
         id: worker.id,
@@ -108,7 +111,7 @@ export function EditWorkerDialog({ worker, onClose }: Props) {
         labourSupplierId: worker.labourSupplierId,
         wageType: values.wageType,
         joiningDate: values.joiningDate || undefined,
-        // A man put back to working keeps no last day, or he is on the roll and gone at once.
+        // A man put back to Active keeps no last day, or he is on the roll and gone at once.
         exitDate: working ? undefined : values.exitDate || undefined,
         aadhaarLast4: worker.aadhaarLast4,
         bankAccountNo: worker.bankAccountNo,
@@ -212,21 +215,24 @@ export function EditWorkerDialog({ worker, onClose }: Props) {
                 {...field}
                 select
                 label="Status"
-                helperText="A man marked Left comes off the roll and keeps every day he worked."
+                helperText="Inactive takes him off the attendance list and keeps every day he worked. Put him back to Active whenever he returns."
               >
-                <MenuItem value="working">Working</MenuItem>
-                <MenuItem value="left">Left</MenuItem>
+                <MenuItem value="active">Active</MenuItem>
+                <MenuItem value="inactive">Inactive</MenuItem>
               </TextField>
             )}
           />
 
-          {status === 'left' && (
+          {status === 'inactive' && (
             <TextField
-              label="Last day"
+              label="Last day (optional)"
               type="date"
               InputLabelProps={{ shrink: true }}
               error={!!errors.exitDate}
-              helperText={errors.exitDate?.message ?? 'The last day he was on the site.'}
+              helperText={
+                errors.exitDate?.message ??
+                'Only if he has gone for good — leave it empty for a man you expect back.'
+              }
               {...register('exitDate')}
             />
           )}

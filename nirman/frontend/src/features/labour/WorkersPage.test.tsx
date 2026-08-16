@@ -243,21 +243,95 @@ describe('WorkersPage', () => {
     expect(body.version).toBe(3);
   });
 
-  // Marking him Left is the ordinary end of a man's time here; deletion is for a row that
-  // should not exist. Without a last day the first of those has no date to be asked about.
-  it('will not mark a man Left without his last day', async () => {
+  /*
+    Standing a man down is the whole point of the flag and is expected to be undone, so it
+    asks for nothing. The last day used to be mandatory here, back when the only way off the
+    roll was called Left — which made a fortnight's absence cost a leaving date that was not
+    true, on a man who would be back.
+  */
+  it('stands a man down without asking for a last day', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
     await screen.findAllByText('Karam Singh');
     const row = table().getByText('Karam Singh').closest('tr') as HTMLElement;
     await user.click(within(row).getByRole('button', { name: 'Edit' }));
 
-    await user.click(await screen.findByRole('combobox', { name: 'Status' }));
-    await user.click(screen.getByRole('option', { name: 'Left' }));
-    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    // Scoped to the dialog: the register's own filter is labelled Status too.
+    const form = within(await screen.findByRole('dialog'));
+    await user.click(form.getByRole('combobox', { name: 'Status' }));
+    await user.click(screen.getByRole('option', { name: 'Inactive' }));
+    await user.click(form.getByRole('button', { name: 'Save changes' }));
 
-    expect(await screen.findByText('Give his last day')).toBeInTheDocument();
-    expect(put).not.toHaveBeenCalled();
+    await waitFor(() => expect(put).toHaveBeenCalledOnce());
+    const [url, body] = put.mock.calls[0] as [string, { active: boolean; exitDate?: string }];
+    expect(url).toBe('/workers/w1');
+    expect(body.active).toBe(false);
+    expect(body.exitDate).toBeUndefined();
+  });
+
+  // The other direction, which is the reason the first one is safe: nothing is lost, and the
+  // leaving date a man picked up on his way out does not survive his coming back.
+  it('puts an inactive man back on the roll and clears his last day', async () => {
+    const gone: PageResponse<Worker> = {
+      ...WORKERS,
+      content: WORKERS.content
+        .slice(0, 1)
+        .map((worker) => ({ ...worker, active: false, exitDate: '2026-07-31' })),
+    };
+    get.mockImplementation((url: string) => {
+      if (url === '/workers') return Promise.resolve({ data: gone });
+      if (url === '/sites') return Promise.resolve({ data: MY_SITES });
+      if (url === '/sites/directory') return Promise.resolve({ data: DIRECTORY });
+      if (url === '/skill-categories') return Promise.resolve({ data: [] });
+      if (url === '/labour-contractors')
+        return Promise.resolve({ data: { ...WORKERS, content: [] } });
+      return Promise.reject(new Error(`unexpected GET ${url}`));
+    });
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('Karam Singh');
+    const row = table().getByText('Karam Singh').closest('tr') as HTMLElement;
+    expect(within(row).getByText('Inactive')).toBeInTheDocument();
+
+    await user.click(within(row).getByRole('button', { name: 'Edit' }));
+    const form = within(await screen.findByRole('dialog'));
+    await user.click(form.getByRole('combobox', { name: 'Status' }));
+    await user.click(screen.getByRole('option', { name: 'Active' }));
+    await user.click(form.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(put).toHaveBeenCalledOnce());
+    const [, body] = put.mock.calls[0] as [string, { active: boolean; exitDate?: string }];
+    expect(body.active).toBe(true);
+    expect(body.exitDate).toBeUndefined();
+  });
+
+  /*
+    The register shows everybody by default — it is where a man stood down is found again —
+    and the filter is what narrows it. The server does the narrowing, because the page holds
+    only the first 200 rows and filtering those in the browser would answer "show me the
+    inactive men" with whichever of them happened to be on this page.
+  */
+  it('asks the server for the men of one status, and shows everybody until asked', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('Karam Singh');
+
+    const params = () => {
+      const last = get.mock.calls.filter((call) => call[0] === '/workers').at(-1) as [
+        string,
+        { params: { active?: boolean } },
+      ];
+      return last[1].params;
+    };
+    expect(params().active).toBeUndefined();
+
+    await user.click(screen.getByRole('combobox', { name: 'Status' }));
+    await user.click(screen.getByRole('option', { name: 'Inactive' }));
+    await waitFor(() => expect(params().active).toBe(false));
+
+    await user.click(screen.getByRole('combobox', { name: 'Status' }));
+    await user.click(screen.getByRole('option', { name: 'Active' }));
+    await waitFor(() => expect(params().active).toBe(true));
   });
 
   it('offers the supervisor no way to delete a man', async () => {

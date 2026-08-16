@@ -8,10 +8,12 @@ import type {
   SkillCategory,
   WageType,
   Worker,
+  WorkerStatusFilter,
 } from './types';
 
 export const labourKeys = {
-  workers: (siteId: string, q: string) => ['labour', 'workers', siteId, q] as const,
+  workers: (siteId: string, q: string, status: WorkerStatusFilter) =>
+    ['labour', 'workers', siteId, q, status] as const,
   allWorkers: ['labour', 'workers'] as const,
   allocations: (workerId: string) => ['labour', 'allocations', workerId] as const,
   directory: ['labour', 'site-directory'] as const,
@@ -22,13 +24,20 @@ export const labourKeys = {
 
 const PAGE_SIZE = 200;
 
-export function useWorkers(siteId: string, q: string) {
+export function useWorkers(siteId: string, q: string, status: WorkerStatusFilter = 'all') {
   return useQuery({
-    queryKey: labourKeys.workers(siteId, q),
+    queryKey: labourKeys.workers(siteId, q, status),
     queryFn: async () =>
       (
         await apiClient.get<PageResponse<Worker>>('/workers', {
-          params: { siteId: siteId || undefined, q: q || undefined, size: PAGE_SIZE },
+          params: {
+            siteId: siteId || undefined,
+            q: q || undefined,
+            // Left off entirely for "everybody" — the server reads an absent filter as no
+            // filter, and sending active=undefined is how axios omits it.
+            active: status === 'all' ? undefined : status === 'active',
+            size: PAGE_SIZE,
+          },
         })
       ).data,
     // Keep the previous list on screen while a new filter loads. Typing a search term

@@ -3,6 +3,15 @@
 export type WageType = 'DAILY' | 'HOURLY' | 'MONTHLY';
 export type EmploymentType = 'PERMANENT' | 'CONTRACT' | 'CASUAL';
 
+/**
+ * Whose names the register is showing. Everybody is the default, which is what the screen
+ * has always shown — a filter that hid men on arrival would answer "where has he gone" with
+ * silence. It is spelled `all` rather than the empty string a select usually uses for this,
+ * because an empty value leaves the box looking unset, and a filter nobody can see the state
+ * of is how a man goes missing from a list without anybody knowing why.
+ */
+export type WorkerStatusFilter = 'all' | 'active' | 'inactive';
+
 export interface WageRate {
   id: string;
   workerId: string;

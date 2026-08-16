@@ -20,7 +20,7 @@ import { useDeleteWorker, useMySites, useSiteDirectory, useWorkers } from './api
 import { EditWorkerDialog } from './EditWorkerDialog';
 import { OnboardWorkerDialog } from './OnboardWorkerDialog';
 import { TransferWorkerDialog } from './TransferWorkerDialog';
-import { WAGE_TYPE_LABEL, type Worker } from './types';
+import { WAGE_TYPE_LABEL, type Worker, type WorkerStatusFilter } from './types';
 
 /**
  * The men on your sites: who is here, what they are paid, and where they go next.
@@ -32,10 +32,15 @@ import { WAGE_TYPE_LABEL, type Worker } from './types';
  * <p>Nobody appears here who is not posted to one of your sites today, which is also who
  * you can mark. A man you transfer away drops off this list on his start date at the other
  * site, and that is the handover.</p>
+ *
+ * <p>The status filter shows everybody by default, because this is the register and not the
+ * roll — the roll is the attendance screen, which asks the server for the active men only. A
+ * man stood down has to stay findable here or there is no way to take him back on.</p>
  */
 export function WorkersPage() {
   const { hasPermission } = useAuth();
   const [search, setSearch] = useState('');
+  const [status, setStatus] = useState<WorkerStatusFilter>('all');
   const [onboarding, setOnboarding] = useState(false);
   const [transferring, setTransferring] = useState<Worker | null>(null);
   const [editing, setEditing] = useState<Worker | null>(null);
@@ -45,7 +50,7 @@ export function WorkersPage() {
   // The site the rest of the app is on, and "all my sites" still available beside it.
   const [siteId, setSiteId] = useSelectedSite(mySites.data, { allowAll: true });
   const directory = useSiteDirectory();
-  const workers = useWorkers(siteId, search);
+  const workers = useWorkers(siteId, search, status);
   const removeWorker = useDeleteWorker();
   const canWrite = hasPermission('worker:write');
   // The engineer and the office, never the supervisor: he corrects what he typed, but taking
@@ -109,7 +114,7 @@ export function WorkersPage() {
           size="small"
           color={worker.active ? 'success' : 'default'}
           variant={worker.active ? 'filled' : 'outlined'}
-          label={worker.active ? 'Working' : 'Left'}
+          label={worker.active ? 'Active' : 'Inactive'}
         />
       ),
     },
@@ -201,6 +206,18 @@ export function WorkersPage() {
             </MenuItem>
           ))}
         </TextField>
+        <TextField
+          select
+          label="Status"
+          value={status}
+          onChange={(event) => setStatus(event.target.value as WorkerStatusFilter)}
+          sx={{ minWidth: 180 }}
+          helperText="Only the active men can be marked."
+        >
+          <MenuItem value="all">Everybody</MenuItem>
+          <MenuItem value="active">Active</MenuItem>
+          <MenuItem value="inactive">Inactive</MenuItem>
+        </TextField>
       </Stack>
 
       {workers.isLoading && (
@@ -221,7 +238,14 @@ export function WorkersPage() {
               {/* With no posting the banner above has already said why. */}
               {noPosting
                 ? 'Nobody to show until you are posted to a site.'
-                : 'Nobody on your sites yet. Take on a worker to start marking attendance.'}
+                : /*
+                    An empty list under a filter is not an empty register, and telling a man
+                    to take somebody on because he asked to see the inactive ones and there
+                    are none would be answering a question he did not ask.
+                  */
+                  status !== 'all' || search
+                  ? 'Nobody matches what you have asked for.'
+                  : 'Nobody on your sites yet. Take on a worker to start marking attendance.'}
             </Typography>
           }
         />
@@ -245,7 +269,7 @@ export function WorkersPage() {
           again, which is one screen away. Saying an administrator can restore him would be
           a lie, and this dialog says so by default.
         */
-        description="This is for a man who should not be on the roll at all — the same worker entered twice, or a name typed into the wrong site. A man who worked here and has gone is marked Left instead, which keeps his days and his wages. Deleting him takes him off every list for good; take him on again if he turns up."
+        description="This is for a man who should not be on the roll at all — the same worker entered twice, or a name typed into the wrong site. A man who worked here and has stopped is marked Inactive instead, which keeps his days and his wages and lets you put him back. Deleting him takes him off every list for good; take him on again if he turns up."
         onConfirm={(reason) =>
           removeWorker.mutateAsync({ workerId: deleting?.id ?? '', reason })
         }

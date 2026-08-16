@@ -214,7 +214,7 @@ public class WorkerService {
      *
      * <p>Deletion here is for a row that should not exist — the same man entered twice at the
      * gate under two numbers, a name typed into the wrong site. A man who actually worked and
-     * has gone is marked <em>Left</em>, and stays visible on purpose: his months carry wages
+     * has stopped is marked <em>Inactive</em>, and stays visible on purpose: his months carry wages
      * that have already been reported, and hiding him would quietly change what the site cost.
      * {@link #assertDeletable} is what keeps the two apart, and it names what is holding him so
      * the answer is actionable rather than a flat refusal.</p>
@@ -264,8 +264,9 @@ public class WorkerService {
         }
         throw new BusinessException("worker.has-records",
                 "This worker has " + join(found) + " recorded against him. A man who has worked "
-                        + "cannot be taken off the books — mark him Left instead, which stops him "
-                        + "appearing on the roll and keeps his figures.");
+                        + "cannot be taken off the books — mark him Inactive instead, which stops "
+                        + "him appearing on the roll, keeps his figures, and can be undone when "
+                        + "he returns.");
     }
 
     /** "3 attendance records and 1 advance", not "3 attendance records, 1 advance". */
