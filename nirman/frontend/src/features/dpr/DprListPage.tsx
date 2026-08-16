@@ -30,7 +30,7 @@ import { StatusChip, type RecordStatus } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
 import { DeleteRecordDialog } from '../../shared/DeleteRecordDialog';
 import { downloadDprPdf, useDecideDpr, useDeleteDpr, useDpr, useDprs, useSites } from './api';
-import { isEditable } from './types';
+import { causeLabel, isEditable, isWritable } from './types';
 import type { Dpr, DprWorkflow, WorkItemResponse } from './types';
 
 const STATUS_CHIP: Record<DprWorkflow, RecordStatus> = {
@@ -98,7 +98,25 @@ export function DprListPage() {
   const columns: RecordColumn<Dpr>[] = [
     { key: 'report', header: 'Report', card: 'title', cell: (report) => report.dprNumber },
     { key: 'site', header: 'Site', cell: (report) => report.siteName },
-    { key: 'date', header: 'Date', cell: (report) => report.reportDate },
+    {
+      key: 'date',
+      header: 'Date',
+      cell: (report) => (
+        <>
+          {report.reportDate}
+          {/*
+            A lost day, said on the row rather than only inside the report. A register where
+            "no work, rain" looks exactly like a day with nothing filled in is a register
+            somebody has to open twelve reports to read.
+          */}
+          {!report.siteOperational && (
+            <Typography variant="body2" color="text.secondary">
+              No work — {causeLabel(report.nonOperationalCause)}
+            </Typography>
+          )}
+        </>
+      ),
+    },
     {
       key: 'men',
       header: 'Men',
@@ -129,7 +147,7 @@ export function DprListPage() {
       align: 'right',
       card: 'actions',
       cell: (report) =>
-        isEditable(report.workflowStatus) && (
+        isWritable(report.workflowStatus, canVerify) && (
           <Button
             component={Link}
             to={`/dpr/${report.id}`}
@@ -137,7 +155,12 @@ export function DprListPage() {
             startIcon={<EditIcon />}
             onClick={(event) => event.stopPropagation()}
           >
-            Continue
+            {/*
+              Two different acts behind one column. A draft is unfinished and its writer is
+              coming back to it; a submitted report is finished as far as its writer is
+              concerned and is waiting on the engineer for the half only he can write.
+            */}
+            {report.workflowStatus === 'SUBMITTED' ? 'Complete and sign' : 'Continue'}
           </Button>
         ),
     },
@@ -271,7 +294,7 @@ function ReportPanel({
         <Button size="small" startIcon={<DownloadIcon />} onClick={() => void download()}>
           Print
         </Button>
-        {isEditable(data.workflowStatus) && (
+        {isWritable(data.workflowStatus, canVerify) && (
           <Button
             component={Link}
             to={`/dpr/${data.id}`}
@@ -279,7 +302,9 @@ function ReportPanel({
             startIcon={<EditIcon />}
             onClick={onClose}
           >
-            Continue this report
+            {data.workflowStatus === 'SUBMITTED'
+              ? 'Complete and sign it'
+              : 'Continue this report'}
           </Button>
         )}
         {/*
@@ -300,6 +325,22 @@ function ReportPanel({
         )}
       </Stack>
       {downloadError && <Alert severity="error">{downloadError}</Alert>}
+
+      {/*
+        The lost day, first and on its own. It is the whole content of the report — there is
+        no work below it and no observation — so it goes above the figures rather than being
+        found at the bottom of a page of dashes.
+      */}
+      {!data.siteOperational && (
+        <Alert severity="warning" icon={false}>
+          <Typography fontWeight={600}>
+            Site not operational — {causeLabel(data.nonOperationalCause)}
+          </Typography>
+          {data.nonOperationalNote && (
+            <Typography variant="body2">{data.nonOperationalNote}</Typography>
+          )}
+        </Alert>
+      )}
 
       {data.workflowStatus === 'REJECTED' && data.rejectionReason && (
         <Alert severity="warning">Sent back: {data.rejectionReason}</Alert>
@@ -365,28 +406,56 @@ function ReportPanel({
         </Paper>
       )}
 
-      {data.workSummary && (
+      {/*
+        Every one of these is drawn only when the report carries it. The first three belong to
+        reports written on the older form, which asked for a summary, the delays and a note to
+        the office; those reports were signed with them in and go on showing them. The last two
+        are what the form asks for now.
+      */}
+      {(data.workSummary || data.delays || data.managementAttention
+        || data.instructionsReceived || data.nextDayPlan) && (
         <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
-          <Typography fontWeight={600}>The day</Typography>
-          <Typography variant="body2">{data.workSummary}</Typography>
-          {data.delays && (
-            <>
-              <Divider sx={{ my: 1 }} />
-              <Typography fontWeight={600}>Delays</Typography>
-              <Typography variant="body2">{data.delays}</Typography>
-            </>
-          )}
-          {data.managementAttention && (
-            <>
-              <Divider sx={{ my: 1 }} />
-              <Typography fontWeight={600}>Needs the office</Typography>
-              <Typography variant="body2">{data.managementAttention}</Typography>
-            </>
-          )}
+          <PanelNote label="The day" value={data.workSummary} first />
+          <PanelNote label="Delays" value={data.delays} first={!data.workSummary} />
+          <PanelNote
+            label="Needs the office"
+            value={data.managementAttention}
+            first={!data.workSummary && !data.delays}
+          />
+          <PanelNote
+            label="Instructions from the department"
+            value={data.instructionsReceived}
+            first={!data.workSummary && !data.delays && !data.managementAttention}
+          />
+          <PanelNote
+            label="Plan for tomorrow"
+            value={data.nextDayPlan}
+            first={
+              !data.workSummary && !data.delays && !data.managementAttention
+              && !data.instructionsReceived
+            }
+          />
         </Paper>
       )}
 
       {decide.isError && <Alert severity="error">{apiErrorDetail(decide.error)}</Alert>}
+
+      {/*
+        A working day nobody has written up yet. The server refuses to sign it and says so,
+        but being told after pressing the button is worse than being told instead of pressing
+        it — and the thing to do about it is one screen away.
+      */}
+      {canVerify && data.workflowStatus === 'SUBMITTED' && data.siteOperational
+        && data.workItems.length === 0 && !data.workSummary && (
+        <Alert severity="info">
+          Nothing has been recorded as built yet, so there is nothing to sign for. Work done
+          and the day&rsquo;s observations are yours to write —{' '}
+          <Box component={Link} to={`/dpr/${data.id}`} onClick={onClose} sx={{ color: 'inherit' }}>
+            open it
+          </Box>
+          .
+        </Alert>
+      )}
 
       {canVerify && data.workflowStatus === 'SUBMITTED' && (
         <Stack direction="row" spacing={2}>
@@ -452,6 +521,29 @@ function ReportPanel({
         onClose={() => setDeleting(false)}
       />
     </Stack>
+  );
+}
+
+/** One written box on the panel, drawn only when the report has one. */
+function PanelNote({
+  label,
+  value,
+  first,
+}: {
+  label: string;
+  value: string | undefined;
+  /** The rule above it is what separates two notes, so the first one does not get one. */
+  first: boolean;
+}) {
+  if (!value) {
+    return null;
+  }
+  return (
+    <>
+      {!first && <Divider sx={{ my: 1 }} />}
+      <Typography fontWeight={600}>{label}</Typography>
+      <Typography variant="body2">{value}</Typography>
+    </>
   );
 }
 

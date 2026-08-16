@@ -5,9 +5,60 @@ export type DprWorkflow = 'DRAFT' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED';
 /** Exactly the server's enum. A value it does not know is refused on save, not stored. */
 export type Weather = 'CLEAR' | 'CLOUDY' | 'RAIN' | 'HEAVY_RAIN' | 'EXTREME_HEAT';
 
+/**
+ * Why the site did not work. A picked cause rather than a sentence, because the value of
+ * recording a lost day is that it can be added up — "nine days to rain in July" is a claim
+ * against the department and "some days, see the notes" is not.
+ */
+export type NonOperationalCause =
+  | 'WEATHER'
+  | 'HOLIDAY'
+  | 'STRIKE'
+  | 'NO_LABOUR'
+  | 'MATERIAL_SHORTAGE'
+  | 'FUNDS'
+  | 'DEPARTMENT_INSTRUCTION'
+  | 'SITE_NOT_READY'
+  | 'OTHER';
+
+/** The same words the printed report uses, so the screen and the paper agree. */
+export const NON_OPERATIONAL_CAUSES: { value: NonOperationalCause; label: string }[] = [
+  { value: 'WEATHER', label: 'Weather' },
+  { value: 'HOLIDAY', label: 'Holiday' },
+  { value: 'STRIKE', label: 'Strike or bandh' },
+  { value: 'NO_LABOUR', label: 'No labour available' },
+  { value: 'MATERIAL_SHORTAGE', label: 'Material not available' },
+  { value: 'FUNDS', label: 'Funds not released' },
+  { value: 'DEPARTMENT_INSTRUCTION', label: 'Stopped by the department' },
+  { value: 'SITE_NOT_READY', label: 'Site not ready for work' },
+  { value: 'OTHER', label: 'Other' },
+];
+
+export function causeLabel(cause: NonOperationalCause | undefined): string {
+  return NON_OPERATIONAL_CAUSES.find((entry) => entry.value === cause)?.label ?? 'Not stated';
+}
+
+/** "Other" says nothing on its own, so it is the one cause the server also wants a note for. */
+export function causeNeedsNote(cause: NonOperationalCause | ''): boolean {
+  return cause === 'OTHER';
+}
+
 /** Draft and returned reports are still the preparer's to change — the server says the same. */
 export function isEditable(status: DprWorkflow): boolean {
   return status === 'DRAFT' || status === 'REJECTED';
+}
+
+/**
+ * Whether this user may still write to the report, and which half of it.
+ *
+ * <p>The report has two authors. A draft is the supervisor's: he records what the day was and
+ * hands it over. A submitted report is the engineer's, and he has to be able to write to it —
+ * work done and the day's observations are his, and a handover he could not finish would leave
+ * every report permanently half-written. The server enforces exactly this; here it decides
+ * which buttons exist.</p>
+ */
+export function isWritable(status: DprWorkflow, canVerify: boolean): boolean {
+  return isEditable(status) || (status === 'SUBMITTED' && canVerify);
 }
 
 export interface Site {
@@ -261,6 +312,10 @@ export interface Dpr {
   siteName?: string;
   projectId: string;
   reportDate: string;
+  /** False when the site did not work. The report is then about why, and nothing else. */
+  siteOperational: boolean;
+  nonOperationalCause?: NonOperationalCause;
+  nonOperationalNote?: string;
   weather?: Weather;
   temperatureC?: number;
   workingHoursLost?: number;
@@ -320,29 +375,51 @@ export interface MachineryInput {
   remarks?: string | undefined;
 }
 
-export interface DprNarrative {
+/**
+ * The supervisor's half: what the day <i>was</i>.
+ *
+ * <p>Split from the engineer's half below rather than kept as one flat shape, because that is
+ * the line the server enforces — a caller holding only `dpr:draft` may send this and not the
+ * other, and once the report has been handed over neither its author nor anybody else may send
+ * this again. A type that hid the split would leave every call site guessing at it.</p>
+ */
+export interface DprConditions {
+  siteOperational?: boolean | undefined;
+  nonOperationalCause?: NonOperationalCause | undefined;
+  nonOperationalNote?: string | undefined;
   weather?: Weather | undefined;
   temperatureC?: number | undefined;
   workingHoursLost?: number | undefined;
-  workSummary?: string | undefined;
-  delays?: string | undefined;
-  safetyObservations?: string | undefined;
-  qualityObservations?: string | undefined;
-  instructionsReceived?: string | undefined;
-  managementAttention?: string | undefined;
-  nextDayPlan?: string | undefined;
+  /**
+   * Plant that stood on the site, on the supervisor's side of the line because the line runs
+   * where claiming does: a quantity is a claim against the contract and a mixer's running
+   * hours are not.
+   */
+  machinery?: MachineryInput[];
 }
 
-export interface CreateDprInput extends DprNarrative {
+/**
+ * The engineer's half: what was built, and the two things the office cannot learn elsewhere.
+ *
+ * <p>The summary, the delays, the safety and quality boxes and the note to management are not
+ * here any more. Four of them were prose the site was asked for every evening and answered with
+ * "nil", and the fifth restated the work rows above it — a form that asks more than it needs
+ * teaches the man filling it that nothing on it is worth reading. The fields survive on
+ * {@link Dpr} because reports were signed with them in, and what was signed does not change
+ * because the form did.</p>
+ */
+export interface DprObservations {
+  instructionsReceived?: string | undefined;
+  nextDayPlan?: string | undefined;
+  workItems?: WorkItemInput[];
+}
+
+export interface CreateDprInput extends DprConditions, DprObservations {
   id: string;
   siteId: string;
   reportDate: string;
-  workItems?: WorkItemInput[];
-  machinery?: MachineryInput[];
 }
 
-export interface UpdateDprInput extends DprNarrative {
-  workItems?: WorkItemInput[];
-  machinery?: MachineryInput[];
+export interface UpdateDprInput extends DprConditions, DprObservations {
   version: number;
 }

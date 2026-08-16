@@ -12,6 +12,7 @@ import in.nirman.modules.dpr.api.dto.DprDtos.UpdateDprRequest;
 import in.nirman.modules.dpr.api.dto.DprDtos.VerifyDprRequest;
 import in.nirman.modules.dpr.api.dto.DprDtos.WorkItemInput;
 import in.nirman.modules.dpr.domain.DailyProgressReport;
+import in.nirman.modules.dpr.domain.DailyProgressReport.NonOperationalCause;
 import in.nirman.modules.dpr.domain.DailyProgressReport.Workflow;
 import in.nirman.modules.dpr.domain.DprLabour;
 import in.nirman.modules.dpr.domain.DprMachinery;
@@ -48,7 +49,25 @@ import java.util.UUID;
 /**
  * Daily progress reports: draft, submit, verify.
  *
- * <p>Four rules carry the weight.</p>
+ * <p>Six rules carry the weight.</p>
+ *
+ * <p><b>The report has two halves and two authors.</b> The supervisor says what the day
+ * <i>was</i> — whether the site worked, in what conditions, and what plant stood on the site —
+ * and hands it over; the engineer says what was <i>built</i> and signs. The line runs where
+ * claiming does: a quantity is a claim against the contract and a mixer's running hours are
+ * not, which is why plant sits on the supervisor's side of it. That is not organisational
+ * tidiness: a quantity on
+ * this report becomes a claim against the contract the moment it is verified, so the man who
+ * measures it and the man who signs for it are the same man, and the supervisor's half is
+ * frozen before either happens. {@code dpr:draft} and {@code dpr:verify} already named those two
+ * people, so no new permission was needed to draw the line — only enforcement, which lives in
+ * {@link #update}.</p>
+ *
+ * <p><b>A day the site did not work is a different document, not an empty one.</b> It carries a
+ * cause off a closed list and no work items at all, and it is submitted and signed like any
+ * other report. A missing report says nothing — it might be rain, it might be a supervisor who
+ * forgot — and only a report that says "no work, rain" can be counted towards a claim for
+ * time.</p>
  *
  * <p><b>One report per site per day.</b> Enforced by {@code uq_dpr_site_date} and checked here
  * first so the answer is a sentence naming the existing report rather than a constraint
@@ -187,12 +206,25 @@ public class DprService {
                                     .formatted(existing.getDprNumber(), request.reportDate()));
                 });
 
+        // Absent means the day was worked, which is what every report written before the
+        // question existed meant, and what an offline client on an older build still means.
+        boolean operational = request.siteOperational() == null || request.siteOperational();
+        assertCauseGiven(operational, request.nonOperationalCause(), request.nonOperationalNote());
+        assertNoWorkClaimedOnALostDay(operational, request.workItems());
+        boolean writesEngineerHalf = carriesEngineerHalf(request.workItems(),
+                request.workSummary(), request.delays(), request.safetyObservations(),
+                request.qualityObservations(), request.instructionsReceived(),
+                request.managementAttention(), request.nextDayPlan());
+        assertMayWriteEngineerHalf(writesEngineerHalf);
+
         SiteLookup.SiteInfo site = sites.require(request.siteId());
         String number = documentNumbers.next(orgId(), DocumentNumberService.DocType.DPR,
                 request.reportDate());
         DailyProgressReport report = new DailyProgressReport(request.id(), orgId(),
                 site.projectId(), site.id(), request.reportDate(), number,
                 currentUser.currentUserIdOrNull());
+        report.recordOperationalStatus(operational, request.nonOperationalCause(),
+                request.nonOperationalNote());
         report.recordConditions(request.weather(), request.temperatureC(),
                 request.workingHoursLost());
         report.recordNarrative(request.workSummary(), request.delays(),
@@ -207,31 +239,85 @@ public class DprService {
 
         audit.record(ENTITY_TYPE, report.getId(), "CREATE", null,
                 Map.of("dprNumber", number, "siteId", site.id().toString(),
-                        "reportDate", request.reportDate().toString()), null);
+                        "reportDate", request.reportDate().toString(),
+                        "siteOperational", operational), null);
         return responses.toResponse(report);
     }
 
+    /**
+     * Edits the report, applying only the half the caller owns.
+     *
+     * <p>While it is a draft it is the supervisor's, and he writes the day's conditions. Once it
+     * has been handed over it is the engineer's, and he writes the work and the observations on
+     * top of a supervisor's half that is now frozen along with the figures. The two halves are
+     * applied separately rather than checked and applied together, which is what stops a
+     * supervisor's save — sending an empty work list because his screen has no work step — from
+     * quietly deleting lines the engineer put on a report that was sent back to him.</p>
+     */
     @PreAuthorize("hasAuthority('dpr:draft')")
     public DprResponse update(UUID id, UpdateDprRequest request) {
         DailyProgressReport report = require(id);
         siteAccessGuard.assertCanAccess(report.getSiteId());
-        assertEditable(report);
+        assertWritable(report);
         if (!report.getVersion().equals(request.version())) {
             throw new OptimisticLockingFailureException("DPR " + id + " was changed by someone else");
         }
 
-        report.recordConditions(request.weather(), request.temperatureC(),
-                request.workingHoursLost());
-        report.recordNarrative(request.workSummary(), request.delays(),
-                request.safetyObservations(), request.qualityObservations(),
-                request.instructionsReceived(), request.managementAttention(),
-                request.nextDayPlan());
-        replaceWorkItems(report, request.workItems());
-        replaceMachinery(id, request.machinery());
-        refreshSnapshot(report);
+        boolean stillTheSupervisors = report.getWorkflowStatus().isEditable();
+        // Null means "leave it as it is", not "the site worked". A flag that defaulted to true
+        // on a field a client omitted would turn a rained-off day into a working one on the
+        // next save, which is the one mistake this column exists to make impossible.
+        boolean operational = request.siteOperational() == null
+                ? report.isSiteOperational() : request.siteOperational();
+        if (stillTheSupervisors) {
+            assertCauseGiven(operational, request.nonOperationalCause(),
+                    request.nonOperationalNote());
+            // The engineer can have put work on this report before sending it back, and the
+            // supervisor's half does not touch work items — so without this the day could end up
+            // saying nobody worked while carrying lines that claim otherwise. Refused rather
+            // than resolved by deleting his lines: if a quantity was measured, the site worked,
+            // and that is the answer to change.
+            if (!operational && !workItems.findByDprIdOrderBySortOrder(id).isEmpty()) {
+                throw new BusinessException("dpr.work-already-recorded",
+                        "Report " + report.getDprNumber() + " already has work recorded against "
+                                + "it, so it cannot be marked as a day the site did not work. "
+                                + "A quantity measured here is claimed against the contract.");
+            }
+            report.recordOperationalStatus(operational, request.nonOperationalCause(),
+                    request.nonOperationalNote());
+            report.recordConditions(request.weather(), request.temperatureC(),
+                    request.workingHoursLost());
+            // Plant is the supervisor's, beside the weather rather than beside the claim. A
+            // mixer that ran six hours and stood for two is something he watched happen; it
+            // measures against no contract line and nothing is billed off it.
+            replaceMachinery(id, request.machinery());
+        } else {
+            assertSupervisorHalfUntouched(report, request);
+        }
+
+        boolean writesEngineerHalf = carriesEngineerHalf(request.workItems(),
+                request.workSummary(), request.delays(), request.safetyObservations(),
+                request.qualityObservations(), request.instructionsReceived(),
+                request.managementAttention(), request.nextDayPlan());
+        assertMayWriteEngineerHalf(writesEngineerHalf);
+        if (currentUser.hasPermission("dpr:verify")) {
+            assertNoWorkClaimedOnALostDay(report.isSiteOperational(), request.workItems());
+            report.recordNarrative(request.workSummary(), request.delays(),
+                    request.safetyObservations(), request.qualityObservations(),
+                    request.instructionsReceived(), request.managementAttention(),
+                    request.nextDayPlan());
+            replaceWorkItems(report, request.workItems());
+        }
+
+        // A submitted report's figures are the document's own from the moment it was handed
+        // over. The engineer adding what was built does not re-open the day's arithmetic.
+        if (stillTheSupervisors) {
+            refreshSnapshot(report);
+        }
 
         audit.record(ENTITY_TYPE, id, "UPDATE", null,
                 Map.of("dprNumber", report.getDprNumber(),
+                        "half", stillTheSupervisors ? "supervisor" : "engineer",
                         "workItems", request.workItems() == null ? 0 : request.workItems().size()),
                 null);
         return responses.toResponse(report);
@@ -301,11 +387,18 @@ public class DprService {
     // ------------------------------------------------------------------ workflow
 
     /**
-     * Sends the report for the engineer's signature, and freezes its figures.
+     * Hands the report to the engineer, and freezes the supervisor's half of it.
      *
-     * <p>The snapshot is recomputed once more here, immediately before it is frozen, so the
-     * document says what the records said at the moment it was sent rather than at the moment
-     * the draft happened to be last touched.</p>
+     * <p>This is a handover rather than a finished document. The supervisor is saying that what
+     * the day was is now settled — the muster, the material, the bills and, on a day the site
+     * did not work, the cause — and from here the report is the engineer's to complete and
+     * sign.</p>
+     *
+     * <p>The snapshot is recomputed once more immediately before it is frozen, so the document
+     * says what the records said at the moment it was handed over rather than at the moment the
+     * draft happened to be last touched. Nothing is asked about work done, because on this side
+     * of the handover nobody has written any: the check that a report says <i>something</i> has
+     * moved to {@link #decide}, where the man who would be signing it is standing.</p>
      */
     @PreAuthorize("hasAuthority('dpr:draft')")
     public DprResponse submit(UUID id) {
@@ -315,11 +408,6 @@ public class DprService {
             throw new BusinessException("dpr.not-submittable",
                     "Report " + report.getDprNumber() + " is already "
                             + report.getWorkflowStatus().name().toLowerCase() + ".");
-        }
-        if (workItems.findByDprIdOrderBySortOrder(id).isEmpty() && isBlank(report.getWorkSummary())) {
-            throw new BusinessException("dpr.nothing-reported",
-                    "A daily report needs either a line of work done or a written summary of the "
-                            + "day. A report that says nothing cannot be verified.");
         }
 
         refreshSnapshot(report);
@@ -346,6 +434,21 @@ public class DprService {
                     "Report " + report.getDprNumber() + " is "
                             + report.getWorkflowStatus().name().toLowerCase()
                             + ", so there is nothing waiting to be signed.");
+        }
+
+        // The check that used to sit on submission, moved to where it belongs. A working day
+        // that claims nothing and describes nothing is not a report, and the engineer is the
+        // one who would be signing it — he owns the half that is missing, so telling him is
+        // telling the person who can fix it. A day the site did not work is exempt: its cause
+        // is the whole of what it has to say, and demanding a work line as well would be
+        // asking him to describe brickwork that nobody laid.
+        if (report.isSiteOperational() && request.action() == VerifyDprRequest.Action.VERIFY
+                && workItems.findByDprIdOrderBySortOrder(id).isEmpty()
+                && isBlank(report.getWorkSummary())) {
+            throw new BusinessException("dpr.nothing-reported",
+                    "Report " + report.getDprNumber() + " has no work recorded on it, so there "
+                            + "is nothing to sign for. Add what was built, or send it back if "
+                            + "the site did not work.");
         }
 
         Instant now = Instant.now();
@@ -477,13 +580,121 @@ public class DprService {
                 entry.remarks())));
     }
 
-    private static void assertEditable(DailyProgressReport report) {
-        if (!report.getWorkflowStatus().isEditable()) {
-            throw new BusinessException("dpr.not-editable",
-                    "Report " + report.getDprNumber() + " has been "
-                            + report.getWorkflowStatus().name().toLowerCase()
-                            + " and can no longer be edited. Its figures are what was signed.");
+    /**
+     * Whether this report is still open to being written, and to whom.
+     *
+     * <p>A draft or a returned report is the supervisor's. A submitted one is the engineer's —
+     * it is on his desk precisely so he can put the work done and the observations on it, and a
+     * handover he could not write to would leave the report permanently half-finished. A
+     * verified one belongs to nobody: it is the document that was signed.</p>
+     */
+    private void assertWritable(DailyProgressReport report) {
+        Workflow status = report.getWorkflowStatus();
+        if (status.isEditable()
+                || (status == Workflow.SUBMITTED && currentUser.hasPermission("dpr:verify"))) {
+            return;
         }
+        throw new BusinessException("dpr.not-editable",
+                "Report " + report.getDprNumber() + " has been " + status.name().toLowerCase()
+                        + " and is not yours to edit. "
+                        + (status == Workflow.SUBMITTED
+                        ? "It is with the engineer, who completes and signs it."
+                        : "Its figures are what was signed."));
+    }
+
+    /**
+     * A day the site did not work has to say why.
+     *
+     * <p>The database keeps the same promise through {@code ck_dpr_operational_cause}; this is
+     * here so the answer is a sentence a supervisor can act on rather than a constraint
+     * violation, and so "other" cannot stand in for an explanation on its own.</p>
+     */
+    private static void assertCauseGiven(boolean operational, NonOperationalCause cause,
+                                         String note) {
+        if (operational) {
+            return;
+        }
+        if (cause == null) {
+            throw new BusinessException("dpr.cause-required",
+                    "A day the site did not work has to say why. A lost day with no cause on it "
+                            + "cannot be counted towards a claim for time.");
+        }
+        if (cause.requiresNote() && isBlank(note)) {
+            throw new BusinessException("dpr.cause-note-required",
+                    "\"Other\" says nothing on its own. Write what stopped the work.");
+        }
+    }
+
+    /**
+     * Nothing is claimed against the contract on a day the site did not work.
+     *
+     * <p>Only the work items are refused, and not the machinery or the narrative. A work item is
+     * the row that reaches the measurement book, so a report claiming brickwork on a day it also
+     * says nobody worked is a contradiction that ends in a bill; a mixer standing idle in the
+     * rain is just a fact about the day, and there is no reason to argue with it.</p>
+     */
+    private static void assertNoWorkClaimedOnALostDay(boolean operational,
+                                                      List<WorkItemInput> lines) {
+        if (operational || lines == null || lines.isEmpty()) {
+            return;
+        }
+        throw new BusinessException("dpr.non-operational-work",
+                "This report says the site did not work that day, so it cannot also record work "
+                        + "done. Say the site worked, or take the work lines off.");
+    }
+
+    /**
+     * Whether the request carries anything belonging to the engineer's half of the report.
+     *
+     * <p>An empty list and a blank box are not an attempt to write: a supervisor's screen has no
+     * work step, so his save sends empty ones, and treating that as a write would either refuse
+     * every save he makes or — worse — let it through and delete lines the engineer had already
+     * put on a report that came back to him.</p>
+     *
+     * <p>Machinery is not asked about here. It moved to the supervisor's half with the rest of
+     * what he watched happen, and it is applied in {@link #update}'s first branch.</p>
+     */
+    private static boolean carriesEngineerHalf(List<WorkItemInput> lines, String... narrative) {
+        if (lines != null && !lines.isEmpty()) {
+            return true;
+        }
+        for (String value : narrative) {
+            if (!isBlank(value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void assertMayWriteEngineerHalf(boolean writes) {
+        if (writes && !currentUser.hasPermission("dpr:verify")) {
+            throw BusinessException.forbidden(
+                    "Work done and the day's observations are the engineer's part of the report. "
+                            + "Record what the day was and hand it over — a measured quantity "
+                            + "here becomes a claim against the contract when it is signed.");
+        }
+    }
+
+    /**
+     * The supervisor's half stops moving when he hands the report over.
+     *
+     * <p>Refused rather than ignored. The conditions, the operational status and the plant on
+     * site are his statement about a day he was standing on, frozen along with the figures at
+     * the same moment and for the same reason — and an engineer who could quietly rewrite them
+     * would be signing his own account of somebody else's day.</p>
+     */
+    private static void assertSupervisorHalfUntouched(DailyProgressReport report,
+                                                      UpdateDprRequest request) {
+        if (request.siteOperational() == null && request.nonOperationalCause() == null
+                && isBlank(request.nonOperationalNote()) && request.weather() == null
+                && request.temperatureC() == null && request.workingHoursLost() == null
+                && (request.machinery() == null || request.machinery().isEmpty())) {
+            return;
+        }
+        throw new BusinessException("dpr.supervisor-half-frozen",
+                "What the day was is settled: report " + report.getDprNumber() + " was handed "
+                        + "over and its conditions were frozen with its figures. Send it back to "
+                        + "the supervisor if they are wrong.");
     }
 
     private DailyProgressReport require(UUID id) {

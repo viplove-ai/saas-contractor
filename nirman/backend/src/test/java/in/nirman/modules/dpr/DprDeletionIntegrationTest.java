@@ -189,9 +189,10 @@ class DprDeletionIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(post("/api/v1/dprs")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
+                        // The supervisor's half and nothing else: what was built is the
+                        // engineer's to write, and this is a token holding dpr:draft alone.
                         .content("""
-                                {"id":"%s","siteId":"%s","reportDate":"%s","weather":"CLEAR",
-                                 "workSummary":"Brickwork on the north wall"}"""
+                                {"id":"%s","siteId":"%s","reportDate":"%s","weather":"CLEAR"}"""
                                 .formatted(id, SITE_A, day)))
                 .andExpect(status().isCreated());
         return id;

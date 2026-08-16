@@ -1,4 +1,19 @@
 import '@testing-library/jest-dom/vitest';
+import { configure } from '@testing-library/react';
+
+/**
+ * How long a `findBy*` waits before it gives up.
+ *
+ * <p>Testing Library's own limit, and separate from the test timeout `vite.config.ts` raises
+ * for the same reason. One second is generous for a screen that loads once and enough for
+ * nothing that loads twice: the daily report resolves its prefill and only then knows which
+ * report to fetch, so a query waiting on the second one is waiting on two round trips through
+ * the query client plus two renders of a MUI tree. That fits inside a second when the file
+ * runs alone and does not when forty-two of them run at once — which showed up as tests that
+ * passed individually and failed in the suite. A machine speed problem, so the limit moves
+ * rather than the tests.</p>
+ */
+configure({ asyncUtilTimeout: 5000 });
 /*
   jsdom ships no IndexedDB, and from Phase 7 the offline queue is mounted under every screen —
   the banner counts unsent records on mount and the sync provider drains on mount. Without a

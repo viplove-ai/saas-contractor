@@ -58,6 +58,65 @@ public class DailyProgressReport extends BaseEntity {
     /** What the day was like. Weather is the usual documented cause of a lost working hour. */
     public enum Weather { CLEAR, CLOUDY, RAIN, HEAVY_RAIN, EXTREME_HEAT }
 
+    /**
+     * Why the site did not work, off a closed list rather than out of a sentence.
+     *
+     * <p>A picked cause is countable and a sentence is not, and the whole value of recording a
+     * lost day is that it can be added up: "nine days to rain in July" is a claim against the
+     * department, "some days, see the notes" is not. The note that travels beside it carries
+     * which road flooded and which letter stopped the work — the cause is the half a query
+     * groups by, the note is the half a person reads.</p>
+     *
+     * <p>Adding a value here is a migration, deliberately: every reading that groups by cause
+     * has to be told about a new one rather than quietly dropping it into an "other" bucket.</p>
+     */
+    public enum NonOperationalCause {
+        /** Rain, flooding, heat — the cause that pairs with {@link Weather}. */
+        WEATHER,
+        /** A declared holiday, a festival, a day the department itself was shut. */
+        HOLIDAY,
+        /** A strike or a bandh, ours or somebody else's. */
+        STRIKE,
+        /** The gang did not come, and no supplier sent one. */
+        NO_LABOUR,
+        /** Nothing to build with — the store was empty and no lorry arrived. */
+        MATERIAL_SHORTAGE,
+        /** Money, not material: a payment or a release that did not come. */
+        FUNDS,
+        /** The department stopped the work, in writing or on site. */
+        DEPARTMENT_INSTRUCTION,
+        /** The site could not be worked — no access, no drawing, another agency in the way. */
+        SITE_NOT_READY,
+        /** None of the above, and the note is what says it. */
+        OTHER;
+
+        /** OTHER on its own says nothing, so it is the one cause that requires the note. */
+        public boolean requiresNote() {
+            return this == OTHER;
+        }
+
+        /**
+         * What the printed report calls it.
+         *
+         * <p>On the entity rather than in the template because the PDF is not the only reader —
+         * a monthly delay statement counts these and has to name them the same way. The enum is
+         * the closed list, so it is the right place for the closed list of words.</p>
+         */
+        public String label() {
+            return switch (this) {
+                case WEATHER -> "Weather";
+                case HOLIDAY -> "Holiday";
+                case STRIKE -> "Strike or bandh";
+                case NO_LABOUR -> "No labour available";
+                case MATERIAL_SHORTAGE -> "Material not available";
+                case FUNDS -> "Funds not released";
+                case DEPARTMENT_INSTRUCTION -> "Stopped by the department";
+                case SITE_NOT_READY -> "Site not ready for work";
+                case OTHER -> "Other";
+            };
+        }
+    }
+
     @Column(name = "org_id", nullable = false, updatable = false)
     private UUID orgId;
 
@@ -72,6 +131,24 @@ public class DailyProgressReport extends BaseEntity {
 
     @Column(name = "dpr_number", nullable = false, length = 50, updatable = false)
     private String dprNumber;
+
+    /**
+     * Whether the site worked at all that day, and the first question the report asks.
+     *
+     * <p>False is not an empty report — it is a different one. There is no work done, no
+     * observation to make and nothing to claim against the contract, and what the day is worth
+     * recording for is the cause below. A day nobody wrote up means nothing; a day written up
+     * as "no work, rain" is evidence.</p>
+     */
+    @Column(name = "site_operational", nullable = false)
+    private boolean siteOperational = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "non_operational_cause", length = 30)
+    private NonOperationalCause nonOperationalCause;
+
+    @Column(name = "non_operational_note", length = 2000)
+    private String nonOperationalNote;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "weather", length = 30)
@@ -199,6 +276,21 @@ public class DailyProgressReport extends BaseEntity {
         this.preparedBy = preparedBy;
     }
 
+    /**
+     * Whether the site worked, and why not.
+     *
+     * <p>The cause is cleared when the answer changes back to a working day rather than left
+     * where it was. A supervisor who ticked "no work — rain" at seven in the morning and found
+     * the gang turning up at nine would otherwise leave a report that describes a full day's
+     * brickwork and carries "rain" in the column every delay reading counts.</p>
+     */
+    public void recordOperationalStatus(boolean siteOperational, NonOperationalCause cause,
+                                        String note) {
+        this.siteOperational = siteOperational;
+        this.nonOperationalCause = siteOperational ? null : cause;
+        this.nonOperationalNote = siteOperational ? null : note;
+    }
+
     /** The conditions the day was worked in, and what they cost in hours. */
     public void recordConditions(Weather weather, BigDecimal temperatureC,
                                  BigDecimal workingHoursLost) {
@@ -307,6 +399,18 @@ public class DailyProgressReport extends BaseEntity {
 
     public String getDprNumber() {
         return dprNumber;
+    }
+
+    public boolean isSiteOperational() {
+        return siteOperational;
+    }
+
+    public NonOperationalCause getNonOperationalCause() {
+        return nonOperationalCause;
+    }
+
+    public String getNonOperationalNote() {
+        return nonOperationalNote;
     }
 
     public Weather getWeather() {

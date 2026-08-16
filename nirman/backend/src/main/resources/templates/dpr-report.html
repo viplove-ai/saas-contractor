@@ -33,6 +33,14 @@
         .sign .line { border-top: 1px solid #444; padding-top: 3px; width: 58mm; }
         .draft { color: #b00; font-weight: bold; }
         .empty { color: #777; font-style: italic; }
+        /*
+          The lost day, declared rather than implied. A reader flicking through a month of
+          reports has to be able to tell "the site did not work" from "somebody filled this in
+          badly" at a glance, and a page of dashes does not do that.
+        */
+        .stopped { border: 2px solid #111; padding: 6px 8px; margin: 10px 0 4px; }
+        .stopped .why { font-size: 12pt; font-weight: bold; }
+        .stopped .said { margin-top: 3px; }
     </style>
 </head>
 <body>
@@ -55,6 +63,20 @@
     </tr>
 </table>
 
+<!--
+  A day the site did not work. The cause comes first, above everything, because it is the
+  whole content of the report: nothing was built, so there is nothing else for the page to
+  say, and this box is what the department reads when time is claimed for the day.
+-->
+<div class="stopped" th:if="${!dpr.siteOperational()}">
+    <div class="why">
+        Site not operational —
+        <span th:text="${dpr.nonOperationalCause().label()}">Weather</span>
+    </div>
+    <div class="said" th:if="${dpr.nonOperationalNote()} != null"
+         th:text="${dpr.nonOperationalNote()}">note</div>
+</div>
+
 <h2>Conditions</h2>
 <table>
     <tr>
@@ -66,6 +88,14 @@
         <td th:text="${dpr.workingHoursLost()}">0</td>
     </tr>
 </table>
+
+<!--
+  Work done and plant, printed only for a day the site worked. On a lost day these are two
+  headings over "none recorded", which reads as a report somebody abandoned rather than as
+  the answer the box above already gave. Labour and the day's cost are not suppressed with
+  them: a watchman was still paid and a hire charge still ran, and those figures are real.
+-->
+<div th:if="${dpr.siteOperational()}">
 
 <h2>Work done</h2>
 <table th:if="${!dpr.workItems().isEmpty()}">
@@ -151,6 +181,8 @@
 </table>
 <p class="empty" th:if="${dpr.machinery().isEmpty()}">No plant recorded.</p>
 
+</div>
+
 <h2>What the day cost</h2>
 <!--
   Four rows, three of which add up, and one that deliberately does not join the total.
@@ -178,34 +210,45 @@
     </tr>
 </table>
 
-<h2>Observations</h2>
-<table class="narrative">
-    <tr>
+<h2 th:if="${dpr.siteOperational()}">Observations</h2>
+<!--
+  Two rows on a form that used to have seven. The five that went were a summary of work the
+  rows above already list, and four boxes of prose the site was asked for every evening and
+  filled with "nil" — a form that asks more than it needs teaches the man filling it that
+  nothing on it is worth reading. What is left is the two the office cannot get anywhere
+  else: an instruction the department gave on site, and what the site intends to do next.
+
+  The five are still printed when a report carries them, and no report written from here on
+  will. They belong to the ones already signed, and what was signed does not change because
+  the form did.
+-->
+<table class="narrative" th:if="${dpr.siteOperational()}">
+    <tr th:if="${dpr.workSummary()} != null">
         <th style="width: 34mm;">Summary of work</th>
-        <td th:text="${dpr.workSummary()} ?: '—'">—</td>
+        <td th:text="${dpr.workSummary()}">—</td>
+    </tr>
+    <tr th:if="${dpr.delays()} != null">
+        <th style="width: 34mm;">Delays</th>
+        <td th:text="${dpr.delays()}">—</td>
+    </tr>
+    <tr th:if="${dpr.safetyObservations()} != null">
+        <th style="width: 34mm;">Safety</th>
+        <td th:text="${dpr.safetyObservations()}">—</td>
+    </tr>
+    <tr th:if="${dpr.qualityObservations()} != null">
+        <th style="width: 34mm;">Quality</th>
+        <td th:text="${dpr.qualityObservations()}">—</td>
+    </tr>
+    <tr th:if="${dpr.managementAttention()} != null">
+        <th style="width: 34mm;">Needs management attention</th>
+        <td th:text="${dpr.managementAttention()}">—</td>
     </tr>
     <tr>
-        <th>Delays</th>
-        <td th:text="${dpr.delays()} ?: '—'">—</td>
-    </tr>
-    <tr>
-        <th>Safety</th>
-        <td th:text="${dpr.safetyObservations()} ?: '—'">—</td>
-    </tr>
-    <tr>
-        <th>Quality</th>
-        <td th:text="${dpr.qualityObservations()} ?: '—'">—</td>
-    </tr>
-    <tr>
-        <th>Instructions received</th>
+        <th style="width: 34mm;">Instructions received from the department</th>
         <td th:text="${dpr.instructionsReceived()} ?: '—'">—</td>
     </tr>
     <tr>
-        <th>Needs management attention</th>
-        <td th:text="${dpr.managementAttention()} ?: '—'">—</td>
-    </tr>
-    <tr>
-        <th>Plan for tomorrow</th>
+        <th style="width: 34mm;">Plan for tomorrow</th>
         <td th:text="${dpr.nextDayPlan()} ?: '—'">—</td>
     </tr>
 </table>

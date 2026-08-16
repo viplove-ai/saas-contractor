@@ -2,10 +2,15 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import {
   Alert,
+  AlertTitle,
   Box,
   Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   IconButton,
   MenuItem,
@@ -15,6 +20,8 @@ import {
   StepLabel,
   Stepper,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
@@ -30,6 +37,7 @@ import {
   useAttachDprPhoto,
   useBoqItems,
   useCreateDpr,
+  useDecideDpr,
   useDeleteDpr,
   useDpr,
   usePrefill,
@@ -43,18 +51,39 @@ import {
   OutsourcedLabourCard,
   PhotoCard,
 } from './DayEntry';
-import { isEditable } from './types';
+import { causeNeedsNote, isWritable, NON_OPERATIONAL_CAUSES } from './types';
 import type {
   Dpr,
+  DprConditions,
+  DprObservations,
   DprPrefill,
   LabourLine,
   MachineryInput,
   MaterialLine,
+  NonOperationalCause,
   Weather,
   WorkItemInput,
 } from './types';
 
-const STEPS = ['The day so far', 'Work done', 'Observations'];
+const DAY_STEP = 'The day so far';
+const WORK_STEP = 'Work done';
+const OBSERVATION_STEP = 'Observations';
+
+/**
+ * The steps this person has on this report.
+ *
+ * <p>Two things narrow it. The report has two authors — the supervisor records what the day
+ * <b>was</b> and hands it over, the engineer records what was <b>built</b> and signs — so a
+ * supervisor never sees the last two steps at all. And a day the site did not work has only
+ * the first step for either of them: there is nothing built to describe and nothing observed
+ * to write down, and the cause is the whole of what the report has to say.</p>
+ */
+function stepsFor(canVerify: boolean, operational: boolean): string[] {
+  if (!operational || !canVerify) {
+    return [DAY_STEP];
+  }
+  return [DAY_STEP, WORK_STEP, OBSERVATION_STEP];
+}
 
 /** The day's men, grouped the way the muster groups them. */
 const LABOUR_COLUMNS: RecordColumn<LabourLine>[] = [
@@ -142,14 +171,60 @@ function emptyWorkLine(): WorkLine {
 }
 
 /**
+ * What the records already hold for the day, in the words a supervisor would use.
+ *
+ * <p>Only ever read when he is about to say the site did not work. A muster with twelve men
+ * marked present behind a day recorded as lost is not necessarily an error — a watchman was
+ * there, a gang was paid to stand — but it is a contradiction, and a screen that let it
+ * through in silence would be the reason a month's delay statement does not survive being
+ * read.</p>
+ */
+function recordsBehind(data: DprPrefill | undefined): string[] {
+  if (!data) {
+    return [];
+  }
+  const found: string[] = [];
+  if (data.labour.presentCount > 0) {
+    found.push(`${data.labour.presentCount} man/men marked present on the muster`);
+  }
+  if (data.outsourcedLabour.headCount > 0) {
+    found.push(`${data.outsourcedLabour.headCount} external man/men counted at the gate`);
+  }
+  if (data.material.receiptCount > 0) {
+    found.push(`${data.material.receiptCount} material receipt(s)`);
+  }
+  if (data.material.issueCount > 0) {
+    found.push(`${data.material.issueCount} material issue(s) to the work face`);
+  }
+  if (data.expense.expenseCount > 0) {
+    found.push(`${data.expense.expenseCount} bill(s) booked`);
+  }
+  return found;
+}
+
+/**
  * The daily progress report, written the way the day actually happened.
  *
- * <p>Step one is the whole argument for this screen. A supervisor at six in the evening has
- * already recorded the muster, the material and the bills; asking him to copy those figures
- * into a diary is asking him to make a transcription error on data the system already holds.
- * So the first step is not a form — it is what the records say, offered for confirmation, and
- * the only thing he adds is what the numbers cannot know: what got built, what went wrong,
- * and what happens tomorrow.</p>
+ * <p>It asks two questions before anything else, and the answers pick the shape of the rest.</p>
+ *
+ * <p><b>Did the site work today?</b> A day it did not is a different document, not an empty
+ * one: it carries a cause off a closed list and a note and photographs, and it has no work
+ * done and no observations because there were none. The alternative is what the form used to
+ * force — a page of dashes, indistinguishable from a report somebody started and abandoned —
+ * and a missing report says nothing at all, while "no work, rain" is what an extension of time
+ * is claimed on.</p>
+ *
+ * <p><b>Whose half is this?</b> The supervisor records what the day was: whether the site
+ * worked, in what conditions, and — through the entry cards on step one — the muster, the
+ * material and the bills that are still missing. Then he hands it over. The engineer records
+ * what was built and signs, because a quantity on this report becomes a claim against the
+ * contract the moment he does, and the man who measures it should be the man who stands behind
+ * it. What the supervisor said freezes at the handover along with the figures.</p>
+ *
+ * <p>Step one is still the argument for the whole screen. A supervisor at six in the evening
+ * has already recorded the muster, the material and the bills; asking him to copy those figures
+ * into a diary is asking him to make a transcription error on data the system already holds. So
+ * it is not a form — it is what the records say, offered for confirmation.</p>
  *
  * <p>Two honesties are carried on the face of it rather than buried. A labour cost standing
  * on unverified attendance is <b>provisional</b>, because the wage is frozen at verification
@@ -162,15 +237,13 @@ export function DprWizardPage() {
   const [reportDate, setReportDate] = useState(today());
   const [step, setStep] = useState(0);
 
+  const [siteOperational, setSiteOperational] = useState(true);
+  const [cause, setCause] = useState<NonOperationalCause | ''>('');
+  const [causeNote, setCauseNote] = useState('');
   const [weather, setWeather] = useState<Weather | ''>('');
   const [temperatureC, setTemperatureC] = useState('');
   const [workingHoursLost, setWorkingHoursLost] = useState('');
-  const [workSummary, setWorkSummary] = useState('');
-  const [delays, setDelays] = useState('');
-  const [safetyObservations, setSafety] = useState('');
-  const [qualityObservations, setQuality] = useState('');
   const [instructionsReceived, setInstructions] = useState('');
-  const [managementAttention, setAttention] = useState('');
   const [nextDayPlan, setNextDayPlan] = useState('');
   const [workLines, setWorkLines] = useState<WorkLine[]>([emptyWorkLine()]);
   const [machinery, setMachinery] = useState<MachineryLine[]>([]);
@@ -184,9 +257,13 @@ export function DprWizardPage() {
   // work; sent with the save.
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [sendingBack, setSendingBack] = useState(false);
+  const [sendBackReason, setSendBackReason] = useState('');
 
   const { hasPermission } = useAuth();
   const canDelete = hasPermission('dpr:delete');
+  /** The engineer — the half of the report that claims work is his, and so is the signature. */
+  const canVerify = hasPermission('dpr:verify');
   const sites = useSites();
   const [siteId, setSiteId] = useSelectedSite(sites.data);
   const prefill = usePrefill(siteId || undefined, reportDate);
@@ -195,6 +272,7 @@ export function DprWizardPage() {
   const create = useCreateDpr();
   const update = useUpdateDpr();
   const submit = useSubmitDpr();
+  const decide = useDecideDpr();
 
   /**
    * Whether a report already covers the day on screen.
@@ -210,15 +288,13 @@ export function DprWizardPage() {
 
   /** Everything the supervisor types, back to blank. The saved report is untouched. */
   function clearForm() {
+    setSiteOperational(true);
+    setCause('');
+    setCauseNote('');
     setWeather('');
     setTemperatureC('');
     setWorkingHoursLost('');
-    setWorkSummary('');
-    setDelays('');
-    setSafety('');
-    setQuality('');
     setInstructions('');
-    setAttention('');
     setNextDayPlan('');
     setWorkLines([emptyWorkLine()]);
     setMachinery([]);
@@ -228,17 +304,15 @@ export function DprWizardPage() {
 
   /** Reads a saved report back into the form, so continuing it starts where it was left. */
   function loadForm(report: Dpr) {
+    setSiteOperational(report.siteOperational);
+    setCause(report.nonOperationalCause ?? '');
+    setCauseNote(report.nonOperationalNote ?? '');
     setWeather(report.weather ?? '');
     setTemperatureC(report.temperatureC == null ? '' : String(report.temperatureC));
     setWorkingHoursLost(
       report.workingHoursLost == null ? '' : String(report.workingHoursLost),
     );
-    setWorkSummary(report.workSummary ?? '');
-    setDelays(report.delays ?? '');
-    setSafety(report.safetyObservations ?? '');
-    setQuality(report.qualityObservations ?? '');
     setInstructions(report.instructionsReceived ?? '');
-    setAttention(report.managementAttention ?? '');
     setNextDayPlan(report.nextDayPlan ?? '');
     setWorkLines(
       report.workItems.length === 0
@@ -324,10 +398,42 @@ export function DprWizardPage() {
   }, [existing.data, routeDprId, routeApplied, setSiteId]);
 
   const existingReport = saved || !covered ? null : (existing.data ?? null);
-  /** A report covers the day and it is past editing — a dead end, and it says so. */
-  const closed = Boolean(existingReport && !isEditable(existingReport.workflowStatus));
+  /**
+   * A report that was handed over, opened by the man it was handed to.
+   *
+   * <p>He is not asked what to do about it. "Carry on / start fresh / delete" is the question
+   * put to somebody who finds his own unfinished draft; a submitted report is not unfinished
+   * by accident, it is waiting on him, and the answer is always to open it.</p>
+   */
+  const handedToMe = Boolean(
+    existingReport && existingReport.workflowStatus === 'SUBMITTED' && canVerify,
+  );
+
+  useEffect(() => {
+    if (handedToMe && existingReport && draftChoice === 'UNDECIDED' && !saved) {
+      resumeDraft(existingReport);
+    }
+    // resumeDraft only calls setState; the report arriving is the trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handedToMe, existingReport, draftChoice, saved]);
+
+  /** The report the screen is standing on, whichever door it came through. */
+  const report = saved ?? existingReport;
+  /** Handed over: the supervisor's half is frozen and the rest of it is the engineer's. */
+  const handedOver = report?.workflowStatus === 'SUBMITTED';
+  /** A report covers the day and it is past this user's editing — a dead end, and it says so. */
+  const closed = Boolean(report && !isWritable(report.workflowStatus, canVerify));
   /** The question is on screen and nothing moves until it is answered. */
-  const mustChoose = !saved && covered && draftChoice === 'UNDECIDED';
+  const mustChoose = !saved && covered && draftChoice === 'UNDECIDED' && !handedToMe;
+  /** Nothing moves while the day belongs to a report the supervisor has not answered for. */
+  const blocked = closed || mustChoose;
+  /** What the day was is the supervisor's, and only until he hands it over. */
+  const conditionsWritable = !handedOver && !blocked;
+
+  const steps = stepsFor(canVerify, siteOperational);
+  // Flipping the day to "no work" while standing on the observations step would otherwise
+  // leave the wizard on a step that no longer exists.
+  const activeStep = Math.min(step, steps.length - 1);
 
   /** Re-ask the day after an entry card saves, so the figures above it move as he types. */
   function refreshDay() {
@@ -364,18 +470,39 @@ export function DprWizardPage() {
     });
   }
 
-  function narrative() {
+  /**
+   * The supervisor's half: what the day was, and what stood on the site while it happened.
+   *
+   * <p>No plant on a day nobody worked — the machines were where they were, and a report that
+   * says the site was shut has nothing to say about their hours.</p>
+   */
+  function conditions(): DprConditions {
     return {
+      siteOperational,
+      nonOperationalCause: siteOperational ? undefined : (cause || undefined),
+      nonOperationalNote: siteOperational ? undefined : (causeNote || undefined),
       weather: weather || undefined,
       temperatureC: temperatureC ? Number(temperatureC) : undefined,
       workingHoursLost: workingHoursLost ? Number(workingHoursLost) : undefined,
-      workSummary: workSummary || undefined,
-      delays: delays || undefined,
-      safetyObservations: safetyObservations || undefined,
-      qualityObservations: qualityObservations || undefined,
+      machinery: siteOperational ? filledMachinery() : [],
+    };
+  }
+
+  /**
+   * The engineer's half: what was built, and the two things the office cannot learn elsewhere.
+   *
+   * <p>Empty on a day the site did not work, and that is the point rather than an oversight —
+   * a report cannot both say nobody worked and claim a quantity against the contract, and the
+   * server refuses the combination.</p>
+   */
+  function observations(): DprObservations {
+    if (!siteOperational) {
+      return { workItems: [] };
+    }
+    return {
       instructionsReceived: instructionsReceived || undefined,
-      managementAttention: managementAttention || undefined,
       nextDayPlan: nextDayPlan || undefined,
+      workItems: filledWorkItems(),
     };
   }
 
@@ -400,16 +527,21 @@ export function DprWizardPage() {
       .map(({ key: _key, ...rest }) => rest);
   }
 
+  /**
+   * Saves the half of the report this user owns, and only that half.
+   *
+   * <p>A supervisor's save carries no work items at all rather than an empty list. The
+   * difference matters on a report the engineer filled in and sent back: an empty list is an
+   * instruction to delete his lines, and the supervisor pressing Save on a screen that never
+   * showed them to him is not an instruction to do anything of the sort.</p>
+   */
   async function saveDraft() {
-    const workItems = filledWorkItems();
-    const machineryLines = filledMachinery();
     if (saved) {
       const next = await update.mutateAsync({
         id: saved.id,
         input: {
-          ...narrative(),
-          workItems,
-          machinery: machineryLines,
+          ...(handedOver ? {} : conditions()),
+          ...(canVerify ? observations() : {}),
           version: saved.version,
         },
       });
@@ -421,9 +553,8 @@ export function DprWizardPage() {
       id: crypto.randomUUID(),
       siteId,
       reportDate,
-      ...narrative(),
-      workItems,
-      machinery: machineryLines,
+      ...conditions(),
+      ...(canVerify ? observations() : {}),
     });
     setSaved(created);
     setSavedHere(true);
@@ -470,10 +601,39 @@ export function DprWizardPage() {
     setSaved(sent);
   }
 
-  const busy = create.isPending || update.isPending || submit.isPending;
-  const error = create.error ?? update.error ?? submit.error;
-  /** Nothing moves while the day belongs to a report the supervisor has not answered for. */
-  const blocked = closed || mustChoose;
+  /** The engineer's end of it: finish what he wrote, then put his name on it. */
+  async function saveAndSign() {
+    const draft = await saveDraft();
+    await uploadPhotos(draft.id);
+    const signed = await decide.mutateAsync({ id: draft.id, action: 'VERIFY' });
+    setSaved(signed);
+  }
+
+  async function sendBack(reason: string) {
+    if (!report) {
+      return;
+    }
+    const returned = await decide.mutateAsync({
+      id: report.id,
+      action: 'REJECT',
+      remarks: reason,
+    });
+    setSaved(returned);
+    setSendingBack(false);
+    setSendBackReason('');
+  }
+
+  const busy =
+    create.isPending || update.isPending || submit.isPending || decide.isPending;
+  const error = create.error ?? update.error ?? submit.error ?? decide.error;
+  const contradictions = siteOperational ? [] : recordsBehind(prefill.data);
+  const measuredLines = filledWorkItems().filter(
+    (line) => line.boqItemId && line.quantity != null && line.quantity > 0,
+  ).length;
+  /** A cause is required, and "other" on its own is not one. */
+  const causeMissing =
+    !siteOperational && (!cause || (causeNeedsNote(cause) && !causeNote.trim()));
+  const onLastStep = activeStep === steps.length - 1;
 
   return (
     <Stack spacing={2}>
@@ -507,10 +667,15 @@ export function DprWizardPage() {
         <Alert severity="info">Looking up the report already filed for this day…</Alert>
       )}
 
-      {closed && existingReport && (
+      {/*
+        Not said to the man who just handed it over. "It is no longer yours to edit" is true
+        the instant he presses the button, and printed beside his own success it reads as a
+        refusal of what he just did — the line below already tells him where the report went.
+      */}
+      {closed && report && !savedHere && (
         <Alert severity="info">
-          {existingReport.dprNumber} already covers {existingReport.reportDate} at this site and
-          has been {existingReport.workflowStatus.toLowerCase()}, so it can no longer be edited.{' '}
+          {report.dprNumber} already covers {report.reportDate} at this site and has been{' '}
+          {report.workflowStatus.toLowerCase()}, so it is no longer yours to edit.{' '}
           <Box component={Link} to="/dprs" sx={{ color: 'inherit' }}>
             Open it from the reports list
           </Box>
@@ -535,7 +700,22 @@ export function DprWizardPage() {
         />
       )}
 
-      {saved && !savedHere && draftChoice === 'RESUMED' && (
+      {/*
+        The engineer's half of the handover, said plainly. He did not write what is above the
+        work step and he cannot change it — the day's conditions were the supervisor's
+        statement and they froze with the figures when it was sent.
+      */}
+      {handedOver && canVerify && (
+        <Alert severity="info">
+          <AlertTitle>{report?.dprNumber} is waiting on you</AlertTitle>
+          {report?.preparedByName ?? 'The supervisor'} recorded what the day was and handed it
+          over. What was built and the day&rsquo;s observations are yours to write; the
+          conditions and the figures were frozen when it was sent, so send it back if they are
+          wrong.
+        </Alert>
+      )}
+
+      {saved && !savedHere && draftChoice === 'RESUMED' && !handedOver && (
         <Alert severity="info">
           Carrying on with {saved.dprNumber}, as it was left. Saving writes over it.
         </Alert>
@@ -549,77 +729,83 @@ export function DprWizardPage() {
       )}
 
       {saved && savedHere && (
-        <Alert severity={saved.workflowStatus === 'SUBMITTED' ? 'success' : 'info'}>
+        <Alert
+          severity={
+            saved.workflowStatus === 'DRAFT'
+              ? 'info'
+              : saved.workflowStatus === 'REJECTED'
+                ? 'warning'
+                : 'success'
+          }
+        >
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
             <span>{saved.dprNumber} saved.</span>
-            <StatusChip status={saved.workflowStatus === 'SUBMITTED' ? 'SUBMITTED' : 'DRAFT'} />
+            {/* The four workflow states are four of the chip's own, so it says the real one. */}
+            <StatusChip status={saved.workflowStatus} />
             {saved.workflowStatus === 'SUBMITTED' && (
               <span>Waiting on the engineer&rsquo;s signature.</span>
             )}
+            {saved.workflowStatus === 'VERIFIED' && (
+              <span>
+                Signed
+                {typeof saved.progressPosted === 'number' && saved.progressPosted > 0
+                  ? ` · ${saved.progressPosted} claim(s) posted to the measurement book`
+                  : ''}
+                .
+              </span>
+            )}
+            {saved.workflowStatus === 'REJECTED' && <span>Sent back to the supervisor.</span>}
           </Stack>
         </Alert>
       )}
 
-      <Stepper activeStep={step} alternativeLabel sx={{ display: { xs: 'none', sm: 'flex' } }}>
-        {STEPS.map((label) => (
-          <Step key={label}>
-            <StepLabel>{label}</StepLabel>
-          </Step>
-        ))}
-      </Stepper>
+      {steps.length > 1 && (
+        <Stepper activeStep={activeStep} alternativeLabel sx={{ display: { xs: 'none', sm: 'flex' } }}>
+          {steps.map((label) => (
+            <Step key={label}>
+              <StepLabel>{label}</StepLabel>
+            </Step>
+          ))}
+        </Stepper>
+      )}
 
       {prefill.isLoading && <CircularProgress />}
       {prefill.isError && <Alert severity="error">{apiErrorDetail(prefill.error)}</Alert>}
       {error && <Alert severity="error">{apiErrorDetail(error)}</Alert>}
 
-      {step === 0 && prefill.data && (
+      {steps[activeStep] === DAY_STEP && (
         <>
-          <PrefillStep data={prefill.data} onUseSuggestion={addSuggestion} />
-          {/*
-            Below the figures rather than above them, and in the order the day happens. What
-            the records already know comes first — most evenings that is the whole answer and
-            he scrolls past these — and what is still missing can be typed here rather than
-            on four other screens.
-          */}
-          <Typography variant="h2" sx={{ fontSize: '1.15rem', mt: 1 }}>
-            Anything not entered yet
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
-            Each box saves on its own, into the same records the other screens write to.
-          </Typography>
-          <OutsourcedLabourCard siteId={siteId} date={reportDate} onSaved={refreshDay} />
-          <MaterialCard siteId={siteId} date={reportDate} mode="RECEIVED" onSaved={refreshDay} />
-          <MaterialCard siteId={siteId} date={reportDate} mode="USED" onSaved={refreshDay} />
-          <ExpenseCard siteId={siteId} date={reportDate} onSaved={refreshDay} />
-          <PhotoCard
-            files={photos}
-            onChange={setPhotos}
-            uploaded={saved?.photos.length ?? 0}
-            siteCode={sites.data?.find((site) => site.id === siteId)?.code}
-            reportDate={reportDate}
+          <DayStatusCard
+            operational={siteOperational}
+            cause={cause}
+            note={causeNote}
+            readOnly={!conditionsWritable}
+            contradictions={contradictions}
+            onOperationalChange={(next) => {
+              setSiteOperational(next);
+              if (next) {
+                setCause('');
+                setCauseNote('');
+              }
+              setStep(0);
+            }}
+            onCauseChange={setCause}
+            onNoteChange={setCauseNote}
           />
-          {photoError && <Alert severity="warning">{photoError}</Alert>}
-        </>
-      )}
 
-      {step === 1 && (
-        <WorkStep
-          lines={workLines}
-          machinery={machinery}
-          boqItems={boqItems.data ?? []}
-          onLinesChange={setWorkLines}
-          onMachineryChange={setMachinery}
-        />
-      )}
-
-      {step === 2 && (
-        <Stack spacing={2}>
+          {/*
+            The conditions the day was worked in, and they are the supervisor's — he was
+            standing in them. Beside the operational question rather than three steps away,
+            because "rain" and "the site did not work, because of the weather" are one answer
+            given twice and they belong on one screen where they can be seen to agree.
+          */}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
               select
               label="Weather"
               value={weather}
               onChange={(e) => setWeather(e.target.value as Weather)}
+              disabled={!conditionsWritable}
               sx={{ minWidth: 160 }}
             >
               {WEATHER.map((option) => (
@@ -633,6 +819,7 @@ export function DprWizardPage() {
               type="number"
               value={temperatureC}
               onChange={(e) => setTemperatureC(e.target.value)}
+              disabled={!conditionsWritable}
               sx={{ maxWidth: 160 }}
             />
             {/*
@@ -644,58 +831,99 @@ export function DprWizardPage() {
               type="number"
               value={workingHoursLost}
               onChange={(e) => setWorkingHoursLost(e.target.value)}
+              disabled={!conditionsWritable}
               sx={{ maxWidth: 180 }}
             />
           </Stack>
-          <TextField
-            label="What happened today"
-            value={workSummary}
-            onChange={(e) => setWorkSummary(e.target.value)}
-            multiline
-            minRows={3}
+
+          {siteOperational && prefill.data && (
+            <PrefillStep
+              data={prefill.data}
+              onUseSuggestion={addSuggestion}
+              suggestable={canVerify}
+            />
+          )}
+
+          {/*
+            Below the figures rather than above them, and in the order the day happens. What
+            the records already know comes first — most evenings that is the whole answer and
+            he scrolls past these — and what is still missing can be typed here rather than
+            on four other screens. Not offered once the report has gone: its figures are
+            frozen, so a receipt entered here would move the ledger and not the document.
+          */}
+          {siteOperational && !handedOver && (
+            <>
+              <Typography variant="h2" sx={{ fontSize: '1.15rem', mt: 1 }}>
+                Anything not entered yet
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
+                Each box saves on its own, into the same records the other screens write to.
+              </Typography>
+              <OutsourcedLabourCard siteId={siteId} date={reportDate} onSaved={refreshDay} />
+              <MaterialCard siteId={siteId} date={reportDate} mode="RECEIVED" onSaved={refreshDay} />
+              <MaterialCard siteId={siteId} date={reportDate} mode="USED" onSaved={refreshDay} />
+              <ExpenseCard siteId={siteId} date={reportDate} onSaved={refreshDay} />
+            </>
+          )}
+
+          {/*
+            Plant, on the day step rather than beside the work claimed. A mixer that ran six
+            hours and stood for two is something the supervisor watched happen: it measures
+            against no contract line, nothing is billed off it, and he is the man who was
+            there to see it. The idle hours are the half worth having — a machine that stood
+            for four hours is a story about the rain, not about the machine.
+          */}
+          {siteOperational && (
+            <MachineryEditor
+              lines={machinery}
+              readOnly={!conditionsWritable}
+              onChange={setMachinery}
+            />
+          )}
+
+          <PhotoCard
+            files={photos}
+            onChange={setPhotos}
+            uploaded={saved?.photos.length ?? 0}
+            siteCode={sites.data?.find((site) => site.id === siteId)?.code}
+            reportDate={reportDate}
           />
+          {photoError && <Alert severity="warning">{photoError}</Alert>}
+        </>
+      )}
+
+      {steps[activeStep] === WORK_STEP && (
+        <WorkStep
+          lines={workLines}
+          boqItems={boqItems.data ?? []}
+          onLinesChange={setWorkLines}
+        />
+      )}
+
+      {/*
+        Two boxes on a step that had seven. Four of the five that went were prose the site was
+        asked for every evening and answered with "nil", and the fifth restated the work rows
+        on the step before it — a form that asks more than it needs teaches the man filling it
+        that nothing on it is worth reading. These two are what the office cannot learn from
+        any other record: an instruction the department gave on site, and what the site
+        intends to do next.
+      */}
+      {steps[activeStep] === OBSERVATION_STEP && (
+        <Stack spacing={2}>
           <TextField
-            label="Delays and stoppages"
-            value={delays}
-            onChange={(e) => setDelays(e.target.value)}
-            multiline
-            minRows={2}
-          />
-          <TextField
-            label="Safety"
-            value={safetyObservations}
-            onChange={(e) => setSafety(e.target.value)}
-            multiline
-            minRows={2}
-          />
-          <TextField
-            label="Quality"
-            value={qualityObservations}
-            onChange={(e) => setQuality(e.target.value)}
-            multiline
-            minRows={2}
-          />
-          <TextField
-            label="Instructions received"
+            label="Instructions received from the department"
             value={instructionsReceived}
             onChange={(e) => setInstructions(e.target.value)}
             multiline
-            minRows={2}
-          />
-          <TextField
-            label="Needs the office to act"
-            value={managementAttention}
-            onChange={(e) => setAttention(e.target.value)}
-            multiline
-            minRows={2}
-            helperText="Anything the site cannot settle on its own."
+            minRows={3}
+            helperText="What was said on site, and by whom. Blank if nothing was."
           />
           <TextField
             label="Plan for tomorrow"
             value={nextDayPlan}
             onChange={(e) => setNextDayPlan(e.target.value)}
             multiline
-            minRows={2}
+            minRows={3}
           />
         </Stack>
       )}
@@ -703,11 +931,11 @@ export function DprWizardPage() {
       <Divider />
 
       <Stack direction="row" spacing={2} justifyContent="space-between">
-        <Button disabled={step === 0} onClick={() => setStep((s) => s - 1)}>
+        <Button disabled={activeStep === 0} onClick={() => setStep((s) => s - 1)}>
           Back
         </Button>
-        <Stack direction="row" spacing={2}>
-          {step < STEPS.length - 1 && (
+        <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+          {!onLastStep && (
             <Button
               variant="contained"
               onClick={() => setStep((s) => s + 1)}
@@ -716,31 +944,192 @@ export function DprWizardPage() {
               Next
             </Button>
           )}
-          {step === STEPS.length - 1 && (
+          {onLastStep && (
             <>
               <Button
                 variant="outlined"
                 onClick={() => void saveDraftWithPhotos()}
-                disabled={busy || blocked || !siteId}
+                disabled={busy || blocked || !siteId || causeMissing}
               >
                 Save draft
               </Button>
               {/*
-                Sending is a separate act from saving, the same way an expense is. A report
-                sent for signature is one the supervisor is standing behind.
+                The two ends of the report, and only one of them is on screen at a time. The
+                supervisor hands over what the day was; the engineer, holding a report that
+                was handed to him, signs it — and signing is what claims the measured lines
+                against the contract, so the button says how many.
               */}
-              <Button
-                variant="contained"
-                onClick={() => void saveAndSubmit()}
-                disabled={busy || blocked || !siteId}
-              >
-                Send for signature
-              </Button>
+              {!handedOver && (
+                <Button
+                  variant="contained"
+                  onClick={() => void saveAndSubmit()}
+                  disabled={busy || blocked || !siteId || causeMissing}
+                >
+                  {canVerify ? 'Send for signature' : 'Hand over to the engineer'}
+                </Button>
+              )}
+              {handedOver && canVerify && (
+                <>
+                  <Button
+                    variant="outlined"
+                    color="warning"
+                    onClick={() => setSendingBack(true)}
+                    disabled={busy}
+                  >
+                    Send back
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={() => void saveAndSign()}
+                    disabled={busy || !siteId}
+                  >
+                    {measuredLines > 0
+                      ? `Sign and claim ${measuredLines} line(s)`
+                      : 'Sign the report'}
+                  </Button>
+                </>
+              )}
             </>
           )}
         </Stack>
       </Stack>
+
+      <Dialog open={sendingBack} onClose={() => setSendingBack(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Send this report back</DialogTitle>
+        <DialogContent>
+          {/*
+            The reason is required by the server and asked for here, because a report sent
+            back without one leaves the supervisor guessing at what to change.
+          */}
+          <TextField
+            autoFocus
+            fullWidth
+            multiline
+            minRows={3}
+            label="What needs fixing"
+            value={sendBackReason}
+            onChange={(e) => setSendBackReason(e.target.value)}
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSendingBack(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={!sendBackReason.trim() || busy}
+            onClick={() => void sendBack(sendBackReason)}
+          >
+            Send back
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
+  );
+}
+
+/**
+ * The first question the report asks, and the one that picks its shape.
+ *
+ * <p>Two buttons rather than a tick box, because a tick box has a default and this question
+ * does not have one. A day the site did not work is not a lesser version of a working day — it
+ * is a different document, and the answer decides which one is being written.</p>
+ *
+ * <p>What the records already hold is shown against a "no work" answer rather than used to
+ * refuse it. A muster with men on it behind a day recorded as lost is a contradiction and not
+ * necessarily an error — a watchman was there, a gang was paid to stand — and the supervisor
+ * standing on the site is the one who knows which. The screen's job is to make sure he is not
+ * saying it by accident.</p>
+ */
+function DayStatusCard({
+  operational,
+  cause,
+  note,
+  readOnly,
+  contradictions,
+  onOperationalChange,
+  onCauseChange,
+  onNoteChange,
+}: {
+  operational: boolean;
+  cause: NonOperationalCause | '';
+  note: string;
+  readOnly: boolean;
+  contradictions: string[];
+  onOperationalChange: (operational: boolean) => void;
+  onCauseChange: (cause: NonOperationalCause) => void;
+  onNoteChange: (note: string) => void;
+}) {
+  return (
+    <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
+      <Typography fontWeight={600} gutterBottom>
+        Did the site work today?
+      </Typography>
+      <ToggleButtonGroup
+        exclusive
+        value={operational ? 'YES' : 'NO'}
+        onChange={(_event, value) => {
+          if (value !== null && !readOnly) {
+            onOperationalChange(value === 'YES');
+          }
+        }}
+        disabled={readOnly}
+        sx={{ flexWrap: 'wrap' }}
+      >
+        <ToggleButton value="YES" sx={{ minHeight: 48, px: 3 }}>
+          Yes, work went on
+        </ToggleButton>
+        <ToggleButton value="NO" sx={{ minHeight: 48, px: 3 }}>
+          No work today
+        </ToggleButton>
+      </ToggleButtonGroup>
+
+      {!operational && (
+        <Stack spacing={2} sx={{ mt: 2 }}>
+          <TextField
+            select
+            required
+            label="Why the site did not work"
+            value={cause}
+            onChange={(e) => onCauseChange(e.target.value as NonOperationalCause)}
+            disabled={readOnly}
+            helperText="Counted across the month, so a claim for time can be made on it."
+            sx={{ maxWidth: 320 }}
+          >
+            {NON_OPERATIONAL_CAUSES.map((option) => (
+              <MenuItem key={option.value} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            label="What happened"
+            required={causeNeedsNote(cause)}
+            value={note}
+            onChange={(e) => onNoteChange(e.target.value)}
+            disabled={readOnly}
+            multiline
+            minRows={2}
+            helperText={
+              causeNeedsNote(cause)
+                ? '"Other" says nothing on its own — write what stopped the work.'
+                : 'Which road flooded, which letter stopped the work. Optional.'
+            }
+          />
+          {contradictions.length > 0 && (
+            <Alert severity="warning">
+              <AlertTitle>The records say something happened here today</AlertTitle>
+              {contradictions.join(', ')}. That may be right — a watchman is still paid, a
+              lorry still arrives at a shut site — and the report will carry both. Check the
+              muster and the bills if it is not.
+            </Alert>
+          )}
+          <Typography variant="body2" color="text.secondary">
+            Photographs below, if there are any worth keeping. There is no work to record and
+            no observation to write: the cause is the report.
+          </Typography>
+        </Stack>
+      )}
+    </Paper>
   );
 }
 
@@ -791,9 +1180,11 @@ function ExistingDraftChoice({
           ? `Sent back by the engineer${report.rejectionReason ? `: ${report.rejectionReason}` : ''}`
           : 'Started and never sent, so the office has not seen it.'}
         {' '}
-        {lines === 0
-          ? 'No work lines in it yet.'
-          : `${lines} work line(s) in it${report.workSummary ? ', and the day written up' : ''}.`}
+        {report.siteOperational
+          ? lines === 0
+            ? 'No work lines in it yet.'
+            : `${lines} work line(s) in it${report.workSummary ? ', and the day written up' : ''}.`
+          : 'It records a day the site did not work.'}
       </Typography>
 
       <Stack direction="row" spacing={1.5} sx={{ mt: 2 }} flexWrap="wrap" useFlexGap>
@@ -869,9 +1260,12 @@ function ExistingDraftChoice({
 function PrefillStep({
   data,
   onUseSuggestion,
+  suggestable,
 }: {
   data: DprPrefill;
   onUseSuggestion: (boqItemId: string) => void;
+  /** Work lines are the engineer's, so only he is offered a shortcut into writing one. */
+  suggestable: boolean;
 }) {
   return (
     <Stack spacing={2}>
@@ -973,7 +1367,7 @@ function PrefillStep({
 
       <Alert severity="info">{data.caveat}</Alert>
 
-      {data.suggestedWorkItems.length > 0 && (
+      {suggestable && data.suggestedWorkItems.length > 0 && (
         <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
           <Typography fontWeight={600}>Worked on today, by the look of the records</Typography>
           {/*
@@ -1003,16 +1397,12 @@ function PrefillStep({
 
 function WorkStep({
   lines,
-  machinery,
   boqItems,
   onLinesChange,
-  onMachineryChange,
 }: {
   lines: WorkLine[];
-  machinery: MachineryLine[];
   boqItems: { id: string; itemNumber: string; description: string }[];
   onLinesChange: (lines: WorkLine[]) => void;
-  onMachineryChange: (lines: MachineryLine[]) => void;
 }) {
   function patch(key: string, changes: Partial<WorkLine>) {
     onLinesChange(lines.map((line) => (line.key === key ? { ...line, ...changes } : line)));
@@ -1027,8 +1417,8 @@ function WorkStep({
         row reaches the measurement book, and only when the engineer signs.
       */}
       <Typography variant="body2" color="text.secondary">
-        A quantity claims work against the contract when the engineer verifies this report.
-        Leave it blank to record work without claiming it.
+        A quantity claims work against the contract when this report is signed. Leave it blank
+        to record work without claiming it.
       </Typography>
 
       {lines.map((line) => (
@@ -1088,38 +1478,56 @@ function WorkStep({
       <Button startIcon={<AddIcon />} onClick={() => onLinesChange([...lines, emptyWorkLine()])}>
         Add a line
       </Button>
+    </Stack>
+  );
+}
 
-      <Divider />
+/**
+ * The plant that stood on the site today, on the supervisor's step.
+ *
+ * <p>It used to sit under the work claimed, which put it on the wrong side of the only line
+ * this report really draws. A quantity is a claim against the contract and has to come from
+ * the man who signs for it; a machine's running hours are a fact about the day, billed to
+ * nobody, and the man who was standing next to it is the one who knows them.</p>
+ */
+function MachineryEditor({
+  lines,
+  readOnly,
+  onChange,
+}: {
+  lines: MachineryLine[];
+  readOnly: boolean;
+  onChange: (lines: MachineryLine[]) => void;
+}) {
+  function patch(key: string, changes: Partial<MachineryLine>) {
+    onChange(lines.map((line) => (line.key === key ? { ...line, ...changes } : line)));
+  }
 
-      <Typography fontWeight={600}>Machinery</Typography>
-      {machinery.map((line) => (
+  return (
+    <Stack spacing={2}>
+      <Typography variant="h2" sx={{ fontSize: '1.15rem', mt: 1 }}>
+        Plant on site
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
+        Machines that were here today, and what they did. Nothing is claimed off these.
+      </Typography>
+
+      {lines.map((line) => (
         <Paper key={line.key} elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
               label="Machine"
               value={line.machineryName}
-              onChange={(e) =>
-                onMachineryChange(
-                  machinery.map((other) =>
-                    other.key === line.key ? { ...other, machineryName: e.target.value } : other,
-                  ),
-                )
-              }
+              onChange={(e) => patch(line.key, { machineryName: e.target.value })}
+              disabled={readOnly}
               sx={{ minWidth: 200 }}
             />
             <TextField
               label="Hours run"
               type="number"
               value={line.hoursUsed}
-              onChange={(e) =>
-                onMachineryChange(
-                  machinery.map((other) =>
-                    other.key === line.key
-                      ? { ...other, hoursUsed: Number(e.target.value) }
-                      : other,
-                  ),
-                )
-              }
+              onChange={(e) => patch(line.key, { hoursUsed: Number(e.target.value) })}
+              disabled={readOnly}
               sx={{ maxWidth: 140 }}
             />
             {/*
@@ -1130,22 +1538,14 @@ function WorkStep({
               label="Idle hours"
               type="number"
               value={line.idleHours}
-              onChange={(e) =>
-                onMachineryChange(
-                  machinery.map((other) =>
-                    other.key === line.key
-                      ? { ...other, idleHours: Number(e.target.value) }
-                      : other,
-                  ),
-                )
-              }
+              onChange={(e) => patch(line.key, { idleHours: Number(e.target.value) })}
+              disabled={readOnly}
               sx={{ maxWidth: 140 }}
             />
             <IconButton
               aria-label="Remove this machine"
-              onClick={() =>
-                onMachineryChange(machinery.filter((other) => other.key !== line.key))
-              }
+              onClick={() => onChange(lines.filter((other) => other.key !== line.key))}
+              disabled={readOnly}
               sx={{ width: 48, height: 48, alignSelf: 'center' }}
             >
               <DeleteOutlineIcon />
@@ -1153,11 +1553,13 @@ function WorkStep({
           </Stack>
         </Paper>
       ))}
+
       <Button
         startIcon={<AddIcon />}
+        disabled={readOnly}
         onClick={() =>
-          onMachineryChange([
-            ...machinery,
+          onChange([
+            ...lines,
             { key: crypto.randomUUID(), machineryName: '', count: 1, hoursUsed: 0, idleHours: 0 },
           ])
         }

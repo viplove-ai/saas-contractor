@@ -156,6 +156,39 @@ if the tests pass:
   per call through each module's read API. A cached total is a second version of the truth.
 - **Claiming work is its own act.** A quantity reaches the measurement book only when an
   engineer verifies the report, and only once.
+- **The daily report has two authors, and the split is enforced.** The supervisor records what
+  the day *was* — whether the site worked, in what conditions, what plant stood on the site, and
+  through the entry cards the muster, material and bills still missing — and hands it over; the
+  engineer records what was *built* and signs. **The line runs where claiming does**: a quantity
+  is a claim against the contract and a mixer's running hours are not, which is why plant is the
+  supervisor's and sits on step one beside the weather rather than under the work.
+  `dpr:draft` and `dpr:verify` already named those two people, so the line
+  needed no new permission, only enforcement in `DprService.update`: a caller without
+  `dpr:verify` may not write work items or the narrative, and a `SUBMITTED` report is
+  writable **only** by a `dpr:verify` holder, because a handover he could not finish would leave
+  every report half-written. The two halves are applied separately rather than checked together
+  — that is what stops a supervisor's save, sending an empty work list because his screen has no
+  work step, from deleting lines the engineer put on a report he sent back. The supervisor's half
+  freezes at the handover along with the snapshot. The "a report that says nothing" check moved
+  from `submit` to `decide` with it: nobody has written the work half at handover time.
+- **The observations step asks two questions, and used to ask seven.** What survives is
+  instructions received from the department and the plan for tomorrow — the two things the
+  office cannot learn from any other record. The summary of work restated the work rows above
+  it; delays, safety, quality and the note to management were prose the site was asked for every
+  evening and answered with "nil", and a form that asks more than it needs teaches the man
+  filling it that nothing on it is worth reading. **The columns stay.** Reports were signed with
+  those fields in them, and the PDF and the register panel print each one only when a report
+  carries it — so the old reports read as they always did and the new ones are not a page of
+  dashes.
+- **A day the site did not work is a different report, not an empty one.** It carries a cause off
+  a closed list (`NonOperationalCause`) and no work items at all, and it is handed over and
+  signed like any other. Free text would not do: "nine days to rain in July" is a claim against
+  the department and "some days, see the notes" is not, so the cause is the countable half and
+  the note beside it is the half a person reads. Records behind such a day — a watchman on the
+  muster, a lorry at a shut gate — are **shown and not refused**; the man on the site is the one
+  who knows. Only the work item is refused, because it is the row that reaches the measurement
+  book. And the refusal runs both ways: a day already carrying measured work cannot be turned
+  into a day nobody worked, because if a quantity was measured the site worked.
 - **A head count is not attendance.** On a site flagged `uses_outsourced_labour`, the day is
   recorded as counts per trade in `site_labour_counts` — no worker, no wage rate, no ledger
   posting, because the supplier bills for the work. Hours are recorded (per man, nullable,
@@ -285,6 +318,12 @@ would split its stock into two balances, neither of them the amount in the shed.
 exists without being able to price it. `V24` adds `expense_categories.provisional` and
 `masterdata:provisional:head` (V15's twin, one screen along); `V25` adds `site_equipment` and
 its four permissions.
+
+`V34` gives the daily report the day it did not happen: `site_operational`,
+`non_operational_cause` and `non_operational_note`, with `ck_dpr_operational_cause` keeping the
+flag and the cause agreeing for the write that never goes through the service. It adds **no
+permission** — the two-author split it comes with is drawn between `dpr:draft` and `dpr:verify`,
+which V2 already seeded.
 
 Hibernate is `ddl-auto: validate`. Flyway owns the schema; an entity that drifts from a
 migration fails at startup.

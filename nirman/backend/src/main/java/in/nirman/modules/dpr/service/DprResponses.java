@@ -89,6 +89,8 @@ public class DprResponses {
 
         return new DprResponse(report.getId(), report.getDprNumber(), report.getSiteId(),
                 siteName(report.getSiteId()), report.getProjectId(), report.getReportDate(),
+                report.isSiteOperational(), report.getNonOperationalCause(),
+                report.getNonOperationalNote(),
                 report.getWeather(), report.getTemperatureC(), report.getWorkingHoursLost(),
                 report.getLabourPresentCount(), report.getOutsourcedHeadCount(),
                 report.getOutsourcedManHours(),

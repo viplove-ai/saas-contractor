@@ -42,6 +42,7 @@ function dpr(overrides: Partial<Dpr> & { id: string; dprNumber: string }): Dpr {
     siteName: 'Kausani Main Block',
     projectId: 'p1',
     reportDate: '2025-06-10',
+    siteOperational: true,
     workflowStatus: 'SUBMITTED',
     snapshotFrozen: true,
     labourPresentCount: 3,
