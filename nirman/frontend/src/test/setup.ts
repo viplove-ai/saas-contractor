@@ -64,6 +64,17 @@ URL.createObjectURL ??= () => 'blob:test';
 URL.revokeObjectURL ??= () => {};
 
 /**
+ * jsdom defines `window.scrollTo` and then throws "Not implemented" from it, which is worse
+ * than not defining it: the `??=` guard above cannot help, and every screen that scrolls the
+ * user to something — the expense correction form, which sits above the list the row was
+ * clicked in — prints a stack trace to stderr on a test that passed.
+ *
+ * <p>A no-op, because no test asserts on scroll position. What the tests care about is that
+ * the form filled in, which is the same thing whether or not the window moved.</p>
+ */
+Object.defineProperty(globalThis, 'scrollTo', { configurable: true, value: () => {} });
+
+/**
  * jsdom has no ResizeObserver, and recharts' ResponsiveContainer constructs one on mount —
  * so any screen with a chart on it renders as an empty div and every assertion against that
  * screen fails for a reason that has nothing to do with the screen.

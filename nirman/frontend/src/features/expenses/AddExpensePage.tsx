@@ -18,14 +18,21 @@ import { useAuth } from '../auth/AuthContext';
 import { BillPhotoField } from './BillPhotoField';
 import {
   duplicateCandidates,
+  useAttachBill,
   useCreateExpense,
   useExpenseCategories,
   useExpenses,
   useNameExpenseCategory,
   useSites,
   useSubmitExpense,
+  useUpdateExpense,
 } from './api';
-import { CATEGORY_OTHER, type DuplicateCandidate, type ExpenseWorkflow } from './types';
+import {
+  CATEGORY_OTHER,
+  type DuplicateCandidate,
+  type Expense,
+  type ExpenseWorkflow,
+} from './types';
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -61,12 +68,23 @@ export function AddExpensePage() {
   // attached to it before the expense exists anywhere, and a fresh uuid at save time would
   // leave the photograph pointing at a record that was never created.
   const [expenseId, setExpenseId] = useState(() => crypto.randomUUID());
+  /**
+   * The expense being corrected, or null when the form is booking a new one.
+   *
+   * <p>One form for both. An expense the office sent back is wrong in the same fields it was
+   * typed in, and a second screen to fix them would be this one with the values filled in —
+   * which is what this is.</p>
+   */
+  const [editing, setEditing] = useState<Expense | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const sites = useSites();
   const [siteId, setSiteId] = useSelectedSite(sites.data);
   const categories = useExpenseCategories();
   const nameCategory = useNameExpenseCategory();
   const create = useCreateExpense();
+  const change = useUpdateExpense();
+  const attachBill = useAttachBill();
   const submit = useSubmitExpense();
   const mine = useExpenses(siteId || undefined, '' as ExpenseWorkflow | '');
 
@@ -87,6 +105,10 @@ export function AddExpensePage() {
   const complete =
     Boolean(siteId) && kindNamed && description.trim().length > 0 && total > 0;
 
+  /** One button does three calls, so every one of them has to hold it disabled. */
+  const correcting =
+    change.isPending || attachBill.isPending || submit.isPending || nameCategory.isPending;
+
   const site = sites.data?.find((candidate) => candidate.id === siteId);
   const booked = create.data;
   // Sending a row from the list below must not change what the banner says about the draft
@@ -103,6 +125,85 @@ export function AddExpensePage() {
    * head does not, and booking it under the wrong head to save the trip is the mess this
    * whole answer exists to avoid.</p>
    */
+  /** Puts a sent-back expense into the form above, where it was typed in the first place. */
+  const openForCorrection = (expense: Expense) => {
+    setEditing(expense);
+    setEditError(null);
+    setCandidates(null);
+    setExpenseDate(expense.expenseDate);
+    setCategoryId(expense.categoryId);
+    setOtherName('');
+    setDescription(expense.description);
+    setBillNumber(expense.billNumber ?? '');
+    setAmountBeforeTax(String(expense.amountBeforeTax));
+    setGstPercent(String(expense.gstPercent));
+    setNoBillReason(expense.noBillReason ?? '');
+    setPhoto(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const stopCorrecting = () => {
+    setEditing(null);
+    setEditError(null);
+    setDescription('');
+    setBillNumber('');
+    setAmountBeforeTax('');
+    setNoBillReason('');
+    setPhoto(null);
+    setExpenseDate(today());
+  };
+
+  /**
+   * Saves the correction and sends it back for approval in one act.
+   *
+   * <p>Booking and sending are deliberately two acts for a new expense — a wrong figure caught
+   * before it goes costs a correction on screen rather than an approval chased back. A
+   * correction is not that: the row has already been sent once and looked at, the office is
+   * waiting on this exact answer, and leaving it sitting as a draft is how a returned expense
+   * is never seen again.</p>
+   */
+  const correct = async () => {
+    if (!editing) return;
+    setEditError(null);
+    let headId = categoryId;
+    if (categoryId === CATEGORY_OTHER) {
+      try {
+        headId = (await nameCategory.mutateAsync({ name: otherName.trim() })).id;
+      } catch (error) {
+        setNamingError(apiErrorDetail(error));
+        return;
+      }
+      setCategoryId(headId);
+      setOtherName('');
+    }
+    try {
+      const saved = await change.mutateAsync({
+        id: editing.id,
+        expenseDate,
+        categoryId: headId,
+        description: description.trim(),
+        billNumber: billNumber || undefined,
+        amountBeforeTax: Number(amountBeforeTax),
+        gstPercent: Number(gstPercent),
+        noBillReason: noBillReason || undefined,
+        version: editing.version,
+      });
+      // The bill after the figures, and only if one was picked: "there is no bill" is one of
+      // the two things an expense comes back for, and the photograph is the answer to it.
+      if (photo) {
+        await attachBill.mutateAsync({
+          expenseId: saved.id,
+          siteId: saved.siteId,
+          file: photo,
+        });
+      }
+      await submit.mutateAsync(saved.id);
+      stopCorrecting();
+    } catch (error) {
+      setEditError(apiErrorDetail(error));
+    }
+  };
+
   const book = async (force: boolean) => {
     setNamingError(null);
     let headId = categoryId;
@@ -157,7 +258,31 @@ export function AddExpensePage() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="h1">Add expense</Typography>
+      <Typography variant="h1">{editing ? 'Correct the expense' : 'Add expense'}</Typography>
+
+      {/*
+        What the office actually said, at the top of the form that answers it. A supervisor
+        looking at a returned row two days later does not remember the reason, and a correction
+        made without it is the same expense sent back a second time.
+      */}
+      {editing && (
+        <Alert severity={editing.workflowStatus === 'REJECTED' ? 'error' : 'warning'}>
+          <Typography fontWeight={600}>
+            {editing.expenseNumber} —{' '}
+            {editing.workflowStatus === 'REJECTED'
+              ? 'the office rejected this'
+              : editing.workflowStatus === 'RETURNED'
+                ? 'the office sent this back to be fixed'
+                : 'a draft you have not sent yet'}
+          </Typography>
+          {editing.rejectionReason && (
+            <Typography variant="body2">{editing.rejectionReason}</Typography>
+          )}
+          <Typography variant="body2">
+            Fix it below and it goes back for approval when you save.
+          </Typography>
+        </Alert>
+      )}
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
         <TextField
@@ -165,6 +290,11 @@ export function AddExpensePage() {
           label="Site"
           value={siteId}
           onChange={(e) => setSiteId(e.target.value)}
+          // An expense does not move site: the site is what scoped every approval already
+          // taken on it. Changing it is booking a different expense, and the screen above
+          // does that.
+          disabled={Boolean(editing)}
+          helperText={editing ? 'An expense stays at the site it was booked to' : undefined}
           sx={{ minWidth: 200 }}
         >
           {(sites.data ?? []).map((site) => (
@@ -308,7 +438,8 @@ export function AddExpensePage() {
         usually now, and the row it means is the one that has just scrolled out of sight under
         the recent list. The same button on the same expense, where the person is looking.
       */}
-      {booked?.outcome === 'SENT' && (
+      {/* Hidden while a correction is open: the form no longer holds what that banner describes. */}
+      {booked?.outcome === 'SENT' && !editing && (
         <Alert
           severity="success"
           action={
@@ -329,23 +460,42 @@ export function AddExpensePage() {
             : `Saved ${booked.expense.expenseNumber} as a draft. Send it now, or leave it and send it from the list below.`}
         </Alert>
       )}
-      {booked?.outcome === 'QUEUED' && (
+      {booked?.outcome === 'QUEUED' && !editing && (
         <Alert severity="info">
           No connection. This expense{booked.photoQueued ? ' and its photograph are' : ' is'} saved
           on this phone and goes out by itself when there is a signal.
         </Alert>
       )}
 
+      {editError && <Alert severity="error">{editError}</Alert>}
+
       <Stack direction="row" spacing={2}>
-        <Button
-          variant="contained"
-          color="secondary"
-          disabled={!complete || create.isPending || nameCategory.isPending}
-          onClick={() => void book(false)}
-          sx={{ minHeight: 48 }}
-        >
-          {create.isPending || nameCategory.isPending ? 'Saving…' : 'Save as draft'}
-        </Button>
+        {editing ? (
+          <>
+            <Button
+              variant="contained"
+              color="secondary"
+              disabled={!complete || correcting}
+              onClick={() => void correct()}
+              sx={{ minHeight: 48 }}
+            >
+              {correcting ? 'Sending…' : 'Save and send for approval'}
+            </Button>
+            <Button onClick={stopCorrecting} disabled={correcting} sx={{ minHeight: 48 }}>
+              Cancel
+            </Button>
+          </>
+        ) : (
+          <Button
+            variant="contained"
+            color="secondary"
+            disabled={!complete || create.isPending || nameCategory.isPending}
+            onClick={() => void book(false)}
+            sx={{ minHeight: 48 }}
+          >
+            {create.isPending || nameCategory.isPending ? 'Saving…' : 'Save as draft'}
+          </Button>
+        )}
       </Stack>
 
       <Divider sx={{ pt: 2 }} />
@@ -390,16 +540,33 @@ export function AddExpensePage() {
                   </Typography>
                 )}
               </div>
+              {/*
+                Both answers to a row the office sent back, side by side. Sending it again
+                unchanged is the right move when nothing was wrong with the expense — the
+                approver had a question and it was answered on the telephone — and correcting
+                it is the right move the rest of the time. Offering only the first is what left
+                a rejected expense with nowhere to go but a second identical submission.
+              */}
               {canSubmit && isSendable(expense.workflowStatus) && (
-                <Button
-                  variant="contained"
-                  color="secondary"
-                  disabled={submit.isPending}
-                  onClick={() => submit.mutate(expense.id)}
-                  sx={{ minHeight: 48 }}
-                >
-                  Send for approval
-                </Button>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="outlined"
+                    disabled={correcting || editing?.id === expense.id}
+                    onClick={() => openForCorrection(expense)}
+                    sx={{ minHeight: 48 }}
+                  >
+                    {editing?.id === expense.id ? 'Correcting above' : 'Correct it'}
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    disabled={submit.isPending}
+                    onClick={() => submit.mutate(expense.id)}
+                    sx={{ minHeight: 48 }}
+                  >
+                    Send for approval
+                  </Button>
+                </Stack>
               )}
             </Stack>
           </Paper>

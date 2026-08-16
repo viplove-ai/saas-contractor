@@ -10,6 +10,7 @@ import type { Expense, ExpenseCategory, PageResponse, Site } from './types';
 
 const get = vi.fn();
 const post = vi.fn();
+const put = vi.fn();
 
 vi.mock('../../shared/apiClient', async () => {
   const actual = await vi.importActual<typeof import('../../shared/apiClient')>(
@@ -20,6 +21,7 @@ vi.mock('../../shared/apiClient', async () => {
     apiClient: {
       get: (...args: unknown[]) => get(...args),
       post: (...args: unknown[]) => post(...args),
+      put: (...args: unknown[]) => put(...args),
     },
   };
 });
@@ -92,6 +94,32 @@ function mockGets(expenses: PageResponse<Expense> = NO_EXPENSES) {
   });
 }
 
+/** One expense the office has sent back, as the list under the form returns it. */
+function returnedExpense(): PageResponse<Expense> {
+  const expense = {
+    id: 'e-7',
+    expenseNumber: 'EXP-2025-0042',
+    siteId: 'site-a',
+    expenseDate: '2025-06-04',
+    categoryId: 'cat-site',
+    categoryName: 'Site Expenses',
+    description: 'Cartage',
+    billNumber: 'SS/856',
+    amountBeforeTax: 4000,
+    gstPercent: 18,
+    gstAmount: 720,
+    totalAmount: 4720,
+    paymentStatus: 'UNPAID',
+    paidAmount: 0,
+    payableAmount: 4720,
+    workflowStatus: 'RETURNED',
+    rejectionReason: 'Bill number does not match the challan',
+    version: 4,
+    attachments: [],
+  } as unknown as Expense;
+  return { ...NO_EXPENSES, content: [expense], totalElements: 1, totalPages: 1 };
+}
+
 /** The 409 shape the server actually returns, candidates and all. */
 function duplicateError() {
   const error = new Error('Request failed with status code 409') as Error & {
@@ -126,6 +154,108 @@ describe('AddExpensePage', () => {
     permissions = ['expense:create', 'expense:read'];
     mockGets();
     post.mockResolvedValue({ data: { id: 'e1', expenseNumber: 'EXP-2025-0001' } });
+  });
+
+  /**
+   * A returned expense with nowhere to go is the shape of the bug this answers: the office
+   * says the figure is wrong, and the only button on the row sends the same wrong figure back.
+   * The reason has to be on screen — two days later nobody remembers it — and saving has to
+   * resubmit, because a correction left as a draft is a returned expense nobody sees again.
+   */
+  it('corrects a returned expense in place and sends it straight back for approval', async () => {
+    mockGets(returnedExpense());
+    put.mockResolvedValue({ data: { id: 'e-7', siteId: 'site-a' } });
+    post.mockResolvedValue({ data: { id: 'e-7', workflowStatus: 'SUBMITTED' } });
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+
+    // The site list and the expense list are two queries, and the row only appears once the
+    // second lands. Waiting on the first alone is what made this flake under a loaded runner.
+    await screen.findByRole('combobox', { name: 'Site' });
+    await user.click(
+      await screen.findByRole('button', { name: 'Correct it' }, { timeout: 5000 }),
+    );
+
+    // The office's words, on the form that answers them — and still on the row below, which
+    // is why there are two of them.
+    expect(screen.getAllByText('Bill number does not match the challan')).toHaveLength(2);
+    expect(screen.getByText(/the office sent this back to be fixed/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Correct the expense' })).toBeInTheDocument();
+    // The typed values are there to be corrected rather than re-entered from the paper.
+    expect(screen.getByRole('textbox', { name: 'What was it for' })).toHaveValue('Cartage');
+
+    await user.clear(screen.getByRole('textbox', { name: 'Bill number' }));
+    await user.type(screen.getByRole('textbox', { name: 'Bill number' }), 'SS/902');
+    await user.click(screen.getByRole('button', { name: 'Save and send for approval' }));
+
+    await waitFor(() => expect(put).toHaveBeenCalledOnce());
+    const [url, body] = put.mock.calls[0] as [string, { billNumber: string; version: number }];
+    expect(url).toBe('/expenses/e-7');
+    expect(body.billNumber).toBe('SS/902');
+    // Carried so that two people correcting one row is a 409 rather than a silent overwrite.
+    expect(body.version).toBe(4);
+
+    // Saved and sent in one act, which is the half that stops it sitting as a draft.
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/expenses/e-7/submit'));
+  });
+
+  /**
+   * "There is no bill" is one of the two things an expense actually comes back for, so the
+   * photograph has to be attachable on the correction and not only when the expense is first
+   * booked. Three calls in one act, and the order is the one the offline drain uses: the file
+   * into storage, the link onto the record, then the record back into the queue.
+   */
+  it('attaches a bill photograph to the correction before sending it back', async () => {
+    mockGets(returnedExpense());
+    put.mockResolvedValue({ data: { id: 'e-7', siteId: 'site-a' } });
+    post.mockImplementation((url: string) =>
+      url === '/attachments'
+        ? Promise.resolve({ data: { id: 'att-3' } })
+        : Promise.resolve({ data: { id: 'e-7' } }),
+    );
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+
+    await screen.findByRole('combobox', { name: 'Site' });
+    await user.click(await screen.findByRole('button', { name: 'Correct it' }, { timeout: 5000 }));
+
+    // Small enough that the compressor hands it straight back, which is what jsdom can run.
+    const bill = new File([new Uint8Array(64)], 'bill.jpg', { type: 'image/jpeg' });
+    await user.upload(screen.getByLabelText('Photograph the bill'), bill);
+    await user.click(screen.getByRole('button', { name: 'Save and send for approval' }));
+
+    await waitFor(() => expect(put).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(post.mock.calls.map((call) => call[0])).toEqual([
+        '/attachments',
+        '/expenses/e-7/attachments',
+        '/expenses/e-7/submit',
+      ]),
+    );
+    // The bucket has to know whose site the file belongs to, or the signed-URL read refuses it.
+    expect(post.mock.calls[0]?.[2]).toMatchObject({
+      params: { ownerEntityType: 'EXPENSE', kind: 'BILL', siteId: 'site-a' },
+    });
+    expect(post.mock.calls[1]?.[1]).toMatchObject({ attachmentId: 'att-3', docType: 'BILL' });
+  });
+
+  /** An expense does not move site: the site is what scoped every approval taken on it. */
+  it('will not let a correction change the site', async () => {
+    mockGets(returnedExpense());
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+
+    // The site list and the expense list are two queries, and the row only appears once the
+    // second lands. Waiting on the first alone is what made this flake under a loaded runner.
+    await screen.findByRole('combobox', { name: 'Site' });
+    await user.click(
+      await screen.findByRole('button', { name: 'Correct it' }, { timeout: 5000 }),
+    );
+
+    expect(screen.getByRole('combobox', { name: 'Site' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 
   /**

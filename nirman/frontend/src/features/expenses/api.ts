@@ -212,6 +212,80 @@ export function duplicateCandidates(error: unknown): DuplicateCandidate[] | null
   return body?.candidates ?? null;
 }
 
+export interface ExpenseEdit {
+  id: string;
+  expenseDate: string;
+  categoryId: string;
+  description: string;
+  billNumber?: string | undefined;
+  amountBeforeTax: number;
+  gstPercent: number;
+  noBillReason?: string | undefined;
+  version: number;
+}
+
+/**
+ * Correcting an expense the office sent back, or a draft not yet sent.
+ *
+ * <p>Not queued when there is no signal, unlike booking one. A correction is a reply to
+ * something the office said about a row that already exists on the server, and the row may
+ * have moved since — approved by somebody else, or returned a second time. Queuing the reply
+ * would have it apply days later to a record that no longer says what was being answered,
+ * which is exactly the case {@code version} exists to refuse. So it waits for a connection,
+ * and the screen says so.</p>
+ */
+export function useUpdateExpense() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...body }: ExpenseEdit) =>
+      (await apiClient.put<Expense>(`/expenses/${id}`, body)).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: expenseKeys.all });
+    },
+  });
+}
+
+/**
+ * A bill photographed onto an expense that already exists — the correction path's half of
+ * what {@link useCreateExpense} does in one go for a new one.
+ *
+ * <p>Two calls, file first, exactly as the offline drain does it: an attachment with no owner
+ * is a draft upload its uploader may still delete, while a link to a file that does not exist
+ * is a bill somebody has to approve without being able to see it. "There is no bill" is one
+ * of the two things an expense is sent back for, so this is most of why the screen lets a
+ * returned row be corrected at all.</p>
+ */
+export function useAttachBill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      expenseId,
+      siteId,
+      file,
+    }: {
+      expenseId: string;
+      siteId: string;
+      file: File;
+    }) => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      const created = await apiClient.post<{ id: string }>('/attachments', form, {
+        params: { ownerEntityType: 'EXPENSE', kind: 'BILL', siteId },
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return (
+        await apiClient.post<Expense>(`/expenses/${expenseId}/attachments`, {
+          attachmentId: created.data.id,
+          docType: 'BILL',
+        })
+      ).data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: expenseKeys.all });
+    },
+  });
+}
+
 export function useSubmitExpense() {
   const queryClient = useQueryClient();
   return useMutation({
