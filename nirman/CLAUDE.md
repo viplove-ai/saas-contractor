@@ -170,8 +170,14 @@ if the tests pass:
   `stock_transactions` — a posting would report the mixer as used up by the slab it poured
   and leave the store's balance claiming there is nothing to pour with. Anybody posted to the
   site may enter a machine (`equipment:create`) and only an administrator accepts it
-  (`equipment:approve`), corrects it or removes it (`equipment:write`); an administrator's own
-  entry arrives accepted, because a queue of his own rows is one he learns to click through.
+  (`equipment:approve`) or removes it (`equipment:write`); an administrator's own entry
+  arrives accepted, because a queue of his own rows is one he learns to click through.
+  **Correcting is shared, and re-opens.** The office corrects any row; the man who entered one
+  corrects his own — its description or its photograph — because an entry he may create and
+  never amend leaves him reporting a broken mixer by telephone. His correction is not quiet:
+  `SiteEquipment.reopen()` puts the row back to PENDING and clears the decision with it, so
+  nothing reaches the register unread. The office's own correction does not re-open, for the
+  same reason its own entry arrives accepted.
 - **The field may name a thing, never value it.** A material off a challan
   (`POST /materials/field`) and an expense head off a bill (`POST /expense-categories/field`)
   both create real rows marked `provisional`, both refuse everything that carries a number or

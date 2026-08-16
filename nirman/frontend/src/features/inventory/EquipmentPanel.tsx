@@ -106,15 +106,27 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
   const canWrite = hasPermission('equipment:write');
 
   /**
-   * Who may put the picture on this row, which the server decides and this only mirrors.
+   * Who may change what this row says — its wording or its picture. The server decides and
+   * this only mirrors it.
    *
-   * <p>The office, always. The man who entered it, until somebody has decided about it — he
-   * is the one standing next to the machine, and the photograph is usually taken on a later
-   * day than the entry. Showing the camera on rows where it would be refused is worse than
-   * not showing it: the supervisor learns the button is a lie.</p>
+   * <p>The office, on anything. The man who entered it, on his own entry, whatever the office
+   * has since decided about it: he is the one standing next to the machine, and an entry he
+   * may create but never amend leaves him reporting a broken mixer by telephone. Not
+   * somebody else's row, though he stands at the same site. Showing the button where the
+   * server would refuse it is worse than not showing it: the supervisor learns it is a lie.
+   * </p>
    */
-  const mayPhotograph = (machine: Equipment): boolean =>
-    canWrite || (canAdd && machine.status === 'PENDING' && machine.createdBy === user?.id);
+  const mayAmend = (machine: Equipment): boolean =>
+    canWrite || (canAdd && machine.createdBy === user?.id);
+
+  /**
+   * Whether saving this correction will put the row back in the queue.
+   *
+   * <p>Only the field's changes do. The office correcting its own register is the office
+   * deciding, and it does not send the entry to itself.</p>
+   */
+  const reopensOnSave = (machine: Equipment | null): boolean =>
+    Boolean(machine) && !canWrite && machine!.status !== 'PENDING';
 
   /** The object URL for a picture chosen but not yet sent. See PhotoThumb on why it is state. */
   const [newPhotoPreview, setNewPhotoPreview] = useState<string | null>(null);
@@ -246,7 +258,7 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
       cell: (machine) =>
         machine.photoAttachmentId ? (
           <MachinePhoto attachmentId={machine.photoAttachmentId} name={machine.name} />
-        ) : mayPhotograph(machine) ? (
+        ) : mayAmend(machine) ? (
           <PickPhotoButton
             label="Photograph it"
             busy={setPhoto.isPending}
@@ -300,7 +312,9 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
     },
   ];
 
-  if (canDecide || canWrite) {
+  // Also for a plain site account now: he corrects the rows he entered, so the column is his
+  // too. It stays absent for somebody who can only read the register — a column of nothing.
+  if (canDecide || canWrite || canAdd) {
     columns.push({
       key: 'actions',
       header: 'Actions',
@@ -318,15 +332,15 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
               </Button>
             </>
           )}
+          {mayAmend(machine) && (
+            <Button size="small" onClick={() => openEdit(machine)}>
+              Edit
+            </Button>
+          )}
           {canWrite && (
-            <>
-              <Button size="small" onClick={() => openEdit(machine)}>
-                Edit
-              </Button>
-              <Button size="small" color="error" onClick={() => void drop(machine)}>
-                Remove
-              </Button>
-            </>
+            <Button size="small" color="error" onClick={() => void drop(machine)}>
+              Remove
+            </Button>
           )}
         </>
       ),
@@ -403,6 +417,18 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
             {!editing && !canDecide && (
               <Alert severity="info">
                 This goes on the register once the office accepts it.
+              </Alert>
+            )}
+            {/*
+              Said before the change is typed, not after it is refused. A supervisor correcting
+              an accepted machine is undoing an acceptance, and finding that out from a row that
+              silently went back to "Waiting on the office" is how he stops correcting anything.
+            */}
+            {reopensOnSave(editing) && (
+              <Alert severity="warning">
+                {editing?.status === 'REJECTED'
+                  ? 'Saving sends this back to the office to look at again.'
+                  : 'The office has accepted this machine. Saving a change sends it back to them to accept again.'}
               </Alert>
             )}
             <TextField
@@ -513,7 +539,7 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
                   busy={setPhoto.isPending}
                   onPick={setNewPhoto}
                 />
-                {editing?.photoAttachmentId && !newPhoto && canWrite && (
+                {editing?.photoAttachmentId && !newPhoto && mayAmend(editing) && (
                   <Button
                     size="small"
                     color="error"
@@ -542,7 +568,13 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
             disabled={!complete || add.isPending || update.isPending}
             onClick={() => void save()}
           >
-            {add.isPending || update.isPending ? 'Saving…' : editing ? 'Save' : 'Add it'}
+            {add.isPending || update.isPending
+              ? 'Saving…'
+              : reopensOnSave(editing)
+                ? 'Save and send it back'
+                : editing
+                  ? 'Save'
+                  : 'Add it'}
           </Button>
         </DialogActions>
       </Dialog>

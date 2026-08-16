@@ -174,16 +174,29 @@ public class SiteEquipmentService {
     }
 
     /**
-     * Correcting an entry — the office's, and only the office's.
+     * Correcting an entry — the office's on any row, and the field's on the rows it entered.
      *
-     * <p>Not the site's, even for the row the site typed. Once an entry is on the register
-     * somebody has read it and decided about it, and an entry that can be quietly rewritten
-     * afterwards makes the acceptance mean nothing.</p>
+     * <p>V25 gave this to the office alone, on the argument that a decided entry which can be
+     * quietly rewritten makes the acceptance mean nothing. The argument was right about the
+     * quietly and wrong about the rewritten. What it produced was a supervisor who could say
+     * a mixer had arrived and then had no way to say it had broken, so the register carried
+     * WORKING against a machine nobody could pour with and the correction travelled by
+     * telephone — which is the state this whole module exists to end.</p>
+     *
+     * <p>So the field may correct what the field entered, and the correction is not quiet: it
+     * puts the row back in the queue as PENDING and drops the decision with it (see {@link
+     * SiteEquipment#reopen()}). The office reads the changed entry and agrees to it, or does
+     * not. Nothing reaches the register unread, which is the invariant V25 was actually
+     * defending.</p>
+     *
+     * <p>The office's own correction does not re-open — it is the office deciding, and asking
+     * it to approve itself is the ceremony {@link #create} already refuses to hold.</p>
      */
-    @PreAuthorize("hasAuthority('equipment:write')")
+    @PreAuthorize("hasAnyAuthority('equipment:create', 'equipment:write')")
     public EquipmentResponse update(UUID id, UpdateEquipmentRequest request) {
         SiteEquipment machine = require(id);
         siteAccessGuard.assertCanAccess(machine.getSiteId());
+        boolean office = assertMayAmend(machine);
         if (!machine.getVersion().equals(request.version())) {
             throw new OptimisticLockingFailureException(
                     "Equipment " + id + " was changed by someone else");
@@ -208,8 +221,13 @@ public class SiteEquipmentService {
         machine.setSupplierId(requireSupplierWhenHired(request.ownership(), request.supplierId()));
         machine.setRemarks(trimToNull(request.remarks()));
 
+        if (!office) {
+            machine.reopen();
+        }
+
         audit.record("SITE_EQUIPMENT", id, "UPDATE", null,
-                Map.of("name", machine.getName(), "condition", machine.getCondition().name()),
+                Map.of("name", machine.getName(), "condition", machine.getCondition().name(),
+                        "status", machine.getStatus().name()),
                 null);
         return toResponses(List.of(machine)).get(0);
     }
@@ -217,13 +235,17 @@ public class SiteEquipmentService {
     /**
      * The photograph of the machine, put on or taken off.
      *
-     * <p>Its own act, and the only one on this register that both the field and the office
-     * may perform. <b>The man who entered the machine may photograph it while the office has
-     * not yet decided</b> — he is standing next to it, and the picture is the evidence the
-     * office is short of when it reads "concrete mixer, no number on it" typed from a yard
-     * forty kilometres away. The moment the entry is accepted or rejected it is the office's
-     * row like every other field on it, because a decided entry that can still be changed by
-     * the man who made it makes the decision mean nothing.</p>
+     * <p>Its own act, and it follows exactly the rule {@link #update} does: the office on any
+     * row, the man who entered the machine on his own. He is the one standing next to it, and
+     * the picture is the evidence the office is short of when it reads "concrete mixer, no
+     * number on it" typed from a yard forty kilometres away — so a photograph he can take
+     * only during the hours before somebody clicks Accept is one he mostly cannot take.</p>
+     *
+     * <p>Replacing the picture on a decided row therefore sends it back to the queue, for the
+     * same reason a corrected description does: the photograph is what the office agreed to,
+     * and a new one is a new claim. Adding the first picture to a row that has none does not
+     * — nothing the office read has changed, and a register that punished a supervisor for
+     * finally photographing the mixer would teach him not to.</p>
      *
      * <p>That rule is also why the picture is not part of {@code create}: it arrives on a
      * different day from the entry. The mixer is written down at the gate in the rain and
@@ -238,7 +260,8 @@ public class SiteEquipmentService {
     public EquipmentResponse setPhoto(UUID id, UUID attachmentId) {
         SiteEquipment machine = require(id);
         siteAccessGuard.assertCanAccess(machine.getSiteId());
-        assertMayPhotograph(machine);
+        boolean office = assertMayAmend(machine);
+        boolean replacesAPicture = machine.getPhotoAttachmentId() != null;
 
         if (attachmentId == null) {
             machine.setPhotoAttachmentId(null);
@@ -255,35 +278,42 @@ public class SiteEquipmentService {
             machine.setPhotoAttachmentId(attachmentId);
         }
 
+        if (!office && replacesAPicture) {
+            machine.reopen();
+        }
+
         audit.record("SITE_EQUIPMENT", id, attachmentId == null ? "PHOTO_REMOVE" : "PHOTO", null,
                 Map.of("name", machine.getName(),
-                        "photoAttachmentId", String.valueOf(attachmentId)), null);
+                        "photoAttachmentId", String.valueOf(attachmentId),
+                        "status", machine.getStatus().name()), null);
         return toResponses(List.of(machine)).get(0);
     }
 
     /**
-     * Who may put the picture on this row.
+     * Who may change what this row says — its description or its photograph.
      *
-     * <p>The office, always. The man who entered it, until somebody has decided about it —
-     * after which changing what the entry shows is a correction, and corrections are
-     * {@code equipment:write} by the argument on {@link #update}.</p>
+     * <p>The office, on anything. The man who entered it, on his own entry, whatever the
+     * office has since decided about it: he is the one who can see the machine, and an entry
+     * he may create but never amend leaves him reporting a broken mixer by telephone.</p>
+     *
+     * <p>Not somebody else's entry, though he stands at the same site. Two supervisors
+     * rewriting each other's rows is a register where nobody can be asked what a line means,
+     * and the office is already the answer for a row whose author has gone.</p>
+     *
+     * @return true when the caller is the office, whose changes are decisions rather than
+     *         claims and so do not send the row back to the queue
      */
-    private void assertMayPhotograph(SiteEquipment machine) {
+    private boolean assertMayAmend(SiteEquipment machine) {
         if (currentUser.hasPermission("equipment:write")) {
-            return;
-        }
-        if (machine.getStatus() != SiteEquipment.Status.PENDING) {
-            throw BusinessException.forbidden(
-                    "The office has already decided about this entry, so changing its "
-                            + "photograph is theirs now. Ask them, or enter the machine again "
-                            + "if it is a different one.");
+            return true;
         }
         UUID me = currentUser.currentUserIdOrNull();
         if (me == null || !me.equals(machine.getCreatedBy())) {
             throw BusinessException.forbidden(
-                    "This entry is somebody else's. You can photograph the machines you "
-                            + "entered yourself while the office has not decided about them.");
+                    "This entry is somebody else's. You can change the machines you entered "
+                            + "yourself; the rest are the office's to correct.");
         }
+        return false;
     }
 
     /**

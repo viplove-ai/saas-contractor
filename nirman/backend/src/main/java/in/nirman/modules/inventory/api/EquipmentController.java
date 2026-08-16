@@ -78,7 +78,10 @@ public class EquipmentController {
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Correct an entry. The office's, including for rows the site typed.")
+    @Operation(summary = "Correct an entry",
+            description = "The office on any row; the man who entered the machine on his own. "
+                    + "A correction by the field puts the row back to PENDING and drops the "
+                    + "earlier decision with it, so nothing reaches the register unread.")
     public EquipmentResponse update(@PathVariable UUID id,
                                     @Valid @RequestBody UpdateEquipmentRequest request) {
         return equipment.update(id, request);
@@ -87,9 +90,10 @@ public class EquipmentController {
     @PutMapping("/{id}/photo")
     @Operation(summary = "Put the picture of the machine on the entry, or take it off",
             description = "Upload the file to /attachments first, then send its id here. The "
-                    + "office may at any time; the man who entered the machine may while the "
-                    + "entry is still waiting to be decided — the photograph usually arrives "
-                    + "on a later day than the entry. A null attachmentId removes it.")
+                    + "office on any row; the man who entered the machine on his own — the "
+                    + "photograph usually arrives on a later day than the entry. Replacing an "
+                    + "existing picture from the field re-opens the row for acceptance; adding "
+                    + "the first one does not. A null attachmentId removes it.")
     public EquipmentResponse setPhoto(@PathVariable UUID id,
                                       @Valid @RequestBody SetEquipmentPhotoRequest request) {
         return equipment.setPhoto(id, request.attachmentId());

@@ -147,6 +147,28 @@ public class SiteEquipment extends BaseEntity {
         this.decisionRemarks = remarks;
     }
 
+    /**
+     * Back into the queue, because the field has changed what the entry says.
+     *
+     * <p>The office accepted a description, not a row id. When the man at the site corrects
+     * the description — the mixer is under repair, the frame count was four and not three,
+     * the photograph shows a different machine — the thing that was accepted no longer
+     * exists, and leaving the row ACCEPTED would let an unchecked claim inherit a decision
+     * taken about something else. So the decision is dropped with it: a stale {@code
+     * decidedBy} on a PENDING row would name somebody as having agreed to wording they never
+     * read.</p>
+     *
+     * <p>Only the field re-opens an entry. The office correcting its own register is the
+     * office deciding, and sending it to itself is the ceremony {@code create} already
+     * refuses to hold.</p>
+     */
+    public void reopen() {
+        this.status = Status.PENDING;
+        this.decidedAt = null;
+        this.decidedBy = null;
+        this.decisionRemarks = null;
+    }
+
     public void delete(Instant at, UUID by) {
         this.deletedAt = at;
         this.deletedBy = by;

@@ -114,7 +114,9 @@ name already on file comes back rather than becoming a second line of the same r
 | GET|POST | `/inventory/equipment` | plant held at a store — **not stock**, nothing here touches the ledger. `?siteId&storeId&status`. POST is idempotent on the client id and needs `equipment:create`; the row is PENDING unless the caller may accept it |
 | GET | `/inventory/equipment/{id}` | |
 | POST | `/inventory/equipment/{id}/decision` | `{action:ACCEPT\|REJECT,remarks}` — `equipment:approve`, admin only |
-| PUT|DELETE | `/inventory/equipment/{id}` | `equipment:write`, admin only. DELETE is soft |
+| PUT | `/inventory/equipment/{id}` | correct an entry. `equipment:write` on any row; `equipment:create` on a row the caller entered, and that correction re-opens it to PENDING and drops the old decision. Needs `version` |
+| PUT | `/inventory/equipment/{id}/photo` | `{attachmentId}`, null to remove. Same rule as PUT above; replacing an existing picture from the field re-opens the row, adding the first one does not |
+| DELETE | `/inventory/equipment/{id}` | `equipment:write`, admin only. Soft |
 
 ### /material-estimates
 `GET|POST /material-estimates` (`?projectId&materialId&level`) — a repeat for the same scope

@@ -114,14 +114,52 @@ describe('EquipmentPanel', () => {
     expect(body.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-/i);
   });
 
-  /** Accepting, correcting and removing are the office's. A supervisor sees none of them. */
-  it('offers the site no way to accept, correct or remove a row', async () => {
+  /**
+   * Accepting and removing stay the office's. Correcting no longer is — but only on the row
+   * this account entered, which is the line the server draws and this screen has to draw the
+   * same way.
+   */
+  it('offers the site a correction on its own row, and no way to accept or remove', async () => {
     renderPanel();
+    const register = await findRegister();
+
+    expect(register.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+  });
+
+  it('offers the site no correction on somebody else’s row', async () => {
+    renderPanel([{ ...SITE_ENTRY, createdBy: 'u-2' }]);
     await findRegister();
 
-    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+  });
+
+  /**
+   * The point of the whole change: the mixer the office accepted in March has broken, and the
+   * man looking at it can say so. The warning is asserted because a correction that silently
+   * undoes an acceptance is one he makes once.
+   */
+  it('warns the site that correcting an accepted machine sends it back, then sends it', async () => {
+    const accepted: Equipment = { ...SITE_ENTRY, status: 'ACCEPTED', version: 3 };
+    put.mockResolvedValue({ data: { ...accepted, condition: 'UNDER_REPAIR', status: 'PENDING' } });
+    const user = userEvent.setup({ delay: null });
+    renderPanel([accepted]);
+    const register = await findRegister();
+
+    await user.click(register.getByRole('button', { name: 'Edit' }));
+    expect(
+      screen.getByText(/Saving a change sends it back to them to accept again/),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Save and send it back' }));
+
+    await waitFor(() => expect(put).toHaveBeenCalledOnce());
+    const [url, body] = put.mock.calls[0] as [string, { version: number }];
+    expect(url).toBe('/inventory/equipment/eq-1');
+    // The version rides along, so two people correcting the same row is a 409 and not a
+    // silent overwrite of whichever of them saved first.
+    expect(body.version).toBe(3);
   });
 
   it('lets an administrator accept the entry', async () => {
@@ -219,10 +257,12 @@ describe('EquipmentPanel', () => {
 
   /*
     The camera is offered exactly where it would work. The server lets the man who entered a
-    machine photograph it until the office has decided, and nobody else at the site — a button
-    that appears on every row and fails on most of them teaches the supervisor to distrust it.
+    machine photograph it — including after the office has decided, because a picture he can
+    only take in the hours before somebody clicks Accept is one he mostly cannot take — and
+    nobody else at the site. A button that appears on every row and fails on most of them
+    teaches the supervisor to distrust it.
   */
-  it('offers the camera on the entry the supervisor made, and not on the rest', async () => {
+  it('offers the camera on the entries the supervisor made, decided or not', async () => {
     renderPanel([
       SITE_ENTRY,
       { ...SITE_ENTRY, id: 'eq-2', name: 'Somebody else’s vibrator', createdBy: 'u-9' },
@@ -233,9 +273,10 @@ describe('EquipmentPanel', () => {
       within(within(table()).getByText(name).closest('tr') as HTMLElement);
 
     expect(rowFor('Concrete Mixer 10/7').getByLabelText('Photograph it')).toBeInTheDocument();
-    // Not his to photograph, and not his to photograph any more, respectively.
+    // His own, and the office deciding about it did not make it somebody else's.
+    expect(rowFor('Already accepted mixer').getByLabelText('Photograph it')).toBeInTheDocument();
+    // Not his, whoever decided about it.
     expect(rowFor('Somebody else’s vibrator').getByText('No photo')).toBeInTheDocument();
-    expect(rowFor('Already accepted mixer').getByText('No photo')).toBeInTheDocument();
   });
 
   /** The office may photograph any row, decided or not: correcting the register is theirs. */
