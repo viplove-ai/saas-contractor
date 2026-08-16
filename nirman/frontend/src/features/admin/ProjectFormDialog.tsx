@@ -13,7 +13,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { NitImportPanel } from './NitImportPanel';
@@ -25,6 +25,7 @@ import {
   useUpdateProject,
   useUsers,
 } from './api';
+import { quotedBudget } from './quotedBudget';
 import { projectSchema, type ProjectForm } from './schema';
 import type { AdminProject, NitPreview, ProjectStatus } from './types';
 
@@ -142,12 +143,20 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
     handleSubmit,
     reset,
     watch,
+    getValues,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<ProjectForm>({ resolver: zodResolver(projectSchema), defaultValues: EMPTY });
 
   // Only to seed the site fields when the box is ticked; the project code is the natural stem.
   const watchedCode = watch('code');
   const watchedName = watch('name');
+  /**
+   * The last budget this dialog filled in itself, so it can tell its own figure from one
+   * somebody typed. A budget that still holds what we put there is ours to keep updating; a
+   * budget holding anything else has been overridden and is never written over again.
+   */
+  const filledBudget = useRef<string | null>(null);
   /** Ticking the box makes these two required — the server would refuse them empty anyway. */
   const siteIncomplete = alsoSite && (!siteCode.trim() || !siteName.trim());
 
@@ -162,6 +171,11 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
     setSiteCode('');
     setSiteName('');
     setCreatedProjectId(null);
+    // A saved budget that is exactly what the bid works out to was ours the first time and
+    // stays ours; anything else the project holds counts as already overridden.
+    filledBudget.current = project
+      ? quotedBudget(project.contractValue?.toString(), project.quotedPercent?.toString())
+      : null;
     reset(
       project
         ? {
@@ -185,10 +199,47 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
     );
   }, [open, project, editing, reset]);
 
+  /**
+   * Puts the bid-adjusted contract value in the budget box, until somebody says otherwise.
+   *
+   * <p>The notice states the estimate put to tender and the contractor states his quote against
+   * it; what the work will actually pay is the one moved by the other, and it was being worked
+   * out on a calculator and typed into the third box. Filling it removes the arithmetic, not
+   * the decision — the box stays a plain editable field, and a figure typed into it is his for
+   * good, because a budget can be set by things this sum knows nothing about.</p>
+   *
+   * <p>Clearing the quote clears a budget we filled, rather than leaving the stale product of
+   * a figure that is no longer there — that would quietly turn a suggestion into an assertion.
+   * Emptying the box by hand hands it back: an empty budget is nobody's claim.</p>
+   *
+   * <p>Driven from the two fields' own change events rather than from a watch, because the
+   * effect would also fire on the pass where {@code reset} has been called but has not yet
+   * re-rendered, and would decide ownership against the values of the previous project.</p>
+   */
+  function syncBudget(typed: Partial<Pick<ProjectForm, 'contractValue' | 'quotedPercent'>>) {
+    const current = getValues('budgetAmount') ?? '';
+    if (current !== '' && current !== filledBudget.current) {
+      return;
+    }
+    // The box just typed in is read from the event: react-hook-form has not necessarily
+    // settled it into the form state by the time its onChange hands back to us.
+    const derived = quotedBudget(
+      typed.contractValue ?? getValues('contractValue'),
+      typed.quotedPercent ?? getValues('quotedPercent'),
+    );
+    filledBudget.current = derived;
+    setValue('budgetAmount', derived ?? '', { shouldValidate: current !== '' });
+  }
+
+  /** Registered here rather than inline so each field's own onChange can be called first. */
+  const contractValueField = register('contractValue');
+  const quotedPercentField = register('quotedPercent');
+
   /** Fills the form from a parsed notice, leaving every field editable. */
   function applyPreview(parsed: NitPreview) {
     setPreview(parsed);
     setServerError(null);
+    filledBudget.current = null;
     reset({
       ...EMPTY,
       code: parsed.suggestedCode ?? '',
@@ -423,8 +474,12 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
               label="Contract value (optional)"
               InputLabelProps={FLOATING_LABEL}
               error={!!errors.contractValue}
-              helperText={errors.contractValue?.message ?? 'What the client pays, in rupees.'}
-              {...register('contractValue')}
+              helperText={errors.contractValue?.message ?? 'The estimate put to tender, in rupees.'}
+              {...contractValueField}
+              onChange={(event) => {
+                void contractValueField.onChange(event);
+                syncBudget({ contractValue: event.target.value });
+              }}
             />
             <TextField
               label="Quoted % (optional)"
@@ -434,13 +489,20 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
                 errors.quotedPercent?.message ??
                 'Above (+) or below (−) the estimate. The planner reads it.'
               }
-              {...register('quotedPercent')}
+              {...quotedPercentField}
+              onChange={(event) => {
+                void quotedPercentField.onChange(event);
+                syncBudget({ quotedPercent: event.target.value });
+              }}
             />
             <TextField
               label="Budget (optional)"
               InputLabelProps={FLOATING_LABEL}
               error={!!errors.budgetAmount}
-              helperText={errors.budgetAmount?.message ?? 'What you plan to spend.'}
+              helperText={
+                errors.budgetAmount?.message ??
+                'The contract value at the quoted rate. Type over it to set your own.'
+              }
               {...register('budgetAmount')}
             />
           </Stack>
