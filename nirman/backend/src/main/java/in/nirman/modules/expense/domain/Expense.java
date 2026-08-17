@@ -1,6 +1,7 @@
 package in.nirman.modules.expense.domain;
 
 import in.nirman.common.BaseEntity;
+import in.nirman.common.CostAllocation;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -126,6 +127,35 @@ public class Expense extends BaseEntity {
     private UUID siteAdvanceId;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "cost_allocation", nullable = false, length = 10)
+    private CostAllocation costAllocation = CostAllocation.SITE;
+
+    /** SPLIT only. The company's part is derived from it and never stored beside it. */
+    @Column(name = "site_share", precision = 18, scale = 2)
+    private BigDecimal siteShare;
+
+    @Column(name = "allocation_note", length = 500)
+    private String allocationNote;
+
+    @Column(name = "allocated_at")
+    private Instant allocatedAt;
+
+    @Column(name = "allocated_by")
+    private UUID allocatedBy;
+
+    @Column(name = "revision", nullable = false)
+    private int revision;
+
+    @Column(name = "revised_at")
+    private Instant revisedAt;
+
+    @Column(name = "revised_by")
+    private UUID revisedBy;
+
+    @Column(name = "revision_reason")
+    private String revisionReason;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "workflow_status", nullable = false, length = 25)
     private Workflow workflowStatus = Workflow.DRAFT;
 
@@ -188,6 +218,76 @@ public class Expense extends BaseEntity {
         this.gstAmount = amountBeforeTax.multiply(this.gstPercent)
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         this.totalAmount = amountBeforeTax.add(this.gstAmount);
+    }
+
+    /**
+     * The head's answer, taken while the expense is being booked.
+     *
+     * <p>Not a decision — the approver's is the decision. This is what he is shown already
+     * chosen, so that the question is asked about the bill where it is interesting and not
+     * two hundred times about office stationery.</p>
+     */
+    public void proposeAllocation(CostAllocation proposed) {
+        this.costAllocation = proposed == null ? CostAllocation.SITE : proposed;
+        this.siteShare = null;
+    }
+
+    /**
+     * Whose cost it is, decided by whoever approved the money or re-decided by the office.
+     *
+     * @param share the site's part, for {@code SPLIT} and nothing else. Strictly inside the
+     *              total: a split giving the site all of it is {@code SITE} and one giving it
+     *              none is {@code COMPANY}, and two spellings of one fact is what makes a
+     *              register disagree with itself.
+     */
+    public void allocate(CostAllocation allocation, BigDecimal share, String note,
+                         Instant at, UUID by) {
+        if (allocation == CostAllocation.SPLIT
+                && (share == null || share.signum() <= 0 || share.compareTo(totalAmount) >= 0)) {
+            throw new IllegalArgumentException(
+                    "a split needs a site share strictly between zero and the total");
+        }
+        this.costAllocation = allocation;
+        this.siteShare = allocation == CostAllocation.SPLIT ? share : null;
+        this.allocationNote = note;
+        this.allocatedAt = at;
+        this.allocatedBy = by;
+    }
+
+    /** What the site's project carries. The only one of the two that may be added to a job. */
+    public BigDecimal siteCost() {
+        return switch (costAllocation) {
+            case SITE -> totalAmount;
+            case COMPANY -> BigDecimal.ZERO;
+            case SPLIT -> siteShare;
+        };
+    }
+
+    /** Overhead. Derived, never stored, so a corrected total cannot leave the two disagreeing. */
+    public BigDecimal companyCost() {
+        return totalAmount.subtract(siteCost());
+    }
+
+    /**
+     * Re-opens an approved expense so its author can correct it.
+     *
+     * <p>Not an edit behind a signature: the caller cancels the approval chain and submits it
+     * again, and what stands is what somebody signed a second time. The allocation goes back
+     * to the head's default because an allocation is a decision about an amount, and the
+     * amount is the thing being changed — a split of ₹45,000 means nothing once the row says
+     * ₹4,500.</p>
+     */
+    public void revise(Instant at, UUID by, String reason, CostAllocation headDefault) {
+        this.revision += 1;
+        this.revisedAt = at;
+        this.revisedBy = by;
+        this.revisionReason = reason;
+        this.approvedAt = null;
+        this.approvedBy = null;
+        this.allocatedAt = null;
+        this.allocatedBy = null;
+        this.allocationNote = null;
+        proposeAllocation(headDefault);
     }
 
     public void submit(Instant at, UUID by) {
@@ -375,6 +475,42 @@ public class Expense extends BaseEntity {
 
     public void setSiteAdvanceId(UUID siteAdvanceId) {
         this.siteAdvanceId = siteAdvanceId;
+    }
+
+    public CostAllocation getCostAllocation() {
+        return costAllocation;
+    }
+
+    public BigDecimal getSiteShare() {
+        return siteShare;
+    }
+
+    public String getAllocationNote() {
+        return allocationNote;
+    }
+
+    public Instant getAllocatedAt() {
+        return allocatedAt;
+    }
+
+    public UUID getAllocatedBy() {
+        return allocatedBy;
+    }
+
+    public int getRevision() {
+        return revision;
+    }
+
+    public Instant getRevisedAt() {
+        return revisedAt;
+    }
+
+    public UUID getRevisedBy() {
+        return revisedBy;
+    }
+
+    public String getRevisionReason() {
+        return revisionReason;
     }
 
     public Workflow getWorkflowStatus() {

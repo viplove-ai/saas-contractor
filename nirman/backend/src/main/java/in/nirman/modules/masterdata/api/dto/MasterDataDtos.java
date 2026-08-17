@@ -1,5 +1,6 @@
 package in.nirman.modules.masterdata.api.dto;
 
+import in.nirman.common.CostAllocation;
 import in.nirman.modules.masterdata.domain.Vendor;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -201,6 +202,9 @@ public final class MasterDataDtos {
     public record ExpenseCategoryResponse(
             UUID id, String code, String name, UUID parentId, boolean materialPurchase,
             boolean labourPayment, boolean requiresVendor, boolean active, boolean provisional,
+            /** What an expense under this head proposes to the approver: the site's, or the
+             *  organisation's. Never a split, which is an amount and so a fact about a bill. */
+            CostAllocation defaultAllocation,
             int sortOrder) {
     }
 
@@ -221,6 +225,8 @@ public final class MasterDataDtos {
             boolean materialPurchase,
             boolean labourPayment,
             boolean requiresVendor,
+            /** Null means the site's, which is what all but the office heads are. */
+            CostAllocation defaultAllocation,
             @Min(0) int sortOrder) {
     }
 }

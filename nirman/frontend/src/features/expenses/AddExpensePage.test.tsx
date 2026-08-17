@@ -373,6 +373,10 @@ describe('AddExpensePage', () => {
           totalAmount: 4000,
           paymentStatus: 'UNPAID',
           paidAmount: 0,
+          costAllocation: 'SITE',
+          siteCost: 4000,
+          companyCost: 0,
+          revision: 0,
           payableAmount: 4000,
           workflowStatus: 'DRAFT',
           version: 0,
@@ -437,6 +441,10 @@ describe('AddExpensePage', () => {
           totalAmount: 4000,
           paymentStatus: 'UNPAID',
           paidAmount: 0,
+          costAllocation: 'SITE',
+          siteCost: 4000,
+          companyCost: 0,
+          revision: 0,
           payableAmount: 4000,
           workflowStatus: 'APPROVED',
           version: 1,
@@ -448,6 +456,66 @@ describe('AddExpensePage', () => {
 
     expect(await screen.findByText('EXP-2025-0008')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Send for approval' })).not.toBeInTheDocument();
+    // It offers the other answer instead: re-open it, which keeps the number and asks for a
+    // fresh approval rather than giving the bill a second one through a void.
+    expect(screen.getByRole('button', { name: 'Re-open to correct' })).toBeInTheDocument();
+  });
+
+  /**
+   * The figure typed badly and already signed. The row keeps its number — that is the whole
+   * difference from a void — and the reason is required, because the approver is being asked
+   * to sign the same expense a second time and cannot act on "it changed".
+   */
+  it('re-opens an approved expense, and will not do it without a reason', async () => {
+    const approved: Expense = {
+      id: 'e8',
+      expenseNumber: 'EXP-2025-0008',
+      siteId: 'site-a',
+      expenseDate: '2025-06-02',
+      categoryId: 'cat-site',
+      description: 'Scaffolding hire',
+      amountBeforeTax: 45000,
+      gstPercent: 0,
+      gstAmount: 0,
+      totalAmount: 45000,
+      paymentStatus: 'UNPAID',
+      paidAmount: 0,
+      payableAmount: 45000,
+      costAllocation: 'SITE',
+      siteCost: 45000,
+      companyCost: 0,
+      revision: 0,
+      workflowStatus: 'APPROVED',
+      version: 3,
+      attachments: [],
+    };
+    mockGets({ ...NO_EXPENSES, totalElements: 1, content: [approved] });
+    post.mockResolvedValue({ data: { ...approved, workflowStatus: 'SUBMITTED', revision: 1 } });
+
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findByText('EXP-2025-0008');
+
+    await user.click(screen.getByRole('button', { name: 'Re-open to correct' }));
+    const send = screen.getByRole('button', { name: 'Re-open and send for approval again' });
+    expect(send).toBeDisabled();
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'What was wrong with it' }),
+      'typed 45,000 for 4,500',
+    );
+    const amount = screen.getByRole('spinbutton', { name: 'Amount before tax' });
+    await user.clear(amount);
+    await user.type(amount, '4500');
+    await user.click(screen.getByRole('button', { name: 'Re-open and send for approval again' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    expect(post.mock.calls[0]![0]).toBe('/expenses/e8/revise');
+    const body = post.mock.calls[0]![1] as { reason: string; amountBeforeTax: number; version: number };
+    expect(body.reason).toBe('typed 45,000 for 4,500');
+    expect(body.amountBeforeTax).toBe(4500);
+    // The version it was read at: the row may have moved, and this is the refusal that says so.
+    expect(body.version).toBe(3);
   });
 
   /**

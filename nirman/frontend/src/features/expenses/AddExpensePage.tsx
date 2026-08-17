@@ -15,6 +15,7 @@ import { useSelectedSite } from '../../shared/siteSelection';
 import { ReferenceNotice } from '../../shared/ReferenceNotice';
 import { StatusChip, type RecordStatus } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
+import { AllocationChip } from './AllocationChip';
 import { BillPhotoField } from './BillPhotoField';
 import {
   duplicateCandidates,
@@ -23,6 +24,7 @@ import {
   useExpenseCategories,
   useExpenses,
   useNameExpenseCategory,
+  useReviseExpense,
   useSites,
   useSubmitExpense,
   useUpdateExpense,
@@ -77,6 +79,15 @@ export function AddExpensePage() {
    */
   const [editing, setEditing] = useState<Expense | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
+  /**
+   * Why an already-approved expense is being re-opened.
+   *
+   * <p>Asked only in that case, and required there. A draft is corrected before anybody has
+   * looked at it and owes nobody an explanation; a figure somebody signed does — the approver
+   * is about to be asked to sign it a second time, and "it changed" is not a reason he can
+   * act on.</p>
+   */
+  const [revisionReason, setRevisionReason] = useState('');
 
   const sites = useSites();
   const [siteId, setSiteId] = useSelectedSite(sites.data);
@@ -84,6 +95,7 @@ export function AddExpensePage() {
   const nameCategory = useNameExpenseCategory();
   const create = useCreateExpense();
   const change = useUpdateExpense();
+  const reopen = useReviseExpense();
   const attachBill = useAttachBill();
   const submit = useSubmitExpense();
   const mine = useExpenses(siteId || undefined, '' as ExpenseWorkflow | '');
@@ -107,7 +119,15 @@ export function AddExpensePage() {
 
   /** One button does three calls, so every one of them has to hold it disabled. */
   const correcting =
-    change.isPending || attachBill.isPending || submit.isPending || nameCategory.isPending;
+    change.isPending ||
+    reopen.isPending ||
+    attachBill.isPending ||
+    submit.isPending ||
+    nameCategory.isPending;
+
+  /** Correcting something already signed, rather than something nobody has looked at yet. */
+  const reopening = editing?.workflowStatus === 'APPROVED';
+  const reasonGiven = !reopening || revisionReason.trim().length > 0;
 
   const site = sites.data?.find((candidate) => candidate.id === siteId);
   const booked = create.data;
@@ -129,6 +149,7 @@ export function AddExpensePage() {
   const openForCorrection = (expense: Expense) => {
     setEditing(expense);
     setEditError(null);
+    setRevisionReason('');
     setCandidates(null);
     setExpenseDate(expense.expenseDate);
     setCategoryId(expense.categoryId);
@@ -145,6 +166,7 @@ export function AddExpensePage() {
   const stopCorrecting = () => {
     setEditing(null);
     setEditError(null);
+    setRevisionReason('');
     setDescription('');
     setBillNumber('');
     setAmountBeforeTax('');
@@ -176,18 +198,30 @@ export function AddExpensePage() {
       setCategoryId(headId);
       setOtherName('');
     }
+    const edit = {
+      id: editing.id,
+      expenseDate,
+      categoryId: headId,
+      description: description.trim(),
+      billNumber: billNumber || undefined,
+      amountBeforeTax: Number(amountBeforeTax),
+      gstPercent: Number(gstPercent),
+      noBillReason: noBillReason || undefined,
+      version: editing.version,
+    };
     try {
-      const saved = await change.mutateAsync({
-        id: editing.id,
-        expenseDate,
-        categoryId: headId,
-        description: description.trim(),
-        billNumber: billNumber || undefined,
-        amountBeforeTax: Number(amountBeforeTax),
-        gstPercent: Number(gstPercent),
-        noBillReason: noBillReason || undefined,
-        version: editing.version,
-      });
+      /*
+        Two doors, and which one is open depends on whether anybody has signed it.
+
+        A draft or a returned row is edited and then sent — two calls, because they are two
+        acts and the second can fail on its own. An approved one is re-opened instead: one
+        call that cancels the approval, keeps the number and puts it back in the queue. It
+        cannot be the first pair, because between the edit and the send there would be a
+        moment when an approved expense carried a figure nobody had approved.
+      */
+      const saved = reopening
+        ? await reopen.mutateAsync({ ...edit, reason: revisionReason.trim() })
+        : await change.mutateAsync(edit);
       // The bill after the figures, and only if one was picked: "there is no bill" is one of
       // the two things an expense comes back for, and the photograph is the answer to it.
       if (photo) {
@@ -197,7 +231,9 @@ export function AddExpensePage() {
           file: photo,
         });
       }
-      await submit.mutateAsync(saved.id);
+      if (!reopening) {
+        await submit.mutateAsync(saved.id);
+      }
       stopCorrecting();
     } catch (error) {
       setEditError(apiErrorDetail(error));
@@ -273,15 +309,33 @@ export function AddExpensePage() {
               ? 'the office rejected this'
               : editing.workflowStatus === 'RETURNED'
                 ? 'the office sent this back to be fixed'
-                : 'a draft you have not sent yet'}
+                : reopening
+                  ? 'this has already been approved'
+                  : 'a draft you have not sent yet'}
           </Typography>
           {editing.rejectionReason && (
             <Typography variant="body2">{editing.rejectionReason}</Typography>
           )}
           <Typography variant="body2">
-            Fix it below and it goes back for approval when you save.
+            {reopening
+              ? 'It keeps its number, its approval is cancelled, and it goes back for a new one.'
+              : 'Fix it below and it goes back for approval when you save.'}
           </Typography>
         </Alert>
+      )}
+
+      {/*
+        The reason, at the top where the banner explaining why it is wanted is. Required for
+        this one case: the approver is about to be asked to sign the same expense a second
+        time, and he cannot act on "it changed".
+      */}
+      {reopening && (
+        <TextField
+          label="What was wrong with it"
+          value={revisionReason}
+          onChange={(e) => setRevisionReason(e.target.value)}
+          helperText="The office approved this figure once. Say what has to change and why."
+        />
       )}
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -475,11 +529,15 @@ export function AddExpensePage() {
             <Button
               variant="contained"
               color="secondary"
-              disabled={!complete || correcting}
+              disabled={!complete || !reasonGiven || correcting}
               onClick={() => void correct()}
               sx={{ minHeight: 48 }}
             >
-              {correcting ? 'Sending…' : 'Save and send for approval'}
+              {correcting
+                ? 'Sending…'
+                : reopening
+                  ? 'Re-open and send for approval again'
+                  : 'Save and send for approval'}
             </Button>
             <Button onClick={stopCorrecting} disabled={correcting} sx={{ minHeight: 48 }}>
               Cancel
@@ -518,9 +576,15 @@ export function AddExpensePage() {
               alignItems={{ sm: 'center' }}
             >
               <div>
-                <Stack direction="row" spacing={1} alignItems="center">
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
                   <Typography fontWeight={600}>{expense.expenseNumber}</Typography>
                   <StatusChip status={chipStatus(expense.workflowStatus)} />
+                  {/*
+                    Only once somebody has decided. Before that the row is carrying its head's
+                    proposal, and a label saying "Company expense" on a bill nobody has looked
+                    at yet is the screen answering a question on the approver's behalf.
+                  */}
+                  {expense.allocatedAt && <AllocationChip expense={expense} />}
                 </Stack>
                 <Typography variant="body2" color="text.secondary">
                   {expense.expenseDate} · {expense.categoryName} ·{' '}
@@ -567,6 +631,24 @@ export function AddExpensePage() {
                     Send for approval
                   </Button>
                 </Stack>
+              )}
+              {/*
+                And the row that has already been through. Until now a mistyped figure that
+                had been approved had one answer — telephone the office — because voiding it
+                and booking a replacement gives the bill a second number and leaves the
+                supplier's paper disagreeing with the system. Offered only while nothing has
+                been paid against it: after that the answer really is a void, and the server
+                says so in those words.
+              */}
+              {canSubmit && expense.workflowStatus === 'APPROVED' && expense.paidAmount === 0 && (
+                <Button
+                  variant="outlined"
+                  disabled={correcting || editing?.id === expense.id}
+                  onClick={() => openForCorrection(expense)}
+                  sx={{ minHeight: 48 }}
+                >
+                  {editing?.id === expense.id ? 'Re-opening above' : 'Re-open to correct'}
+                </Button>
               )}
             </Stack>
           </Paper>

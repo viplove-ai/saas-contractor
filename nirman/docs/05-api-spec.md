@@ -137,10 +137,13 @@ beside it and a `scopeComplete` flag saying whether the figure is the whole stor
 ### /expenses, /payments, /advances
 | Method | Path | Notes |
 |---|---|---|
-| GET|POST | `/expenses` | idempotent on the client id. POST returns **409 with the candidates** on a duplicate — exact vendor-and-bill-number, or same vendor and amount within a week — unless `?force=true`, which then requires `duplicateOverrideReason` |
-| GET|PUT | `/expenses/{id}` | PUT for draft, returned and rejected rows only. An approved expense is voided and replaced, never edited |
+| GET|POST | `/expenses` | idempotent on the client id. POST returns **409 with the candidates** on a duplicate — exact vendor-and-bill-number, or same vendor and amount within a week — unless `?force=true`, which then requires `duplicateOverrideReason`. GET filters `?siteId&vendorId&categoryId&status&allocation&paymentStatus&from&to` |
+| GET | `/expenses/summary` | what the same filter adds up to: booked, the site's share, the company's, paid, payable — computed per call, never stored |
+| GET|PUT | `/expenses/{id}` | PUT for draft, returned and rejected rows only. An approved expense is re-opened or voided, never edited in place |
 | POST | `/expenses/{id}/submit` | bill number, attached photograph or `noBillReason` required above `expense_settings.bill_required_above`; raises the approval chain |
-| POST | `/expenses/{id}/approve` | `{action:APPROVE\|REJECT\|RETURN,remarks}` — routes to the same engine as `/approvals/{id}/action` |
+| POST | `/expenses/{id}/approve` | `{action:APPROVE\|REJECT\|RETURN,remarks,allocation,siteShare,allocationNote}` — routes to the same engine as `/approvals/{id}/action`. The allocation is taken **only on an approval**; absent, the head's proposal stands |
+| PUT | `/expenses/{id}/allocation` | `expense:allocate`. Re-decides whose cost it is — `{allocation:SITE\|COMPANY\|SPLIT,siteShare,note}`. Refused on a closed site, a locked period, a void row, and on a material-purchase or wage head whose value is counted at the site |
+| POST | `/expenses/{id}/revise` | the author re-opens an approved expense: keeps its number, cancels its approval, re-enters the chain. Needs `reason` and `version`; refused once anything has been paid against it |
 | POST | `/expenses/{id}/void` | never a hard delete; cancels any level still waiting |
 | POST | `/expenses/{id}/attachments` | links an uploaded bill photograph |
 | GET|POST | `/payments` | partial payments are the normal case; refuses more than is still payable, and anything against an unapproved expense. `?vendorId&expenseId&from&to` |

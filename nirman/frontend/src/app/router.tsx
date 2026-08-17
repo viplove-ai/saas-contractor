@@ -83,6 +83,13 @@ export const router = createBrowserRouter([
           screen('approvals', async () => ({
             Component: (await import('../features/expenses/ApprovalsPage')).ApprovalsPage,
           })),
+          // Approvals is a queue; this is the ledger the queue empties into. Different
+          // question, different screen: "what is waiting on me" against "what did this month
+          // cost, and how much of it was the company's".
+          screen('payments', async () => ({
+            Component: (await import('../features/expenses/PaymentsRegisterPage'))
+              .PaymentsRegisterPage,
+          })),
           screen('dpr/new', async () => ({
             Component: (await import('../features/dpr/DprWizardPage')).DprWizardPage,
           })),

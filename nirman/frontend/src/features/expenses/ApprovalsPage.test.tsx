@@ -60,6 +60,10 @@ function expense(overrides: Partial<Expense> & { id: string; expenseNumber: stri
     paymentStatus: 'UNPAID',
     paidAmount: 0,
     payableAmount: 4000,
+    costAllocation: 'SITE',
+    siteCost: 4000,
+    companyCost: 0,
+    revision: 0,
     workflowStatus: 'SUBMITTED',
     version: 1,
     attachments: [],
@@ -167,9 +171,12 @@ describe('ApprovalsPage', () => {
 
     await waitFor(() => expect(post).toHaveBeenCalledOnce());
     expect(post.mock.calls[0]![0]).toBe('/expenses/e1/approve');
+    // The allocation rides along with the decision, because they are one act. Untouched, it
+    // is whatever the head proposed and the row already carries.
     expect(post.mock.calls[0]![1]).toEqual({
       action: 'APPROVE',
       remarks: 'Checked against the challan',
+      allocation: 'SITE',
     });
   });
 
@@ -181,6 +188,43 @@ describe('ApprovalsPage', () => {
     await user.click(screen.getAllByRole('button', { name: 'Send back to fix' })[0]!);
     await waitFor(() => expect(post).toHaveBeenCalledOnce());
     expect(post.mock.calls[0]![1]).toMatchObject({ action: 'RETURN' });
+  });
+
+  /** A refusal decides nothing about a cost that is not being incurred. */
+  it('leaves the allocation off a return', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findByText('EXP-2025-0001');
+
+    await user.click(screen.getAllByRole('button', { name: 'Send back to fix' })[0]!);
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    expect(post.mock.calls[0]![1]).not.toHaveProperty('allocation');
+  });
+
+  /**
+   * One bill, two costs. The site's part is typed and the company carries the rest — and the
+   * approval is held until the number is a real split, because the server refuses one that is
+   * the whole bill or none of it and a 422 at that point reads as a broken screen.
+   */
+  it('sends a split with the site’s part, and will not send an empty one', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findByText('EXP-2025-0001');
+
+    await user.click(screen.getAllByRole('combobox', { name: 'Whose cost is it' })[0]!);
+    await user.click(await screen.findByRole('option', { name: 'Part each' }));
+
+    expect(screen.getAllByRole('button', { name: 'Approve' })[0]!).toBeDisabled();
+
+    await user.type(screen.getAllByRole('spinbutton', { name: "The site's part" })[0]!, '1500');
+    await user.click(screen.getAllByRole('button', { name: 'Approve' })[0]!);
+
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    expect(post.mock.calls[0]![1]).toMatchObject({
+      action: 'APPROVE',
+      allocation: 'SPLIT',
+      siteShare: 1500,
+    });
   });
 
   /** An engineer approves and never pays. The payment half simply is not there for him. */

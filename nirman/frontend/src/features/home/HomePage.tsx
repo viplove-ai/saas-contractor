@@ -68,6 +68,13 @@ const GROUPS: Group[] = [
     tiles: [
       { title: 'Stock', to: '/inventory/stock', permission: 'inventory:read' },
       { title: 'Workers', to: '/workers', permission: 'worker:read' },
+      /*
+        A register rather than a queue, which is why it is here and not beside Approvals.
+        Behind expense:allocate: the screen exists to be read *and* corrected, and to somebody
+        who can do neither it is a page of other people's bills — the same reason Approvals
+        is not offered on 'expense:read'.
+      */
+      { title: 'Payments register', to: '/payments', permission: 'expense:allocate' },
     ],
   },
   {

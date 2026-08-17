@@ -11,6 +11,29 @@ export type ExpenseWorkflow =
 
 export type PaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
 
+/**
+ * Whose cost an expense is (V36).
+ *
+ * <p>Every expense is typed at a site, which is not the same thing as being the site's cost:
+ * the lorry of sand is, the accountant's salary is not, and both are typed by somebody
+ * standing at a site. {@code SPLIT} is the diesel bill that ran the mixer and the office
+ * car — one bill, two costs, and tearing it into two rows would stop it matching the paper.</p>
+ */
+export type CostAllocation = 'SITE' | 'COMPANY' | 'SPLIT';
+
+/** What the register's current filter adds up to. Computed server-side, over every row. */
+export interface AllocationSummary {
+  totalBooked: number;
+  siteCost: number;
+  companyCost: number;
+  paid: number;
+  payable: number;
+  expenseCount: number;
+  awaitingApproval: number;
+  /** Still carrying its head's proposal — approved without anybody reading the question. */
+  unallocatedCount: number;
+}
+
 export type ApprovalAction = 'APPROVE' | 'REJECT' | 'RETURN';
 
 export interface ExpenseCategory {
@@ -24,6 +47,11 @@ export interface ExpenseCategory {
   active: boolean;
   /** Named at a site while booking an expense, and nobody at the office has vetted it. */
   provisional?: boolean;
+  /**
+   * What an expense under this head proposes to the approver. Never a split — a split is an
+   * amount, and an amount is a fact about one bill rather than about a category.
+   */
+  defaultAllocation?: Exclude<CostAllocation, 'SPLIT'>;
 }
 
 /**
@@ -76,6 +104,19 @@ export interface Expense {
   payableAmount: number;
   noBillReason?: string;
   siteAdvanceId?: string;
+  /** Whose cost it is. The label every screen shows and the register groups by. */
+  costAllocation: CostAllocation;
+  /** What the site's project carries: the total, nothing, or the split's site part. */
+  siteCost: number;
+  /** Overhead. Derived server-side from the total and the site's part. */
+  companyCost: number;
+  allocationNote?: string;
+  /** Absent on a row nobody has decided yet: it is carrying its head's proposal. */
+  allocatedAt?: string;
+  /** How many times the author has re-opened it after approval. Zero for almost all. */
+  revision: number;
+  revisedAt?: string;
+  revisionReason?: string;
   workflowStatus: ExpenseWorkflow;
   /** Which level is waiting, and on whom. Absent once the record is through. */
   pendingLevel?: number;

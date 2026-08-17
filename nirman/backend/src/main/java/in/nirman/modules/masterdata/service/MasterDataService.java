@@ -448,6 +448,9 @@ public class MasterDataService {
         category.setMaterialPurchase(request.materialPurchase());
         category.setLabourPayment(request.labourPayment());
         category.setRequiresVendor(request.requiresVendor());
+        // What the approver will be shown already chosen. Absent means the site's, which is
+        // what all but the office heads are.
+        category.setDefaultAllocation(request.defaultAllocation());
         category.setSortOrder(request.sortOrder());
         expenseCategories.save(category);
         recordCreate("EXPENSE_CATEGORY", category.getId(), category.getCode());

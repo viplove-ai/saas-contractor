@@ -1,16 +1,20 @@
 package in.nirman.modules.expense.service;
 
 import in.nirman.common.BusinessException;
+import in.nirman.common.CostAllocation;
 import in.nirman.common.DocumentNumberService;
 import in.nirman.common.PageResponse;
 import in.nirman.common.PeriodLockGuard;
 import in.nirman.modules.approval.domain.Approval;
 import in.nirman.modules.approval.service.ApprovalEngine;
 import in.nirman.modules.audit.AuditService;
+import in.nirman.modules.expense.api.dto.ExpenseDtos.AllocateExpenseRequest;
+import in.nirman.modules.expense.api.dto.ExpenseDtos.AllocationSummary;
 import in.nirman.modules.expense.api.dto.ExpenseDtos.AttachBillRequest;
 import in.nirman.modules.expense.api.dto.ExpenseDtos.CreateExpenseRequest;
 import in.nirman.modules.expense.api.dto.ExpenseDtos.DuplicateCandidate;
 import in.nirman.modules.expense.api.dto.ExpenseDtos.ExpenseResponse;
+import in.nirman.modules.expense.api.dto.ExpenseDtos.ReviseExpenseRequest;
 import in.nirman.modules.expense.api.dto.ExpenseDtos.UpdateExpenseRequest;
 import in.nirman.modules.expense.domain.Expense;
 import in.nirman.modules.expense.domain.ExpenseAttachment;
@@ -18,6 +22,8 @@ import in.nirman.modules.expense.domain.ExpenseSettings;
 import in.nirman.modules.expense.repository.ExpenseAttachmentRepository;
 import in.nirman.modules.expense.repository.ExpenseRepository;
 import in.nirman.modules.expense.repository.ExpenseSettingsRepository;
+import in.nirman.modules.masterdata.domain.ExpenseCategory;
+import in.nirman.modules.masterdata.repository.ExpenseCategoryRepository;
 import in.nirman.modules.project.service.BoqLookup;
 import in.nirman.modules.project.service.SiteLookup;
 import in.nirman.security.CurrentUserProvider;
@@ -84,6 +90,11 @@ public class ExpenseService {
     private final ApprovalEngine approvals;
     private final SiteLookup sites;
     private final BoqLookup boqItems;
+    /**
+     * Read straight, as {@link ExpenseResponses} and {@link ExpenseLookupService} already do:
+     * master data is the reference catalogue every module reads and nothing reads back.
+     */
+    private final ExpenseCategoryRepository categories;
     private final SiteAccessGuard siteAccessGuard;
     private final PeriodLockGuard periodLockGuard;
     private final DocumentNumberService documentNumbers;
@@ -93,7 +104,8 @@ public class ExpenseService {
 
     public ExpenseService(ExpenseRepository expenses, ExpenseAttachmentRepository billLinks,
                           ExpenseSettingsRepository settings, ApprovalEngine approvals,
-                          SiteLookup sites, BoqLookup boqItems, SiteAccessGuard siteAccessGuard,
+                          SiteLookup sites, BoqLookup boqItems,
+                          ExpenseCategoryRepository categories, SiteAccessGuard siteAccessGuard,
                           PeriodLockGuard periodLockGuard, DocumentNumberService documentNumbers,
                           ExpenseResponses responses, CurrentUserProvider currentUser,
                           AuditService audit) {
@@ -103,6 +115,7 @@ public class ExpenseService {
         this.approvals = approvals;
         this.sites = sites;
         this.boqItems = boqItems;
+        this.categories = categories;
         this.siteAccessGuard = siteAccessGuard;
         this.periodLockGuard = periodLockGuard;
         this.documentNumbers = documentNumbers;
@@ -116,8 +129,10 @@ public class ExpenseService {
     @Transactional(readOnly = true)
     @PreAuthorize("hasAuthority('expense:read')")
     public PageResponse<ExpenseResponse> list(UUID siteId, UUID vendorId, UUID categoryId,
-                                              Expense.Workflow status, LocalDate from,
-                                              LocalDate to, Pageable pageable) {
+                                              Expense.Workflow status,
+                                              CostAllocation allocation,
+                                              Expense.PaymentStatus paymentStatus,
+                                              LocalDate from, LocalDate to, Pageable pageable) {
         if (siteId != null) {
             siteAccessGuard.assertCanAccess(siteId);
         }
@@ -129,9 +144,67 @@ public class ExpenseService {
         // The matrix says A/O for a supervisor: his own records, not everything at his site.
         boolean ownOnly = ownRecordsOnly();
         return PageResponse.from(
-                expenses.search(orgId(), siteId, vendorId, categoryId, status, from, to,
-                        restricted, visible, ownOnly, currentUser.currentUserIdOrNull(), pageable),
+                expenses.search(orgId(), siteId, vendorId, categoryId, status, allocation,
+                        paymentStatus, from, to, restricted, visible, ownOnly,
+                        currentUser.currentUserIdOrNull(), pageable),
                 responses::toResponse);
+    }
+
+    /**
+     * What the register's filter adds up to, in the figures the screen is split by.
+     *
+     * <p>Computed from the rows on every call. A stored total would be a second version of
+     * the truth and would go stale the first time the office re-allocated a bill — which is
+     * the one thing this screen exists to let it do.</p>
+     *
+     * <p>Void rows are out of every figure: a cost that was never incurred is carried by
+     * nobody. Everything else is in, because "what is still waiting on somebody" is half of
+     * what the office comes here to find out.</p>
+     */
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAuthority('expense:read')")
+    public AllocationSummary summary(UUID siteId, CostAllocation allocation, LocalDate from,
+                                     LocalDate to) {
+        if (siteId != null) {
+            siteAccessGuard.assertCanAccess(siteId);
+        }
+        boolean restricted = !currentUser.seesAllSites();
+        Collection<UUID> visible = restricted ? currentUser.assignedSiteIds() : List.of();
+        if (restricted && visible.isEmpty()) {
+            return new AllocationSummary(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                    BigDecimal.ZERO, BigDecimal.ZERO, 0, 0, 0);
+        }
+        List<Expense> rows = expenses.findForSummary(orgId(), siteId, allocation, from, to,
+                restricted, visible, ownRecordsOnly(), currentUser.currentUserIdOrNull());
+
+        BigDecimal booked = BigDecimal.ZERO;
+        BigDecimal site = BigDecimal.ZERO;
+        BigDecimal company = BigDecimal.ZERO;
+        BigDecimal paid = BigDecimal.ZERO;
+        BigDecimal payable = BigDecimal.ZERO;
+        int awaiting = 0;
+        int undecided = 0;
+
+        for (Expense expense : rows) {
+            booked = booked.add(expense.getTotalAmount());
+            site = site.add(expense.siteCost());
+            company = company.add(expense.companyCost());
+            paid = paid.add(expense.getPaidAmount());
+            if (expense.getWorkflowStatus() == Expense.Workflow.APPROVED) {
+                payable = payable.add(expense.payableAmount());
+            }
+            if (expense.getWorkflowStatus().isInFlight()) {
+                awaiting++;
+            }
+            // Still carrying its head's proposal: approved without anybody looking at the
+            // question, or not approved yet. Worth a number, because it is what the office
+            // would otherwise have to find by reading every row.
+            if (expense.getAllocatedAt() == null) {
+                undecided++;
+            }
+        }
+        return new AllocationSummary(booked, site, company, paid, payable, rows.size(),
+                awaiting, undecided);
     }
 
     @Transactional(readOnly = true)
@@ -195,6 +268,11 @@ public class ExpenseService {
                 request.gstPercent(), request.paymentMode(), request.noBillReason(),
                 request.remarks());
         expense.setSiteAdvanceId(request.siteAdvanceId());
+        // The head's proposal, not a decision — the approver's is the decision. Booking it
+        // here is what lets him be shown the answer already chosen for the two hundred office
+        // bills, so that the question is still read on the diesel bill where it matters.
+        expense.proposeAllocation(defaultAllocationFor(request.categoryId(),
+                request.subcategoryId()));
         if (!candidates.isEmpty()) {
             expense.markDuplicateOf(candidates.getFirst().id(), request.duplicateOverrideReason());
         }
@@ -205,6 +283,135 @@ public class ExpenseService {
                         "totalAmount", expense.getTotalAmount(),
                         "bookedOverDuplicate", !candidates.isEmpty()),
                 request.duplicateOverrideReason());
+        return responses.toResponse(expense);
+    }
+
+    /**
+     * Re-opens an approved expense so its author can correct it.
+     *
+     * <p>V1 gave an approved expense one way back: void it and book a replacement. That is
+     * right when the expense should not have existed and wrong when a figure was typed badly
+     * — the replacement carries a new number, so the vendor's bill and the system disagree
+     * about what the record is called, and the supervisor who typed 45,000 for 4,500 learns
+     * to telephone the office rather than use the screen.</p>
+     *
+     * <p>So: not a silent edit behind a signature, and not a void either. The approval it had
+     * is cancelled, the row keeps its number, and it goes back through the same chain as a
+     * first submission — what stands is what somebody signed again. Three refusals hold the
+     * rest of the system still:</p>
+     *
+     * <ul>
+     *   <li><b>Not once cash has gone out.</b> Paid and payable are computed against the
+     *       total, and moving the total under a payment that has already left the bank is how
+     *       a supplier's ledger stops matching his bills. That case is a void, and the
+     *       payment stays on the record.</li>
+     *   <li><b>Not by anybody but its author</b>, or an administrator. The office's answer to
+     *       a wrong figure is to send it back; re-opening it is the field correcting itself.</li>
+     *   <li><b>Not into a closed period or a closed site</b>, for the reason every other
+     *       write path stops there.</li>
+     * </ul>
+     */
+    @PreAuthorize("hasAuthority('expense:create')")
+    public ExpenseResponse revise(UUID id, ReviseExpenseRequest request) {
+        Expense expense = require(id);
+        siteAccessGuard.assertCanAccess(expense.getSiteId());
+        assertOwnIfRestricted(expense);
+        assertSiteStillOpen(expense);
+        periodLockGuard.assertOpen(expense.getSiteId(), expense.getExpenseDate(),
+                PeriodLockGuard.Module.EXPENSE);
+        periodLockGuard.assertOpen(expense.getSiteId(), request.expenseDate(),
+                PeriodLockGuard.Module.EXPENSE);
+
+        if (expense.getWorkflowStatus() != Expense.Workflow.APPROVED) {
+            throw new BusinessException("expense.not-revisable",
+                    "Expense " + expense.getExpenseNumber() + " is "
+                            + spell(expense.getWorkflowStatus())
+                            + ". Only an approved expense is re-opened this way — this one can "
+                            + "still be corrected where it stands.");
+        }
+        if (!expense.getVersion().equals(request.version())) {
+            throw new OptimisticLockingFailureException(
+                    "Expense " + id + " was changed by someone else");
+        }
+        if (expense.getPaidAmount().signum() > 0) {
+            throw new BusinessException("expense.paid-not-revisable",
+                    "%s has already been paid %s. Changing what it says now would leave the "
+                            .formatted(expense.getExpenseNumber(),
+                                    expense.getPaidAmount().toPlainString())
+                            + "supplier's ledger disagreeing with his bills — void it and book "
+                            + "the replacement instead, and the payment stays on the record.");
+        }
+        if (!isAuthorOrAdmin(expense)) {
+            throw BusinessException.forbidden(
+                    "Only the person who booked " + expense.getExpenseNumber() + " may re-open "
+                            + "it. Send it back to them instead, and they will correct it.");
+        }
+
+        BigDecimal wasTotal = expense.getTotalAmount();
+        approvals.cancelChain(ENTITY_TYPE, id, "expense re-opened by its author");
+        // The allocation goes with the amount it was a decision about: a split of ₹45,000
+        // means nothing once the row says ₹4,500. Back to the head's proposal, and the
+        // approver decides it again along with everything else.
+        expense.revise(Instant.now(), currentUser.currentUserIdOrNull(), request.reason(),
+                defaultAllocationFor(request.categoryId(), request.subcategoryId()));
+        expense.setExpenseDate(request.expenseDate());
+        expense.setCategoryId(request.categoryId());
+        expense.setDescription(request.description());
+        apply(expense, request.subcategoryId(), request.vendorId(), request.boqItemId(),
+                request.billNumber(), request.billDate(), request.amountBeforeTax(),
+                request.gstPercent(), request.paymentMode(), request.noBillReason(),
+                request.remarks());
+        assertHasEvidence(expense);
+
+        expense.submit(Instant.now(), currentUser.currentUserIdOrNull());
+        ApprovalEngine.Chain chain = approvals.submit(new ApprovalEngine.Request(ENTITY_TYPE,
+                expense.getId(), expense.getSiteId(), expense.getTotalAmount(),
+                Expense.Workflow.DRAFT.name()));
+
+        audit.record(ENTITY_TYPE, id, "REVISE",
+                Map.of("totalAmount", wasTotal),
+                Map.of("expenseNumber", expense.getExpenseNumber(),
+                        "totalAmount", expense.getTotalAmount(),
+                        "revision", expense.getRevision(),
+                        "pendingWith", chain.assignedRole()), request.reason());
+        return responses.toResponse(expense);
+    }
+
+    /**
+     * Whose cost an approved expense was, re-decided.
+     *
+     * <p>The approver answers this while the bill is in front of him and is sometimes wrong
+     * about it — a month later the office reads the register and can see that the diesel was
+     * the office car's. Its own permission rather than the approver's: the accountant who
+     * reads the month holds no approval permission at all, and the act is a different one by
+     * a different person.</p>
+     *
+     * <p>It stops at the site's closing. A closed site's figures have gone to the department,
+     * and a classification moved afterwards moves a number somebody has already been paid
+     * against.</p>
+     */
+    @PreAuthorize("hasAuthority('expense:allocate')")
+    public ExpenseResponse allocate(UUID id, AllocateExpenseRequest request) {
+        Expense expense = require(id);
+        siteAccessGuard.assertCanAccess(expense.getSiteId());
+        assertSiteStillOpen(expense);
+        periodLockGuard.assertOpen(expense.getSiteId(), expense.getExpenseDate(),
+                PeriodLockGuard.Module.EXPENSE);
+
+        if (expense.getWorkflowStatus() == Expense.Workflow.VOIDED) {
+            throw new BusinessException("expense.voided-not-allocatable",
+                    "Expense " + expense.getExpenseNumber() + " is void. Nobody carries a cost "
+                            + "that was never incurred.");
+        }
+        CostAllocation was = expense.getCostAllocation();
+        applyAllocation(expense, request.allocation(), request.siteShare(), request.note());
+
+        audit.record(ENTITY_TYPE, id, "ALLOCATE",
+                Map.of("costAllocation", was.name()),
+                Map.of("expenseNumber", expense.getExpenseNumber(),
+                        "costAllocation", expense.getCostAllocation().name(),
+                        "siteCost", expense.siteCost(),
+                        "companyCost", expense.companyCost()), request.note());
         return responses.toResponse(expense);
     }
 
@@ -277,12 +484,29 @@ public class ExpenseService {
      * The decision, taken while looking at the record rather than from the queue. Routes to
      * exactly the same engine as {@code POST /approvals/{id}/action}, so there is one code
      * path and two doors.
+     *
+     * <p><b>And whose cost it is, in the same call.</b> Approving the money and saying whose
+     * money it was are one act by one person at one moment; two requests would leave a window
+     * in which an approved expense is charged to nobody, and a second screen for the approver
+     * who did not come back. It needs no permission of its own for the same reason — deciding
+     * to spend the company's money and deciding that it was the company's are the same
+     * question, and an organisation able to grant one and withhold the other would leave an
+     * approver required to answer something he is not allowed to answer.</p>
+     *
+     * <p>An allocation is only taken on an approval. A rejection and a return decide nothing
+     * about a cost that is not being incurred, and the row keeps its head's proposal for
+     * whenever it comes back round.</p>
      */
     @PreAuthorize("hasAuthority('expense:approve:l1')")
-    public ExpenseResponse decide(UUID id, Approval.Status outcome, String remarks) {
+    public ExpenseResponse decide(UUID id, Approval.Status outcome, String remarks,
+                                  CostAllocation allocation, BigDecimal siteShare,
+                                  String allocationNote) {
         Expense expense = require(id);
         siteAccessGuard.assertCanAccess(expense.getSiteId());
         Approval pending = approvals.requirePending(ENTITY_TYPE, id);
+        if (outcome == Approval.Status.APPROVED && allocation != null) {
+            applyAllocation(expense, allocation, siteShare, allocationNote);
+        }
         approvals.act(pending.getId(), outcome, remarks);
         return responses.toResponse(expense);
     }
@@ -337,6 +561,96 @@ public class ExpenseService {
     }
 
     // ------------------------------------------------------------------ internals
+
+    /**
+     * The allocation rules, in one place because two doors reach them.
+     *
+     * <p>The split is refused at both ends of the range rather than clamped: a split giving
+     * the site the whole bill is {@code SITE} and one giving it none is {@code COMPANY}, and
+     * two spellings of one fact make a register that disagrees with itself.</p>
+     *
+     * <p>The other refusal is the one that keeps the older invariant true. A material
+     * purchase becomes stock in <i>this site's</i> store and a wage payment settles a wage
+     * <i>this site's</i> attendance already counted; charging half of either to the company
+     * would leave the stock ledger and the muster roll answering a question the expense
+     * register answers differently. Those two heads carry the whole of their amount at the
+     * site, and the way to make one an overhead is to book it under a head that is one.</p>
+     */
+    private void applyAllocation(Expense expense, CostAllocation allocation,
+                                 BigDecimal siteShare, String note) {
+        if (allocation == CostAllocation.SPLIT
+                && (siteShare == null || siteShare.signum() <= 0
+                        || siteShare.compareTo(expense.getTotalAmount()) >= 0)) {
+            throw new BusinessException("expense.split-share",
+                    "A split needs the site's part, and it has to be more than nothing and "
+                            + "less than the whole %s. All of it is a site cost; none of it is "
+                                    .formatted(expense.getTotalAmount().toPlainString())
+                            + "a company cost.");
+        }
+        if (allocation != CostAllocation.SITE && isCostedElsewhere(expense)) {
+            throw new BusinessException("expense.allocation-not-shareable",
+                    "%s is booked under a head whose value is counted at the site — material "
+                            .formatted(expense.getExpenseNumber())
+                            + "purchases become that store's stock, and wage payments settle "
+                            + "wages its attendance has already counted. Book it under a "
+                            + "company head instead of splitting it.");
+        }
+        expense.allocate(allocation, siteShare, emptyToNull(note), Instant.now(),
+                currentUser.currentUserIdOrNull());
+    }
+
+    /** Material purchase or wage disbursement: value that another register already carries. */
+    private boolean isCostedElsewhere(Expense expense) {
+        ExpenseCategory head = headOf(expense.getCategoryId(), expense.getSubcategoryId());
+        return head != null && (head.isMaterialPurchase() || head.isLabourPayment());
+    }
+
+    /**
+     * The head's proposal. The subcategory's where there is one, on the precedence
+     * {@code ExpenseLookupService} already applies — "Worker Wage Payment" carries the flags,
+     * its parent "Labour" does not, because not everything under Labour is a disbursement.
+     */
+    private CostAllocation defaultAllocationFor(UUID categoryId, UUID subcategoryId) {
+        ExpenseCategory head = headOf(categoryId, subcategoryId);
+        return head == null ? CostAllocation.SITE : head.getDefaultAllocation();
+    }
+
+    private ExpenseCategory headOf(UUID categoryId, UUID subcategoryId) {
+        if (subcategoryId != null) {
+            ExpenseCategory sub = categories.findById(subcategoryId).orElse(null);
+            if (sub != null) {
+                return sub;
+            }
+        }
+        return categoryId == null ? null : categories.findById(categoryId).orElse(null);
+    }
+
+    /**
+     * A closed site takes no more corrections.
+     *
+     * <p>Its figures have been reported to the department and paid against; a cost moved off
+     * it afterwards moves a number somebody has already been paid for. {@code isLiveInOrg}
+     * asks exactly this and asks it without the assignment check, which is right here — the
+     * caller has already been through {@link SiteAccessGuard}.</p>
+     */
+    private void assertSiteStillOpen(Expense expense) {
+        if (!sites.isLiveInOrg(expense.getSiteId())) {
+            throw new BusinessException("expense.site-closed",
+                    "The site this expense was booked to is closed. Its figures have gone to "
+                            + "the department, and nothing on them moves afterwards.");
+        }
+    }
+
+    /** The author, or the administrator who has to be able to unstick a site he is not on. */
+    private boolean isAuthorOrAdmin(Expense expense) {
+        return currentUser.isAdmin()
+                || java.util.Objects.equals(expense.getCreatedBy(),
+                        currentUser.currentUserIdOrNull());
+    }
+
+    private static String spell(Expense.Workflow status) {
+        return status.name().toLowerCase().replace('_', ' ');
+    }
 
     /**
      * Above the threshold an expense needs a bill number or a written reason there is none —

@@ -1,5 +1,6 @@
 package in.nirman.modules.expense.repository;
 
+import in.nirman.common.CostAllocation;
 import in.nirman.modules.expense.domain.Expense;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -67,6 +68,13 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
     /**
      * {@code ownRecordsOnly} is the matrix's <b>O</b>: a supervisor sees the expenses he
      * raised, not everything booked at his site.
+     *
+     * <p>The date bounds are written as {@code COALESCE(:from, e.expenseDate)} rather than as
+     * {@code :from IS NULL OR …}. An omitted bound in the second form reaches Postgres as a
+     * parameter that appears nowhere but in its own null check, and the server has nothing to
+     * infer its type from — "could not determine data type of parameter $6", at prepare time,
+     * whatever the value. Coalescing it against the column types it, and an absent bound
+     * compares the row's own date to itself.</p>
      */
     @Query("""
             SELECT e FROM Expense e
@@ -75,8 +83,10 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
               AND (:vendorId IS NULL OR e.vendorId = :vendorId)
               AND (:categoryId IS NULL OR e.categoryId = :categoryId)
               AND (:status IS NULL OR e.workflowStatus = :status)
-              AND (:from IS NULL OR e.expenseDate >= :from)
-              AND (:to IS NULL OR e.expenseDate <= :to)
+              AND (:allocation IS NULL OR e.costAllocation = :allocation)
+              AND (:paymentStatus IS NULL OR e.paymentStatus = :paymentStatus)
+              AND e.expenseDate >= COALESCE(:from, e.expenseDate)
+              AND e.expenseDate <= COALESCE(:to, e.expenseDate)
               AND (:restricted = false OR e.siteId IN :siteIds)
               AND (:ownRecordsOnly = false OR e.createdBy = :currentUserId)
             """)
@@ -85,6 +95,8 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
                          @Param("vendorId") UUID vendorId,
                          @Param("categoryId") UUID categoryId,
                          @Param("status") Expense.Workflow status,
+                         @Param("allocation") CostAllocation allocation,
+                         @Param("paymentStatus") Expense.PaymentStatus paymentStatus,
                          @Param("from") LocalDate from,
                          @Param("to") LocalDate to,
                          @Param("restricted") boolean restricted,
@@ -92,6 +104,34 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
                          @Param("ownRecordsOnly") boolean ownRecordsOnly,
                          @Param("currentUserId") UUID currentUserId,
                          Pageable pageable);
+
+    /**
+     * The register's totals: the same rows the page shows, unpaged and without the void ones.
+     *
+     * <p>Unpaged on purpose — a total over the twenty-five rows somebody happens to be looking
+     * at is not a total, and a screen that labels it one is worse than a screen with no total
+     * at all. The filter is a month and a site in practice, which is hundreds of rows.</p>
+     */
+    @Query("""
+            SELECT e FROM Expense e
+            WHERE e.orgId = :orgId
+              AND (:siteId IS NULL OR e.siteId = :siteId)
+              AND (:allocation IS NULL OR e.costAllocation = :allocation)
+              AND e.expenseDate >= COALESCE(:from, e.expenseDate)
+              AND e.expenseDate <= COALESCE(:to, e.expenseDate)
+              AND (:restricted = false OR e.siteId IN :siteIds)
+              AND (:ownRecordsOnly = false OR e.createdBy = :currentUserId)
+              AND e.workflowStatus <> in.nirman.modules.expense.domain.Expense$Workflow.VOIDED
+            """)
+    List<Expense> findForSummary(@Param("orgId") UUID orgId,
+                                 @Param("siteId") UUID siteId,
+                                 @Param("allocation") CostAllocation allocation,
+                                 @Param("from") LocalDate from,
+                                 @Param("to") LocalDate to,
+                                 @Param("restricted") boolean restricted,
+                                 @Param("siteIds") Collection<UUID> siteIds,
+                                 @Param("ownRecordsOnly") boolean ownRecordsOnly,
+                                 @Param("currentUserId") UUID currentUserId);
 
     /** Approved expenses over a period, for the register and the cost roll-up. */
     @Query("""

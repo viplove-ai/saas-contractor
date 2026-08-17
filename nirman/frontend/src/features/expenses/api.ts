@@ -5,8 +5,10 @@ import { saveOrQueue } from '../../offline/saveOrQueue';
 import { queuePhoto } from '../../offline/uploads';
 import { apiClient } from '../../shared/apiClient';
 import type {
+  AllocationSummary,
   Approval,
   ApprovalAction,
+  CostAllocation,
   DuplicateCandidate,
   DuplicateExpenseError,
   Expense,
@@ -14,6 +16,7 @@ import type {
   ExpenseWorkflow,
   PageResponse,
   Payment,
+  PaymentStatus,
   Site,
   Vendor,
   VendorBalance,
@@ -25,6 +28,7 @@ export const expenseKeys = {
   vendors: ['vendors'] as const,
   list: (siteId: string, status: string) => ['expenses', siteId, status] as const,
   all: ['expenses'] as const,
+  register: ['expenses', 'register'] as const,
   pending: ['approvals', 'pending'] as const,
   payments: (expenseId: string) => ['payments', expenseId] as const,
   vendorBalances: ['vendors', 'balances'] as const,
@@ -298,6 +302,17 @@ export function useSubmitExpense() {
   });
 }
 
+/**
+ * The decision, with whose cost it is attached to it.
+ *
+ * <p>One call, because approving the money and saying whose money it was are one act by one
+ * person at one moment. Two would leave a window in which an approved expense is charged to
+ * nobody, and a second screen for the approver who never came back.</p>
+ *
+ * <p>The allocation is left off a rejection or a return: a refusal decides nothing about a
+ * cost that is not being incurred, and the row keeps its head's proposal for when it comes
+ * back round.</p>
+ */
 export function useDecideExpense() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -305,11 +320,21 @@ export function useDecideExpense() {
       id: string;
       action: ApprovalAction;
       remarks?: string | undefined;
+      allocation?: CostAllocation | undefined;
+      siteShare?: number | undefined;
+      allocationNote?: string | undefined;
     }) =>
       (
         await apiClient.post<Expense>(`/expenses/${input.id}/approve`, {
           action: input.action,
           remarks: input.remarks || undefined,
+          ...(input.action === 'APPROVE' && input.allocation
+            ? {
+                allocation: input.allocation,
+                ...(input.allocation === 'SPLIT' ? { siteShare: input.siteShare } : {}),
+                ...(input.allocationNote ? { allocationNote: input.allocationNote } : {}),
+              }
+            : {}),
         })
       ).data,
     onSuccess: () => {
@@ -317,6 +342,114 @@ export function useDecideExpense() {
       void queryClient.invalidateQueries({ queryKey: expenseKeys.pending });
     },
   });
+}
+
+/**
+ * Whose cost an approved expense was, re-decided by the office.
+ *
+ * <p>The month read afterwards: the approver had the bill in front of him and was wrong about
+ * it, and the accountant reading the register can see that the diesel was the office car's.
+ * Refused once the site closes — those figures have gone to the department.</p>
+ */
+export function useAllocateExpense() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      id: string;
+      allocation: CostAllocation;
+      siteShare?: number | undefined;
+      note?: string | undefined;
+    }) =>
+      (
+        await apiClient.put<Expense>(`/expenses/${input.id}/allocation`, {
+          allocation: input.allocation,
+          siteShare: input.allocation === 'SPLIT' ? input.siteShare : undefined,
+          note: input.note || undefined,
+        })
+      ).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: expenseKeys.all });
+      void queryClient.invalidateQueries({ queryKey: expenseKeys.register });
+    },
+  });
+}
+
+/**
+ * Re-opening an approved expense the author needs to correct.
+ *
+ * <p>Not an edit behind a signature: the row keeps its number, its approval is cancelled, and
+ * it goes back through the same chain as a first submission. Not queued offline either, for
+ * the reason {@link useUpdateExpense} is not — it is a reply to a record the server already
+ * holds, and applying it days later to a row that has moved is exactly what {@code version}
+ * refuses.</p>
+ */
+export function useReviseExpense() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...body }: ExpenseRevision) =>
+      (await apiClient.post<Expense>(`/expenses/${id}/revise`, body)).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: expenseKeys.all });
+      void queryClient.invalidateQueries({ queryKey: expenseKeys.pending });
+      void queryClient.invalidateQueries({ queryKey: expenseKeys.register });
+    },
+  });
+}
+
+export interface ExpenseRevision extends ExpenseEdit {
+  /** What was wrong with a figure somebody had already approved. */
+  reason: string;
+}
+
+/**
+ * The register: every payment record the caller may see, narrowed by the filters above it.
+ *
+ * <p>Its own query key rather than {@link useExpenses}': this screen filters on things no
+ * other screen does, and sharing a key would have the approvals screen serving a page that
+ * had been narrowed to company costs in March.</p>
+ */
+export function usePaymentRegister(filters: RegisterFilters) {
+  return useQuery({
+    queryKey: [...expenseKeys.register, filters],
+    queryFn: async () =>
+      (
+        await apiClient.get<PageResponse<Expense>>('/expenses', {
+          params: { ...cleaned(filters), size: 100 },
+        })
+      ).data,
+  });
+}
+
+/** What the same filter adds up to. Server-side, over every row rather than the page shown. */
+export function useRegisterSummary(filters: RegisterFilters) {
+  const { siteId, allocation, from, to } = filters;
+  return useQuery({
+    queryKey: [...expenseKeys.register, 'summary', { siteId, allocation, from, to }],
+    queryFn: async () =>
+      (
+        await apiClient.get<AllocationSummary>('/expenses/summary', {
+          params: cleaned({ siteId, allocation, from, to }),
+        })
+      ).data,
+  });
+}
+
+export interface RegisterFilters {
+  siteId?: string | undefined;
+  status?: ExpenseWorkflow | undefined;
+  allocation?: CostAllocation | undefined;
+  paymentStatus?: PaymentStatus | undefined;
+  categoryId?: string | undefined;
+  vendorId?: string | undefined;
+  from?: string | undefined;
+  to?: string | undefined;
+}
+
+/** An empty filter is not a filter. Axios would otherwise send `status=` and match nothing. */
+function cleaned(filters: object): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(filters).filter(([, value]) => Boolean(value)),
+  ) as Record<string, string>;
 }
 
 export function useVoidExpense() {

@@ -1,5 +1,7 @@
 package in.nirman.modules.expense.api.dto;
 
+import in.nirman.common.CostAllocation;
+import in.nirman.modules.approval.api.dto.ApprovalDtos.ActionRequest;
 import in.nirman.modules.expense.domain.Expense;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -64,6 +66,84 @@ public final class ExpenseDtos {
             String noBillReason,
             String remarks,
             @NotNull Long version) {
+    }
+
+    /**
+     * Whose cost it is, decided by the approver or re-decided by the office.
+     *
+     * @param siteShare the site's part, for {@code SPLIT} and nothing else. Strictly between
+     *                  zero and the total: a split giving the site all of it is {@code SITE}
+     *                  and one giving it none is {@code COMPANY}.
+     * @param note      why, for the bill where the answer is not the obvious one. Optional,
+     *                  because demanding a sentence on every office bill produces a column of
+     *                  the word "office".
+     */
+    public record AllocateExpenseRequest(
+            @NotNull CostAllocation allocation,
+            @DecimalMin("0") BigDecimal siteShare,
+            @Size(max = 500) String note) {
+    }
+
+    /**
+     * The decision, with whose cost it is attached.
+     *
+     * <p>One call rather than two. Approving the money and saying whose money it was are the
+     * same act by the same person at the same moment, and splitting them across two requests
+     * leaves a window in which an approved expense has been charged to nobody — and a second
+     * screen for the approver who forgot to come back.</p>
+     *
+     * @param allocation absent leaves the head's own default standing, which is what the
+     *                   approver was shown and what he agreed with by not changing it
+     */
+    public record DecideExpenseRequest(
+            @NotNull ActionRequest.Action action,
+            @Size(max = 2000) String remarks,
+            CostAllocation allocation,
+            @DecimalMin("0") BigDecimal siteShare,
+            @Size(max = 500) String allocationNote) {
+    }
+
+    /**
+     * Re-opening an approved expense so its author can correct it.
+     *
+     * <p>Carries the whole expense rather than a patch, because it is the same form the
+     * author typed it in and a half-sent correction is how a bill ends up with last week's
+     * amount and this week's date.</p>
+     */
+    public record ReviseExpenseRequest(
+            @NotNull LocalDate expenseDate,
+            @NotNull UUID categoryId,
+            UUID subcategoryId,
+            UUID vendorId,
+            UUID boqItemId,
+            @NotBlank String description,
+            @Size(max = 60) String billNumber,
+            LocalDate billDate,
+            @NotNull @DecimalMin("0") BigDecimal amountBeforeTax,
+            @DecimalMin("0") @DecimalMax("100") BigDecimal gstPercent,
+            @Size(max = 20) String paymentMode,
+            String noBillReason,
+            String remarks,
+            /** What was wrong with the figure somebody had already approved. */
+            @NotBlank @Size(max = 2000) String reason,
+            @NotNull Long version) {
+    }
+
+    /**
+     * What the register's current filter adds up to, split the way the screen is.
+     *
+     * <p>Computed per call from the rows themselves — a stored total is a second version of
+     * the truth, and this one would go stale the first time the office re-allocated a bill.</p>
+     */
+    public record AllocationSummary(
+            BigDecimal totalBooked,
+            BigDecimal siteCost,
+            BigDecimal companyCost,
+            BigDecimal paid,
+            BigDecimal payable,
+            int expenseCount,
+            int awaitingApproval,
+            int unallocatedCount) {
     }
 
     /**
@@ -132,6 +212,19 @@ public final class ExpenseDtos {
             BigDecimal payableAmount,
             String noBillReason,
             UUID siteAdvanceId,
+            /** Whose cost it is. The label the register groups by. */
+            CostAllocation costAllocation,
+            /** What the site's project carries — the total, zero, or the split's site part. */
+            BigDecimal siteCost,
+            /** Overhead. Derived from the two above, never stored beside them. */
+            BigDecimal companyCost,
+            String allocationNote,
+            /** Null on a row nobody has decided yet: it is carrying its head's proposal. */
+            Instant allocatedAt,
+            /** How many times the author has re-opened it after approval. Zero for most. */
+            int revision,
+            Instant revisedAt,
+            String revisionReason,
             Expense.Workflow workflowStatus,
             /** Which level is waiting, and on whom. Null once the record is through. */
             Integer pendingLevel,

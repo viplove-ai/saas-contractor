@@ -1,7 +1,10 @@
 package in.nirman.modules.masterdata.domain;
 
+import in.nirman.common.CostAllocation;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
@@ -41,6 +44,18 @@ public class ExpenseCategory {
 
     @Column(name = "requires_vendor", nullable = false)
     private boolean requiresVendor;
+
+    /**
+     * Whose cost rows under this head almost always are (V36). Staff salary and office
+     * spending are the organisation's at every site, and asking the approver the same question
+     * about every one of them is how the question stops being read.
+     *
+     * <p>Never {@code SPLIT}: a split is an amount, and an amount is a fact about one bill
+     * rather than about a category. The column is a proposal — the approver decides.</p>
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "default_allocation", nullable = false, length = 10)
+    private CostAllocation defaultAllocation = CostAllocation.SITE;
 
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
@@ -113,6 +128,19 @@ public class ExpenseCategory {
 
     public boolean isRequiresVendor() {
         return requiresVendor;
+    }
+
+    public CostAllocation getDefaultAllocation() {
+        return defaultAllocation;
+    }
+
+    /** Refuses {@code SPLIT}: a split is an amount, and an amount is not a fact about a head. */
+    public void setDefaultAllocation(CostAllocation defaultAllocation) {
+        if (defaultAllocation != null && !defaultAllocation.isProposable()) {
+            throw new IllegalArgumentException("a head cannot default to a split");
+        }
+        this.defaultAllocation = defaultAllocation == null ? CostAllocation.SITE
+                : defaultAllocation;
     }
 
     public void setRequiresVendor(boolean requiresVendor) {

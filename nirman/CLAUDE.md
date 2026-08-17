@@ -152,6 +152,34 @@ if the tests pass:
 - **History does not move.** Attendance freezes the wage rate at verification, so a later
   revision cannot change last month's labour cost. A DPR freezes its figures when sent.
   Approved financial records are voided with a reason, never deleted.
+- **An expense is typed at a site; that is not the same as being the site's cost.** The lorry
+  of sand is, the accountant's salary is not, and both are typed by somebody standing at a
+  site — so booking every expense against its site overstates the job, the same double-count
+  docs/09 chased out of material and wages arriving through a different door. `cost_allocation`
+  (V36) carries the answer: SITE, COMPANY, or SPLIT, and the split stores **one** number
+  (`site_share`), the company's being the remainder, because two stored halves disagree the
+  day a total is corrected. **The decision belongs to the approver**, in the same call — deciding
+  to spend the company's money and deciding that it was the company's are one question, which is
+  why the approval carries it and no permission was minted for it. The head *proposes*
+  (`expense_categories.default_allocation`, COMPANY for office and staff heads), so the question
+  costs nothing on the two hundred obvious rows and is still in front of him on the diesel bill.
+  Re-deciding it afterwards is a different act by a different person — the accountant reading the
+  month holds no approval permission at all — and is the one new permission, `expense:allocate`,
+  refused once the site is CLOSED. Two things it may not do: a split of the whole amount or of
+  none of it (that is SITE and COMPANY, and two spellings of one fact make a register disagree
+  with itself), and anything but SITE on a material-purchase or wage head, whose value is already
+  carried by that site's store and that site's muster.
+- **An approved expense is re-opened, not edited and not always voided.** Voiding and re-booking
+  is right when the expense should not have existed and wrong when a figure was typed badly: the
+  replacement carries a new number, the vendor's bill and the system stop agreeing about what the
+  record is called, and the supervisor who typed 45,000 for 4,500 learns to telephone the office
+  instead of using the screen. `POST /expenses/{id}/revise` keeps the number, cancels the
+  approval, and sends it back through the same chain — so what stands is what somebody signed
+  again, and `revision` says how many times. It is refused once **cash has gone out** (paid and
+  payable are computed against the total, and moving it under a payment already made is how a
+  supplier's ledger stops matching his bills), to anybody but the author or an administrator, and
+  into a closed period or site. The allocation resets to the head's proposal, because an
+  allocation is a decision about an amount and the amount is what is being changed.
 - **Rolled-up figures are derived, not stored.** Dashboard tiles and DPR prefill are computed
   per call through each module's read API. A cached total is a second version of the truth.
 - **Claiming work is its own act.** A quantity reaches the measurement book only when an
@@ -343,6 +371,14 @@ its four permissions.
 flag and the cause agreeing for the write that never goes through the service. It adds **no
 permission** — the two-author split it comes with is drawn between `dpr:draft` and `dpr:verify`,
 which V2 already seeded.
+
+`V36` adds whose cost it is — `expenses.cost_allocation` and `site_share`, the revision columns
+behind re-opening, and `expense_categories.default_allocation` with the office heads and a new
+`OFFICE-STAFF` set to COMPANY. **One new permission**, `expense:allocate`, for re-deciding
+afterwards and not for deciding: the approver's answer rides on his approval. The catalogue half
+is guarded by code exactly as V14 is, and repeated in `db/seed/V905` because the dev organisation
+only arrives in V900 — after every migration — and a demo whose office bill defaults to the site
+is a demo of the bug.
 
 `V35` is the third turn of the same screw, on the one register where the field could not be
 given the write at all. `stock_correction_requests` lets somebody holding the new

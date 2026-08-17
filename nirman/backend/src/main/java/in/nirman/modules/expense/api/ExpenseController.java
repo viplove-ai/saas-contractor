@@ -1,10 +1,14 @@
 package in.nirman.modules.expense.api;
 
+import in.nirman.common.CostAllocation;
 import in.nirman.common.PageResponse;
-import in.nirman.modules.approval.api.dto.ApprovalDtos.ActionRequest;
+import in.nirman.modules.expense.api.dto.ExpenseDtos.AllocateExpenseRequest;
+import in.nirman.modules.expense.api.dto.ExpenseDtos.AllocationSummary;
 import in.nirman.modules.expense.api.dto.ExpenseDtos.AttachBillRequest;
 import in.nirman.modules.expense.api.dto.ExpenseDtos.CreateExpenseRequest;
+import in.nirman.modules.expense.api.dto.ExpenseDtos.DecideExpenseRequest;
 import in.nirman.modules.expense.api.dto.ExpenseDtos.ExpenseResponse;
+import in.nirman.modules.expense.api.dto.ExpenseDtos.ReviseExpenseRequest;
 import in.nirman.modules.expense.api.dto.ExpenseDtos.UpdateExpenseRequest;
 import in.nirman.modules.expense.api.dto.ExpenseDtos.VoidExpenseRequest;
 import in.nirman.modules.expense.domain.Expense;
@@ -47,13 +51,26 @@ public class ExpenseController {
             @RequestParam(required = false) UUID vendorId,
             @RequestParam(required = false) UUID categoryId,
             @RequestParam(required = false) Expense.Workflow status,
+            @RequestParam(required = false) CostAllocation allocation,
+            @RequestParam(required = false) Expense.PaymentStatus paymentStatus,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "25") int size) {
-        return expenses.list(siteId, vendorId, categoryId, status, from, to,
+        return expenses.list(siteId, vendorId, categoryId, status, allocation, paymentStatus,
+                from, to,
                 PageRequest.of(page, Math.min(size, 200),
                         Sort.by(Sort.Direction.DESC, "expenseDate")));
+    }
+
+    @GetMapping("/summary")
+    @Operation(summary = "What the register's filter adds up to: booked, the site's share, the company's")
+    public AllocationSummary summary(
+            @RequestParam(required = false) UUID siteId,
+            @RequestParam(required = false) CostAllocation allocation,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return expenses.summary(siteId, allocation, from, to);
     }
 
     @PostMapping
@@ -84,10 +101,25 @@ public class ExpenseController {
     }
 
     @PostMapping("/{id}/approve")
-    @Operation(summary = "Approve, reject or return. Routes to the same engine as the approvals queue.")
+    @Operation(summary = "Approve, reject or return — and, on an approval, say whose cost it is")
     public ExpenseResponse decide(@PathVariable UUID id,
-                                  @Valid @RequestBody ActionRequest request) {
-        return expenses.decide(id, request.action().toStatus(), request.remarks());
+                                  @Valid @RequestBody DecideExpenseRequest request) {
+        return expenses.decide(id, request.action().toStatus(), request.remarks(),
+                request.allocation(), request.siteShare(), request.allocationNote());
+    }
+
+    @PutMapping("/{id}/allocation")
+    @Operation(summary = "Re-decide whose cost an expense is. Refused once the site is closed.")
+    public ExpenseResponse allocate(@PathVariable UUID id,
+                                    @Valid @RequestBody AllocateExpenseRequest request) {
+        return expenses.allocate(id, request);
+    }
+
+    @PostMapping("/{id}/revise")
+    @Operation(summary = "Re-open an approved expense. Keeps its number, cancels its approval, goes back for a new one.")
+    public ExpenseResponse revise(@PathVariable UUID id,
+                                  @Valid @RequestBody ReviseExpenseRequest request) {
+        return expenses.revise(id, request);
     }
 
     @PostMapping("/{id}/void")

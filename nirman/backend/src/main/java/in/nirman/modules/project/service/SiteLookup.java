@@ -79,6 +79,11 @@ public interface SiteLookup {
      * <p>For the one question that is about a site you do not work at: is this a real place
      * I can send a man to? Answering it needs no access to the site, and refusing to answer
      * would make a transfer between two supervisors impossible.</p>
+     *
+     * <p>Live excludes closed, which is why the expense module asks this before it lets the
+     * office re-decide whose cost an old bill was: a closed site's figures have been reported
+     * to the department, and moving one afterwards moves a number somebody has already been
+     * paid against.</p>
      */
     boolean isLiveInOrg(UUID siteId);
 }

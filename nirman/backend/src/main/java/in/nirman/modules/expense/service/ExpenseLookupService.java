@@ -62,6 +62,7 @@ public class ExpenseLookupService implements ExpenseLookup {
         BigDecimal booked = BigDecimal.ZERO;
         BigDecimal material = BigDecimal.ZERO;
         BigDecimal labour = BigDecimal.ZERO;
+        BigDecimal company = BigDecimal.ZERO;
         int unapproved = 0;
 
         for (Expense expense : found) {
@@ -71,14 +72,20 @@ public class ExpenseLookupService implements ExpenseLookup {
                 material = material.add(expense.getTotalAmount());
             } else if (category != null && category.isLabourPayment()) {
                 labour = labour.add(expense.getTotalAmount());
+            } else {
+                // Only here. A material purchase and a wage payment are already out of cost
+                // incurred, and their value belongs to this site's store and this site's
+                // muster — which is why the service refuses to charge either to the company.
+                company = company.add(expense.companyCost());
             }
             if (expense.getWorkflowStatus() != Expense.Workflow.APPROVED) {
                 unapproved++;
             }
         }
 
-        return new DailySpend(date, booked, booked.subtract(material).subtract(labour),
-                material, labour, found.size(), unapproved);
+        return new DailySpend(date, booked,
+                booked.subtract(material).subtract(labour).subtract(company),
+                company, material, labour, found.size(), unapproved);
     }
 
     @Override
@@ -89,6 +96,7 @@ public class ExpenseLookupService implements ExpenseLookup {
         BigDecimal booked = BigDecimal.ZERO;
         BigDecimal material = BigDecimal.ZERO;
         BigDecimal labour = BigDecimal.ZERO;
+        BigDecimal company = BigDecimal.ZERO;
         BigDecimal approved = BigDecimal.ZERO;
         BigDecimal paid = BigDecimal.ZERO;
         BigDecimal payable = BigDecimal.ZERO;
@@ -101,6 +109,8 @@ public class ExpenseLookupService implements ExpenseLookup {
                 material = material.add(expense.getTotalAmount());
             } else if (category != null && category.isLabourPayment()) {
                 labour = labour.add(expense.getTotalAmount());
+            } else {
+                company = company.add(expense.companyCost());
             }
             if (expense.getWorkflowStatus() == Expense.Workflow.APPROVED) {
                 approved = approved.add(expense.getTotalAmount());
@@ -112,8 +122,9 @@ public class ExpenseLookupService implements ExpenseLookup {
             paid = paid.add(expense.getPaidAmount());
         }
 
-        return new PeriodSpend(from, to, booked, booked.subtract(material).subtract(labour),
-                material, labour, approved, paid, payable, found.size(), awaiting);
+        return new PeriodSpend(from, to, booked,
+                booked.subtract(material).subtract(labour).subtract(company),
+                company, material, labour, approved, paid, payable, found.size(), awaiting);
     }
 
     @Override
@@ -132,7 +143,9 @@ public class ExpenseLookupService implements ExpenseLookup {
             if (category != null && (category.isMaterialPurchase() || category.isLabourPayment())) {
                 continue;
             }
-            byDay.merge(expense.getExpenseDate(), expense.getTotalAmount(), BigDecimal::add);
+            // The site's share, not the total: the half of a diesel bill that ran the office
+            // car is on the same trend line otherwise, and the site never spent it.
+            byDay.merge(expense.getExpenseDate(), expense.siteCost(), BigDecimal::add);
         }
         return byDay.entrySet().stream()
                 .map(entry -> new DailyCost(entry.getKey(), entry.getValue()))

@@ -23,7 +23,8 @@ import {
   useRecordPayment,
   useSites,
 } from './api';
-import type { ApprovalAction, Expense } from './types';
+import { AllocationChip } from './AllocationChip';
+import type { ApprovalAction, CostAllocation, Expense } from './types';
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -44,6 +45,15 @@ export function ApprovalsPage() {
   const { hasPermission } = useAuth();
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [payAmount, setPayAmount] = useState<Record<string, string>>({});
+  /**
+   * Whose cost each waiting bill is, where the approver has changed his mind about it.
+   *
+   * <p>Empty means "what the head proposed", which is what the row already carries — so an
+   * approver who agrees with the proposal simply presses Approve, and the two hundred office
+   * bills cost him nothing. Only the diesel bill gets touched.</p>
+   */
+  const [allocation, setAllocation] = useState<Record<string, CostAllocation>>({});
+  const [siteShare, setSiteShare] = useState<Record<string, string>>({});
 
   const sites = useSites();
   const [siteId, setSiteId] = useSelectedSite(sites.data);
@@ -61,8 +71,25 @@ export function ApprovalsPage() {
   const waiting = [...(submitted.data?.content ?? []), ...(l1.data?.content ?? [])];
   const unpaid = (approved.data?.content ?? []).filter((expense) => expense.payableAmount > 0);
 
+  /** What the approver has chosen for this bill, or what its head proposed if he has not. */
+  const chosen = (expense: Expense): CostAllocation =>
+    allocation[expense.id] ?? expense.costAllocation;
+
+  /** A split needs a number, and the server refuses one that is the whole bill or none of it. */
+  const splitIncomplete = (expense: Expense) => {
+    if (chosen(expense) !== 'SPLIT') return false;
+    const share = Number(siteShare[expense.id]);
+    return !(share > 0 && share < expense.totalAmount);
+  };
+
   const act = (expense: Expense, action: ApprovalAction) => {
-    decide.mutate({ id: expense.id, action, remarks: remarks[expense.id] });
+    decide.mutate({
+      id: expense.id,
+      action,
+      remarks: remarks[expense.id],
+      allocation: chosen(expense),
+      siteShare: Number(siteShare[expense.id]),
+    });
   };
 
   return (
@@ -131,6 +158,45 @@ export function ApprovalsPage() {
 
               {canDecide && (
                 <>
+                  {/*
+                    Whose cost it is, asked where the money is being agreed to and not on a
+                    screen somebody visits afterwards. It arrives already answered by the head
+                    — office and staff heads say company — so the question costs nothing on the
+                    rows where it is obvious and is still in front of him on the diesel bill.
+                  */}
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                    <TextField
+                      select
+                      label="Whose cost is it"
+                      size="small"
+                      value={chosen(expense)}
+                      onChange={(e) =>
+                        setAllocation((current) => ({
+                          ...current,
+                          [expense.id]: e.target.value as CostAllocation,
+                        }))
+                      }
+                      sx={{ minWidth: 200 }}
+                    >
+                      <MenuItem value="SITE">The site&apos;s</MenuItem>
+                      <MenuItem value="COMPANY">The company&apos;s</MenuItem>
+                      <MenuItem value="SPLIT">Part each</MenuItem>
+                    </TextField>
+                    {chosen(expense) === 'SPLIT' && (
+                      <TextField
+                        label="The site's part"
+                        type="number"
+                        inputMode="decimal"
+                        size="small"
+                        value={siteShare[expense.id] ?? ''}
+                        onChange={(e) =>
+                          setSiteShare((current) => ({ ...current, [expense.id]: e.target.value }))
+                        }
+                        helperText={`The company carries the rest of ${formatAmount(expense.totalAmount)}`}
+                        sx={{ minWidth: 200 }}
+                      />
+                    )}
+                  </Stack>
                   <TextField
                     label="Remarks"
                     size="small"
@@ -143,7 +209,7 @@ export function ApprovalsPage() {
                     <Button
                       variant="contained"
                       color="secondary"
-                      disabled={decide.isPending}
+                      disabled={decide.isPending || splitIncomplete(expense)}
                       onClick={() => act(expense, 'APPROVE')}
                       sx={{ minHeight: 48 }}
                     >
@@ -197,9 +263,11 @@ export function ApprovalsPage() {
                 sx={{ p: 1.5, border: 1, borderColor: 'divider' }}
               >
                 <Stack spacing={1.5}>
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                     <Typography fontWeight={600}>{expense.expenseNumber}</Typography>
                     <StatusChip status="APPROVED" />
+                    {/* Whose cost it was, in front of the person about to pay it. */}
+                    <AllocationChip expense={expense} />
                   </Stack>
                   {/* The three figures, on the row, never merged into one. */}
                   <Typography variant="body2" color="text.secondary">

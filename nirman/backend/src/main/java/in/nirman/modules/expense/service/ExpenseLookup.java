@@ -18,12 +18,24 @@ import java.util.UUID;
  *
  * <p>So {@link DailySpend} and {@link PeriodSpend} both carry the split, and
  * {@code costIncurred} is the only one of the four that may be added to anything.</p>
+ *
+ * <h2>And one the site does not carry at all</h2>
+ *
+ * <p>V36 gave the approver a fourth answer: this bill was typed at the site and is the
+ * company's — an office rent, a staff salary, the half of a diesel bill that ran the office
+ * car. {@code companyOverhead} is that part, and it is out of {@code costIncurred} for the
+ * same reason the other two are: the site did not incur it. The four still add to
+ * {@code totalBooked}, which is what makes the omission checkable rather than a matter of
+ * trust.</p>
  */
 public interface ExpenseLookup {
 
     /**
-     * @param costIncurred        the part that adds to project cost — total booked less
-     *                            material purchases and labour disbursements
+     * @param costIncurred        the part that adds to <i>this site's</i> project cost — total
+     *                            booked less material purchases, labour disbursements and
+     *                            whatever the approver charged to the company
+     * @param companyOverhead     booked here and carried by the organisation (V36). The fourth
+     *                            figure, and the reason the other three still add up
      * @param materialPurchases   becomes inventory value; costed again at issue
      * @param labourDisbursements settles wages already costed through attendance
      */
@@ -31,6 +43,7 @@ public interface ExpenseLookup {
             LocalDate date,
             BigDecimal totalBooked,
             BigDecimal costIncurred,
+            BigDecimal companyOverhead,
             BigDecimal materialPurchases,
             BigDecimal labourDisbursements,
             int expenseCount,
@@ -42,6 +55,7 @@ public interface ExpenseLookup {
             LocalDate to,
             BigDecimal totalBooked,
             BigDecimal costIncurred,
+            BigDecimal companyOverhead,
             BigDecimal materialPurchases,
             BigDecimal labourDisbursements,
             BigDecimal approvedCost,
