@@ -118,10 +118,16 @@ export function DprListPage() {
       ),
     },
     {
+      /*
+        Every man on the site, ours and the suppliers' together. The register is read as a
+        month of days, and a column that counted only the muster roll would show four men on
+        a day thirty stood on the site because twenty-six of them were somebody else's to
+        pay — which is a fact about the wage bill, not about the day.
+      */
       key: 'men',
       header: 'Men',
       align: 'right',
-      cell: (report) => report.labourPresentCount ?? '—',
+      cell: (report) => report.menOnSite ?? report.labourPresentCount ?? '—',
     },
     {
       key: 'cost',
@@ -355,7 +361,22 @@ function ReportPanel({
 
       <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
         <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap>
-          <Figure label="Men present" value={String(data.labourPresentCount ?? '—')} />
+          {/*
+            The men first and whole, then what the whole is made of. The split is only drawn
+            when a supplier sent somebody — on an ordinary day it would be the same number
+            twice — and it is drawn at all because the two halves are not the same kind of
+            fact: the wage cost below belongs to the muster's men alone.
+          */}
+          <Figure
+            label="Men on site"
+            value={String(data.menOnSite ?? data.labourPresentCount ?? '—')}
+          />
+          {(data.outsourcedHeadCount ?? 0) > 0 && (
+            <>
+              <Figure label="On the muster" value={String(data.labourPresentCount ?? '—')} />
+              <Figure label="External (counted)" value={String(data.outsourcedHeadCount)} />
+            </>
+          )}
           <Figure label="Regular" value={formatHours(data.labourRegularHours)} />
           <Figure label="Overtime" value={formatHours(data.labourOvertimeHours)} />
           <Figure label="Labour cost" value={formatAmount(data.labourCost)} />

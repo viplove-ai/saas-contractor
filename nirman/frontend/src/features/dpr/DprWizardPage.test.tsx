@@ -227,6 +227,27 @@ describe('DprWizardPage', () => {
     ).toBeInTheDocument();
   });
 
+  /**
+   * A supplier's gang and our own muster are two different kinds of fact — one has a wage
+   * behind it and the other is somebody else's bill — and they are still both men standing on
+   * the site. So the figures stay apart and the head count adds: three on the muster and
+   * eleven at the gate is fourteen men on the site.
+   */
+  it('adds the suppliers’ men to the muster’s for the men on site', async () => {
+    mockGets(
+      prefill({
+        outsourcedLabour: { enabled: true, headCount: 11, manHours: 88, lines: [] },
+      }),
+    );
+    renderPage();
+
+    expect(await screen.findByText('Men on site')).toBeInTheDocument();
+    expect(screen.getByText('Men on site').nextSibling).toHaveTextContent('14');
+    // Apart, and still apart: the wage cost above belongs to the three.
+    expect(screen.getByText('Present').nextSibling).toHaveTextContent('3');
+    expect(screen.getByText('External (counted)').nextSibling).toHaveTextContent('11');
+  });
+
   /** Received is inventory and consumed is cost. Blending them counts the cement twice. */
   it('keeps material received apart from material consumed', async () => {
     renderPage();

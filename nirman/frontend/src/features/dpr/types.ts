@@ -340,6 +340,14 @@ export interface Dpr {
   labourPresentCount?: number;
   /** Contractor's men counted at the gate. Frozen beside the present count, never inside it. */
   outsourcedHeadCount?: number;
+  /**
+   * Every man who stood on the site — the muster roll's plus the suppliers' gangs.
+   *
+   * <p>Derived by the server from the two figures above, which stay frozen and separate:
+   * only one of them has a wage behind it. This is the head count the report leads with,
+   * and it is a head count alone — no hours and no money are added along with it.</p>
+   */
+  menOnSite?: number;
   labourRegularHours?: number;
   labourOvertimeHours?: number;
   labourCost?: number;

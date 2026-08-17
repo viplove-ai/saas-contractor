@@ -51,6 +51,11 @@ class SiteLabourCountIntegrationTest extends AbstractIntegrationTest {
 
     @AfterEach
     void restore() {
+        // The report the men-on-site test writes goes with them. Its children follow by
+        // cascade; leaving the parent behind would give the next test a day that already has
+        // a report, and one report per site per day is an invariant it would trip over.
+        jdbc.update("DELETE FROM daily_progress_reports WHERE site_id = ?::uuid AND report_date = ?",
+                SITE_A, DAY);
         jdbc.update("DELETE FROM site_labour_counts WHERE site_id = ?::uuid", SITE_A);
         jdbc.update("UPDATE sites SET uses_outsourced_labour = false WHERE id = ?::uuid", SITE_A);
     }
@@ -204,6 +209,50 @@ class SiteLabourCountIntegrationTest extends AbstractIntegrationTest {
         // than against zero: another test in the suite may have marked somebody at this site
         // on this day, and the property under test is that the eleven did not join them.
         assertThat(prefill.get("labour").get("presentCount").asInt()).isEqualTo(markedPresent());
+    }
+
+    /**
+     * The other half of the same rule. The two kinds of man stay apart in the columns — one
+     * of them has a wage behind him and the other is somebody else's bill — and they are
+     * added for the one question the department asks the site, which is how many men stood
+     * on it. So the report carries three figures and not one: the muster's, the suppliers',
+     * and the men on the site.
+     */
+    @Test
+    @DisplayName("the report's men on site are the muster's and the suppliers' added")
+    void menOnSiteAddsBothKinds() throws Exception {
+        String token = loginToken("vivek");
+        mockMvc.perform(saveCounts(token, """
+                        {"skillCategoryId":"%s","headCount":11}
+                        """.formatted(skill("MASON"))))
+                .andExpect(status().isOk());
+
+        // Read from the muster rather than assumed to be zero, for the reason markedPresent()
+        // gives: what is under test is the addition, not the seed.
+        int ours = markedPresent();
+        String id = java.util.UUID.randomUUID().toString();
+        mockMvc.perform(post("/api/v1/dprs")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"id":"%s","siteId":"%s","reportDate":"%s"}"""
+                                .formatted(id, SITE_A, DAY)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.labourPresentCount").value(ours))
+                .andExpect(jsonPath("$.outsourcedHeadCount").value(11))
+                .andExpect(jsonPath("$.menOnSite").value(ours + 11))
+                // The money is not added along with them. The wage cost is the muster's alone,
+                // and a supplier's man has no rate to reach it with.
+                .andExpect(jsonPath("$.labourRegularHours").value(musterRegularHours()));
+
+        // And the paper prints. The men-on-site row is only drawn when a supplier sent
+        // somebody, so this is the one report in the suite that reaches it — without this the
+        // row would be a template expression nothing ever evaluates.
+        byte[] printed = mockMvc.perform(get("/api/v1/dprs/" + id + "/pdf")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        assertThat(new String(printed, 0, 5)).isEqualTo("%PDF-");
     }
 
     /**

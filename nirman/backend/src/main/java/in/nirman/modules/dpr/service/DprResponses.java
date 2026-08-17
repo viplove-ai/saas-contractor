@@ -93,7 +93,7 @@ public class DprResponses {
                 report.getNonOperationalNote(),
                 report.getWeather(), report.getTemperatureC(), report.getWorkingHoursLost(),
                 report.getLabourPresentCount(), report.getOutsourcedHeadCount(),
-                report.getOutsourcedManHours(),
+                report.getOutsourcedManHours(), menOnSite(report),
                 report.getLabourRegularHours(),
                 report.getLabourOvertimeHours(), report.getLabourCost(),
                 report.getMaterialReceivedValue(), report.getMaterialConsumedValue(),
@@ -111,6 +111,22 @@ public class DprResponses {
                 labourFor(report.getId()),
                 machinery.findByDprId(report.getId()).stream().map(DprResponses::toMachinery).toList(),
                 photosFor(report.getId()));
+    }
+
+    /**
+     * Every man on the site: the muster roll's and the suppliers' gangs added.
+     *
+     * <p>Computed here rather than stored, exactly as {@link #dayCost} is. The two columns it
+     * adds stay frozen and separate on the row — that separation is what keeps a wage off a
+     * supplier's man — and this is the one figure that answers the question the department
+     * actually asks, which is how many men stood on the site.</p>
+     *
+     * <p>A null present count is a report with no muster behind it, not zero men of ours; it
+     * contributes nothing here and the supplier's count is then the whole answer.</p>
+     */
+    private static int menOnSite(DailyProgressReport report) {
+        Integer own = report.getLabourPresentCount();
+        return (own == null ? 0 : own) + report.getOutsourcedHeadCount();
     }
 
     /**

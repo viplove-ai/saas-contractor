@@ -332,6 +332,26 @@ public final class DprDtos {
             int outsourcedHeadCount,
             /** Their man-hours, kept out of labourRegularHours for the same reason. */
             BigDecimal outsourcedManHours,
+            /**
+             * Every man who stood on the site: the muster roll's plus the suppliers' gangs.
+             *
+             * <p>"How many men were on the site" has one answer and the department asks it of
+             * the site, not of the payroll — so the report answers it, and the two figures it
+             * is made of stay beside it because they are what the answer is made of.</p>
+             *
+             * <p><b>Derived, never stored.</b> {@code labour_present_count} and
+             * {@code outsourced_head_count} are the frozen columns; this is their sum computed
+             * per call, so the two kinds of man remain separable in the record and no wage is
+             * ever spread over a supplier's gang. The money figures are untouched by it —
+             * {@code labourCost} is still the muster roll's alone, and the hours stay in their
+             * own columns for the same reason: a man-hour on the muster has a rate behind it
+             * and one at the gate has none.</p>
+             *
+             * <p>Named for what it counts rather than {@code totalHeadCount}, which the
+             * labour-counts endpoint already uses for the suppliers' men alone. Two totals
+             * with one name is how a screen ends up printing the smaller one.</p>
+             */
+            int menOnSite,
             BigDecimal labourRegularHours,
             BigDecimal labourOvertimeHours,
             BigDecimal labourCost,

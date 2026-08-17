@@ -221,11 +221,19 @@ if the tests pass:
   recorded as counts per trade in `site_labour_counts` — no worker, no wage rate, no ledger
   posting, because the supplier bills for the work. Hours are recorded (per man, nullable,
   and null is not zero) and stay unpriced: nothing multiplies them by a rate. The DPR prints
-  them beside the muster roll and never inside its head count or its hours —
+  them beside the muster roll and never inside its wage cost or its hours —
   `dpr_labour.outsourced` and `daily_progress_reports.outsourced_man_hours` are what keep the
-  two apart once the report is frozen. The screen calls this **external labour** and no
-  longer asks which contractor supplied it; the column is still stored and still carried
-  through a re-save, waiting on contractor onboarding.
+  two apart once the report is frozen. **The men, though, add.** "How many men stood on the
+  site" is one question, and the department asks it of the site and not of the payroll — so
+  `DprResponse.menOnSite` is `labour_present_count` plus `outsourced_head_count`, derived per
+  call like every other roll-up and stored nowhere, and it is the head count the register, the
+  panel, the wizard and the PDF lead with. What refuses to add is anything with a rate behind
+  it: a man-hour on the muster has one and a man-hour at the gate has none, so the hours stay
+  in their own columns and the total prints with its two halves beside it rather than in place
+  of them. Do not reuse the name — `DayCountsResponse.totalHeadCount` is the suppliers' men
+  alone. The screen calls this **external labour** and asks which supplier sent the men, off
+  the one supplier register (V23); naming him stays optional, because a count with no name on
+  it is still a true count.
 - **Plant is held, not consumed.** A mixer is at the site in March and in June, so
   `site_equipment` is its own register and no equipment row ever reaches
   `stock_transactions` — a posting would report the mixer as used up by the slab it poured

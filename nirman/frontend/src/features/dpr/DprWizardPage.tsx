@@ -1308,10 +1308,14 @@ function PrefillStep({
           </Alert>
         )}
         {/*
-          External labour, beside the muster and never inside it. Its own row of figures
-          rather than a share of the ones above: those men have a wage behind their hours and
-          these have none, so a single "45 present" would read as a wage bill spread over
-          people who are not on our payroll.
+          External labour on its own row of figures rather than folded into the ones above:
+          those men have a wage behind their hours and these have none, so an "Present: 45"
+          that included them would read as a wage bill spread over people who are not on our
+          payroll.
+
+          The men, though, do add. "How many men were on the site" is one question with one
+          answer, and it is the head count alone that answers it — no hours and no money
+          travel with the sum, which is why they are still shown apart above and beside it.
         */}
         {data.outsourcedLabour.enabled && (
           <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
@@ -1323,6 +1327,10 @@ function PrefillStep({
                   ? formatHours(data.outsourcedLabour.manHours)
                   : 'Not recorded'
               }
+            />
+            <Figure
+              label="Men on site"
+              value={String(data.labour.presentCount + data.outsourcedLabour.headCount)}
             />
           </Stack>
         )}

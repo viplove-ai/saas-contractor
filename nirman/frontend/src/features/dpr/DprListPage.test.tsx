@@ -174,6 +174,52 @@ describe('DprListPage', () => {
     expect(screen.getByText('Shuttering struck and stacked')).toBeInTheDocument();
   });
 
+  /**
+   * The register is read as a month of days, so its Men column is the men who stood on the
+   * site — ours and the suppliers' together. Counting only the muster would show three on a
+   * day fourteen were there, because eleven of them were somebody else's to pay.
+   */
+  it('counts the suppliers’ men in the register’s head count', async () => {
+    const mixed = dpr({
+      id: 'd1',
+      dprNumber: 'DPR-2025-9002',
+      labourPresentCount: 3,
+      outsourcedHeadCount: 11,
+      menOnSite: 14,
+    });
+    mockGets(mixed, [mixed]);
+    renderPage();
+
+    await screen.findAllByText('DPR-2025-9002');
+    expect(table().getByText('14')).toBeInTheDocument();
+  });
+
+  /**
+   * And the panel shows what the fourteen are made of. The wage cost beside them belongs to
+   * the three alone, so a total with no split under it would read as a wage bill spread over
+   * men who are not on our payroll.
+   */
+  it('splits the men on site into the muster’s and the suppliers’', async () => {
+    const user = userEvent.setup({ delay: null });
+    const mixed = dpr({
+      id: 'd1',
+      dprNumber: 'DPR-2025-9002',
+      labourPresentCount: 3,
+      outsourcedHeadCount: 11,
+      menOnSite: 14,
+    });
+    mockGets(mixed, [mixed]);
+    renderPage();
+
+    await openReport(user, 'DPR-2025-9002');
+
+    const panel = within(await screen.findByRole('presentation'));
+    expect(panel.getByText('Men on site')).toBeInTheDocument();
+    expect(panel.getByText('On the muster')).toBeInTheDocument();
+    expect(panel.getByText('External (counted)')).toBeInTheDocument();
+    expect(panel.getByText('11')).toBeInTheDocument();
+  });
+
   /** The frozen snapshot is explained on the panel, so a difference reads as intent. */
   it('explains that a submitted report no longer follows the records', async () => {
     const user = userEvent.setup({ delay: null });
