@@ -21,21 +21,39 @@ export type NonOperationalCause =
   | 'SITE_NOT_READY'
   | 'OTHER';
 
-/** The same words the printed report uses, so the screen and the paper agree. */
-export const NON_OPERATIONAL_CAUSES: { value: NonOperationalCause; label: string }[] = [
-  { value: 'WEATHER', label: 'Weather' },
-  { value: 'HOLIDAY', label: 'Holiday' },
-  { value: 'STRIKE', label: 'Strike or bandh' },
-  { value: 'NO_LABOUR', label: 'No labour available' },
-  { value: 'MATERIAL_SHORTAGE', label: 'Material not available' },
-  { value: 'FUNDS', label: 'Funds not released' },
-  { value: 'DEPARTMENT_INSTRUCTION', label: 'Stopped by the department' },
-  { value: 'SITE_NOT_READY', label: 'Site not ready for work' },
-  { value: 'OTHER', label: 'Other' },
-];
+/**
+ * The same words the printed report uses, so the screen and the paper agree.
+ *
+ * <p>Every cause the server knows, including the ones the picker no longer offers: reports
+ * were signed carrying them and a register that renders a signed report as "Not stated" has
+ * lost the reason it was written down for.</p>
+ */
+const CAUSE_LABELS: Record<NonOperationalCause, string> = {
+  WEATHER: 'Weather',
+  HOLIDAY: 'Holiday',
+  STRIKE: 'Strike or bandh',
+  NO_LABOUR: 'No labour available',
+  MATERIAL_SHORTAGE: 'Material not available',
+  FUNDS: 'Funds not released',
+  DEPARTMENT_INSTRUCTION: 'Stopped by the department',
+  SITE_NOT_READY: 'Site not ready for work',
+  OTHER: 'Other',
+};
+
+/**
+ * What the picker offers, which is a subset of what the column holds.
+ *
+ * <p>Strike, no labour, material shortage and funds were dropped from the list a supervisor
+ * chooses from. They stay in {@link CAUSE_LABELS} and in the server's enum, so a report
+ * already signed with one still reads as it did — offering a cause and understanding a cause
+ * are two different jobs, and only the first one narrowed.</p>
+ */
+export const NON_OPERATIONAL_CAUSES: { value: NonOperationalCause; label: string }[] = (
+  ['WEATHER', 'HOLIDAY', 'DEPARTMENT_INSTRUCTION', 'SITE_NOT_READY', 'OTHER'] as const
+).map((value) => ({ value, label: CAUSE_LABELS[value] }));
 
 export function causeLabel(cause: NonOperationalCause | undefined): string {
-  return NON_OPERATIONAL_CAUSES.find((entry) => entry.value === cause)?.label ?? 'Not stated';
+  return cause ? CAUSE_LABELS[cause] : 'Not stated';
 }
 
 /** "Other" says nothing on its own, so it is the one cause the server also wants a note for. */

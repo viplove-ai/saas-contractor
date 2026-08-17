@@ -51,7 +51,7 @@ import {
   OutsourcedLabourCard,
   PhotoCard,
 } from './DayEntry';
-import { causeNeedsNote, isWritable, NON_OPERATIONAL_CAUSES } from './types';
+import { causeLabel, causeNeedsNote, isWritable, NON_OPERATIONAL_CAUSES } from './types';
 import type {
   Dpr,
   DprConditions,
@@ -814,26 +814,33 @@ export function DprWizardPage() {
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              label="Temperature (°C)"
-              type="number"
-              value={temperatureC}
-              onChange={(e) => setTemperatureC(e.target.value)}
-              disabled={!conditionsWritable}
-              sx={{ maxWidth: 160 }}
-            />
             {/*
+              The two numbers share a row on the handset instead of taking a line each. Both
+              hold three characters, so a column of them is mostly empty screen between the
+              weather and the entry cards — and they are read together anyway: hot, and two
+              hours off the brickwork.
+
               Hours lost is the operationally useful half of a weather note: "rain" is
               weather, "an hour and a half off the brickwork" is a delay somebody can price.
             */}
-            <TextField
-              label="Working hours lost"
-              type="number"
-              value={workingHoursLost}
-              onChange={(e) => setWorkingHoursLost(e.target.value)}
-              disabled={!conditionsWritable}
-              sx={{ maxWidth: 180 }}
-            />
+            <Stack direction="row" spacing={2}>
+              <TextField
+                label="Temperature (°C)"
+                type="number"
+                value={temperatureC}
+                onChange={(e) => setTemperatureC(e.target.value)}
+                disabled={!conditionsWritable}
+                sx={{ flex: 1, maxWidth: { sm: 160 } }}
+              />
+              <TextField
+                label="Working hours lost"
+                type="number"
+                value={workingHoursLost}
+                onChange={(e) => setWorkingHoursLost(e.target.value)}
+                disabled={!conditionsWritable}
+                sx={{ flex: 1, maxWidth: { sm: 180 } }}
+              />
+            </Stack>
           </Stack>
 
           {siteOperational && prefill.data && (
@@ -965,7 +972,7 @@ export function DprWizardPage() {
                   onClick={() => void saveAndSubmit()}
                   disabled={busy || blocked || !siteId || causeMissing}
                 >
-                  {canVerify ? 'Send for signature' : 'Hand over to the engineer'}
+                  {canVerify ? 'Send for signature' : 'Submit'}
                 </Button>
               )}
               {handedOver && canVerify && (
@@ -1059,6 +1066,17 @@ function DayStatusCard({
   onCauseChange: (cause: NonOperationalCause) => void;
   onNoteChange: (note: string) => void;
 }) {
+  /*
+    A cause the picker no longer offers is still shown when the report already carries one.
+    Reports were written with the retired causes, and a draft reopened against a picker that
+    has no row for what it says would show an empty required field and read as though the
+    supervisor had never answered.
+  */
+  const causeOptions =
+    cause && !NON_OPERATIONAL_CAUSES.some((option) => option.value === cause)
+      ? [...NON_OPERATIONAL_CAUSES, { value: cause, label: causeLabel(cause) }]
+      : NON_OPERATIONAL_CAUSES;
+
   return (
     <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
       <Typography fontWeight={600} gutterBottom>
@@ -1095,7 +1113,7 @@ function DayStatusCard({
             helperText="Counted across the month, so a claim for time can be made on it."
             sx={{ maxWidth: 320 }}
           >
-            {NON_OPERATIONAL_CAUSES.map((option) => (
+            {causeOptions.map((option) => (
               <MenuItem key={option.value} value={option.value}>
                 {option.label}
               </MenuItem>

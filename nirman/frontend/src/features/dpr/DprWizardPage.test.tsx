@@ -261,7 +261,7 @@ describe('DprWizardPage', () => {
     expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
     expect(screen.queryByText('Work done')).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Hand over to the engineer' }),
+      screen.getByRole('button', { name: 'Submit' }),
     ).toBeInTheDocument();
   });
 
@@ -307,7 +307,7 @@ describe('DprWizardPage', () => {
     renderPage();
 
     await screen.findByText('Labour');
-    await user.click(screen.getByRole('button', { name: 'Hand over to the engineer' }));
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
 
     await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
     expect(post.mock.calls[0]![0]).toBe('/dprs');
@@ -443,7 +443,7 @@ describe('DprWizardPage', () => {
 
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
     expect(
-      screen.getByRole('button', { name: 'Hand over to the engineer' }),
+      screen.getByRole('button', { name: 'Submit' }),
     ).toBeDisabled();
   });
 
