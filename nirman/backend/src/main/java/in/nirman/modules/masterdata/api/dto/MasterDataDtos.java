@@ -141,6 +141,20 @@ public final class MasterDataDtos {
             @NotNull UUID baseUnitId) {
     }
 
+    /**
+     * The same act a day later: the name the field gave a material, corrected by the field.
+     *
+     * <p>A name and a version, and deliberately nothing else — not even the unit. Naming a
+     * thing wrong is the ordinary mistake ("celment", "TMT 12 mm" against the 16 mm bars);
+     * changing what it is measured in re-reads every quantity ever booked against it, so 50
+     * bags become 50 kilogrammes without a single stock row moving. That correction is the
+     * office's, and today not even the office makes it by editing.</p>
+     */
+    public record CorrectFieldMaterialRequest(
+            @NotBlank @Size(max = 200) String name,
+            @NotNull Long version) {
+    }
+
     public record CreateMaterialRequest(
             @NotBlank @Size(max = 40) @Pattern(regexp = "[A-Za-z0-9._-]+") String code,
             @NotBlank @Size(max = 200) String name,

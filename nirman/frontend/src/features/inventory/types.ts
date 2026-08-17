@@ -41,6 +41,8 @@ export interface Material {
   active: boolean;
   /** Named at the gate rather than set up by the office, and nobody has vetted it yet. */
   provisional: boolean;
+  /** Sent back with a name correction: the server refuses a stale one with a 409. */
+  version: number;
 }
 
 /**
@@ -275,4 +277,36 @@ export interface LineDraft {
   boqItemId?: string | undefined;
   /** What the storekeeper called it, when the catalogue has no name for it. */
   newName?: string | undefined;
+}
+
+/**
+ * A correction the field has asked for, and what the office did about it.
+ *
+ * <p>It holds no stock. The storekeeper can see the shed and cannot move a balance — that is
+ * the office's, because a role that can adjust a balance can hide a loss — so this is the
+ * sentence he otherwise has no way to say. Accepting one posts the ordinary signed adjustment
+ * through the ledger, which is why `postedTxnId` only ever appears on an accepted row.</p>
+ */
+export type StockCorrectionStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
+
+export interface StockCorrection {
+  id: string;
+  siteId: string;
+  storeId: string;
+  storeName?: string;
+  materialId: string;
+  materialName?: string;
+  unitId: string;
+  unitCode?: string;
+  /** Signed: negative writes stock off, positive writes it on. */
+  quantityDelta: number;
+  correctionDate: string;
+  reason: string;
+  status: StockCorrectionStatus;
+  postedTxnId?: string;
+  decidedAt?: string;
+  decisionRemarks?: string;
+  createdAt: string;
+  createdBy?: string;
+  version: number;
 }

@@ -84,7 +84,7 @@ function emptyDraft(): Draft {
  * new entry waits, visibly, and says who it is waiting on.</p>
  */
 export function EquipmentPanel({ storeId }: { storeId: string }) {
-  const { user, hasPermission } = useAuth();
+  const { hasPermission } = useAuth();
   const equipment = useEquipment(storeId || undefined);
   const vendors = useVendors();
   const add = useAddEquipment();
@@ -109,15 +109,14 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
    * Who may change what this row says — its wording or its picture. The server decides and
    * this only mirrors it.
    *
-   * <p>The office, on anything. The man who entered it, on his own entry, whatever the office
-   * has since decided about it: he is the one standing next to the machine, and an entry he
-   * may create but never amend leaves him reporting a broken mixer by telephone. Not
-   * somebody else's row, though he stands at the same site. Showing the button where the
-   * server would refuse it is worse than not showing it: the supervisor learns it is a lie.
-   * </p>
+   * <p>The office, on anything. Anybody who may enter plant at this site, on any row standing
+   * at it — the rows are already filtered to the sites he is posted to. It was his own entries
+   * only, until the shift roster made a nonsense of that: the man who wrote the mixer down in
+   * March is on another site in June, and the breaker whose jaw came off is visible to whoever
+   * is standing there now. His correction re-opens the row, so nothing gets past the office by
+   * this route.</p>
    */
-  const mayAmend = (machine: Equipment): boolean =>
-    canWrite || (canAdd && machine.createdBy === user?.id);
+  const mayAmend = (): boolean => canWrite || canAdd;
 
   /**
    * Whether saving this correction will put the row back in the queue.
@@ -258,7 +257,7 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
       cell: (machine) =>
         machine.photoAttachmentId ? (
           <MachinePhoto attachmentId={machine.photoAttachmentId} name={machine.name} />
-        ) : mayAmend(machine) ? (
+        ) : mayAmend() ? (
           <PickPhotoButton
             label="Photograph it"
             busy={setPhoto.isPending}
@@ -332,7 +331,7 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
               </Button>
             </>
           )}
-          {mayAmend(machine) && (
+          {mayAmend() && (
             <Button size="small" onClick={() => openEdit(machine)}>
               Edit
             </Button>
@@ -539,7 +538,7 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
                   busy={setPhoto.isPending}
                   onPick={setNewPhoto}
                 />
-                {editing?.photoAttachmentId && !newPhoto && mayAmend(editing) && (
+                {editing?.photoAttachmentId && !newPhoto && mayAmend() && (
                   <Button
                     size="small"
                     color="error"

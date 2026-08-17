@@ -205,18 +205,37 @@ if the tests pass:
   site may enter a machine (`equipment:create`) and only an administrator accepts it
   (`equipment:approve`) or removes it (`equipment:write`); an administrator's own entry
   arrives accepted, because a queue of his own rows is one he learns to click through.
-  **Correcting is shared, and re-opens.** The office corrects any row; the man who entered one
-  corrects his own — its description or its photograph — because an entry he may create and
-  never amend leaves him reporting a broken mixer by telephone. His correction is not quiet:
-  `SiteEquipment.reopen()` puts the row back to PENDING and clears the decision with it, so
-  nothing reaches the register unread. The office's own correction does not re-open, for the
-  same reason its own entry arrives accepted.
+  **Correcting is shared, and re-opens.** Anybody holding `equipment:create` corrects any row
+  standing at a site he is posted to — its description or its photograph — because an entry he
+  may create and never amend leaves him reporting a broken mixer by telephone. It was his own
+  entries only until the shift roster made a nonsense of that: the man who wrote the mixer down
+  in March is on another site in June, and the one who can see the broken jaw was the one
+  refused the row. His correction is not quiet: `SiteEquipment.reopen()` puts the row back to
+  PENDING and clears the decision with it, so nothing reaches the register unread — which is
+  what makes widening it safe. The office's own correction does not re-open, for the same
+  reason its own entry arrives accepted.
 - **The field may name a thing, never value it.** A material off a challan
   (`POST /materials/field`) and an expense head off a bill (`POST /expense-categories/field`)
   both create real rows marked `provisional`, both refuse everything that carries a number or
   a consequence — rate, HSN, the two expense cost flags — and both answer a name the
   organisation already holds with the row it already holds, because two rows for one thing
-  split one figure into two that never add up.
+  split one figure into two that never add up. **Naming has a second half: unnaming.**
+  `PUT /materials/{id}/field` lets the same permission correct the name it gave — the name and
+  nothing else, not even the unit, because changing what a material is measured in re-reads
+  every quantity ever booked against it. The correction marks the row `provisional` again, so
+  the office reads the new name; an office caller does not re-open it. Without that half,
+  "celment" sits on every picker until somebody notices and the man who typed it routes round
+  his own mistake by naming a second row — the split balance reached from the inside.
+- **A wrong stock figure is reported, never edited.** `stock_transactions` is append-only, and
+  an ADJUSTMENT is `inventory:adjust`, the office's, because a role that can move a balance can
+  hide a loss. That left the one man who can see the shed unable to say anything about it. So
+  `stock_correction_requests` (V35) holds a *request*: `inventory:correct` raises one, it posts
+  nothing, and an administrator accepting it calls `StockAdjustmentService.adjust` — the same
+  period lock, the same refusal to go negative, the same signed row in the store's history. The
+  accepted request keeps `posted_txn_id`, so "what did the office do about my count" has an
+  answer, and a refused one keeps its reason, because a request that vanishes when it is turned
+  down is a shed nobody counts twice. One open request per store and material: two are how the
+  same correction gets posted twice.
 - **A site is never without a store.** `SiteService.create` gives every new site one, named
   `site-<site code>` after it, because a store is not a decision anybody was making and an
   empty store picker strands a lorry at the gate. The Stores screen is for the second store
@@ -324,6 +343,14 @@ its four permissions.
 flag and the cause agreeing for the write that never goes through the service. It adds **no
 permission** — the two-author split it comes with is drawn between `dpr:draft` and `dpr:verify`,
 which V2 already seeded.
+
+`V35` is the third turn of the same screw, on the one register where the field could not be
+given the write at all. `stock_correction_requests` lets somebody holding the new
+`inventory:correct` say a stock figure is wrong; it stores no stock, and accepting one posts an
+ordinary ADJUSTMENT through `StockAdjustmentService`. **One new permission, not two** —
+approving a correction *is* posting the adjustment, so it is held by `inventory:adjust`, which
+is already exactly that question. A second one would let an organisation grant the decision to
+somebody who cannot make the posting it commits them to.
 
 Hibernate is `ddl-auto: validate`. Flyway owns the schema; an entity that drifts from a
 migration fails at startup.

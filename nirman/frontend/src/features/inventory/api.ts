@@ -13,6 +13,7 @@ import type {
   Receipt,
   Site,
   StockPosition,
+  StockCorrection,
   Store,
   Unit,
   Vendor,
@@ -36,6 +37,8 @@ export const inventoryKeys = {
   allIssues: ['inventory', 'issues'] as const,
   equipment: (storeId: string) => ['inventory', 'equipment', storeId] as const,
   allEquipment: ['inventory', 'equipment'] as const,
+  corrections: (storeId: string) => ['inventory', 'stock-corrections', storeId] as const,
+  allCorrections: ['inventory', 'stock-corrections'] as const,
   /** One signed link per attachment, shared by every thumbnail drawn from it. */
   attachmentUrl: (attachmentId: string) => ['attachments', attachmentId, 'url'] as const,
   vendors: ['vendors'] as const,
@@ -441,6 +444,100 @@ export function useApproveIssue() {
       ).data,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: inventoryKeys.allIssues });
+      void queryClient.invalidateQueries({ queryKey: inventoryKeys.allStock });
+    },
+  });
+}
+
+/**
+ * The corrections asked for at this store, decided and undecided.
+ *
+ * <p>Refused ones are in the list on purpose. A request that disappeared the moment it was
+ * turned down would be a storekeeper who counts the shed once and never types it again.</p>
+ */
+export function useStockCorrections(storeId: string | undefined) {
+  return useQuery({
+    queryKey: inventoryKeys.corrections(storeId ?? ''),
+    queryFn: async () =>
+      (
+        await apiClient.get<StockCorrection[]>('/inventory/stock-corrections', {
+          params: { storeId },
+        })
+      ).data,
+    enabled: Boolean(storeId),
+  });
+}
+
+/**
+ * Asking for a stock figure to be put right. Posts nothing — an administrator decides, and
+ * accepting is what writes the adjustment onto the ledger.
+ *
+ * <p>The id is generated here, like every other entry the field makes: a count typed in a shed
+ * with no signal and synced three times is one request, not three corrections in the queue.</p>
+ */
+export function useRaiseStockCorrection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      storeId: string;
+      materialId: string;
+      unitId: string;
+      quantityDelta: number;
+      correctionDate: string;
+      reason: string;
+    }) =>
+      (
+        await apiClient.post<StockCorrection>('/inventory/stock-corrections', {
+          id: crypto.randomUUID(),
+          ...input,
+        })
+      ).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inventoryKeys.allCorrections });
+    },
+  });
+}
+
+/** The office answering one. Accepting moves the balance, so the stock queries go with it. */
+export function useDecideStockCorrection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; action: 'ACCEPT' | 'REJECT'; remarks?: string }) =>
+      (
+        await apiClient.post<StockCorrection>(
+          `/inventory/stock-corrections/${input.id}/decision`,
+          { action: input.action, remarks: input.remarks || undefined },
+        )
+      ).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inventoryKeys.allCorrections });
+      void queryClient.invalidateQueries({ queryKey: inventoryKeys.allStock });
+    },
+  });
+}
+
+/**
+ * Correcting the name a material was given at the gate.
+ *
+ * <p>The other half of naming one. Without it "celment" sits on every picker until somebody in
+ * the office notices, and the man who typed it works around his own mistake by naming a second
+ * row — which is the split balance the naming rule exists to prevent, reached from inside.</p>
+ *
+ * <p>The name and nothing else: not the rate, not the unit. Changing what a material is
+ * measured in re-reads every quantity ever booked against it.</p>
+ */
+export function useCorrectFieldMaterial() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; name: string; version: number }) =>
+      (
+        await apiClient.put<Material>(`/materials/${input.id}/field`, {
+          name: input.name,
+          version: input.version,
+        })
+      ).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inventoryKeys.materials });
       void queryClient.invalidateQueries({ queryKey: inventoryKeys.allStock });
     },
   });

@@ -97,9 +97,18 @@ class SiteEquipmentIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+    /**
+     * Removing stays the office's, and correcting is no longer restricted to the author.
+     *
+     * <p>Authorship was the rule until the shift roster made a nonsense of it: the man who
+     * entered the machine in March is on another site in June, and the one who can see that
+     * its jaw has come off was refused the row. So a supervisor corrects any machine standing
+     * at a site he is posted to — and the correction re-opens it, which is what keeps the
+     * office's acceptance meaning something.</p>
+     */
     @Test
-    @DisplayName("the site may not remove a row, and may not correct somebody else's")
-    void theSiteMayNotDeleteOrEditAnothersRow() throws Exception {
+    @DisplayName("the site may not remove a row, and corrects anybody's")
+    void theSiteMayNotDeleteButCorrectsAnothersRow() throws Exception {
         String supervisor = loginToken("vivek");
         String id = UUID.randomUUID().toString();
         JsonNode entered = enter(supervisor, body(UUID.fromString(id), "Plate Compactor", null));
@@ -108,7 +117,8 @@ class SiteEquipmentIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", "Bearer " + supervisor))
                 .andExpect(status().isForbidden());
 
-        // The administrator's own entry, which the supervisor did not make and may not rewrite.
+        // The administrator's own entry, accepted on the way in — and the supervisor may
+        // still say what has become of the machine, which sends it back to be read again.
         String officeRow = UUID.randomUUID().toString();
         JsonNode office = enter(loginToken("viplove"),
                 body(UUID.fromString(officeRow), "Office Tower Light", null));
@@ -116,12 +126,11 @@ class SiteEquipmentIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(put("/api/v1/inventory/equipment/" + officeRow)
                         .header("Authorization", "Bearer " + supervisor)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(correction("Office Tower Light (mine)", "WORKING",
+                        .content(correction("Office Tower Light (bulb gone)", "UNDER_REPAIR",
                                 office.get("version").asLong())))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING"));
 
-        // His own row is still his, so the refusal above is about whose it is and not about
-        // the supervisor being unable to correct anything.
         mockMvc.perform(put("/api/v1/inventory/equipment/" + id)
                         .header("Authorization", "Bearer " + supervisor)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -378,21 +387,34 @@ class SiteEquipmentIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.status").value("PENDING"));
     }
 
-    /** Somebody else's row is somebody else's, whoever has decided about it. */
+    /**
+     * The camera follows the correction: any machine at a site he is posted to.
+     *
+     * <p>The office's row already carried a picture, so this one replaces what the office
+     * agreed to — a new claim, and it goes back to the queue like any other.</p>
+     */
     @Test
-    @DisplayName("the site cannot photograph an entry it did not make")
-    void theSiteCannotPhotographAnothersEntry() throws Exception {
+    @DisplayName("the site photographs an entry it did not make, and re-opens it")
+    void theSitePhotographsAnothersEntry() throws Exception {
         String supervisor = loginToken("vivek");
         String office = loginToken("viplove");
         String id = UUID.randomUUID().toString();
         enter(office, body(UUID.fromString(id), "Office Mixer", null));
 
         mockMvc.perform(put("/api/v1/inventory/equipment/" + id + "/photo")
+                        .header("Authorization", "Bearer " + office)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"attachmentId\":\"%s\"}"
+                                .formatted(uploadPhoto(office, "as-received.jpg"))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/v1/inventory/equipment/" + id + "/photo")
                         .header("Authorization", "Bearer " + supervisor)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"attachmentId\":\"%s\"}"
-                                .formatted(uploadPhoto(supervisor, "not-mine.jpg"))))
-                .andExpect(status().isForbidden());
+                                .formatted(uploadPhoto(supervisor, "as-it-stands.jpg"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING"));
     }
 
     /** A machine is identified by a picture of it. A PDF identifies nothing. */

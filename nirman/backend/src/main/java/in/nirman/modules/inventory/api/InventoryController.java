@@ -11,6 +11,10 @@ import in.nirman.modules.inventory.api.dto.InventoryDtos.CreateTransferRequest;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.DecideCountRequest;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.IssueResponse;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.LedgerRow;
+import in.nirman.modules.inventory.api.dto.InventoryDtos.DecideStockCorrectionRequest;
+import in.nirman.modules.inventory.api.dto.InventoryDtos.StockCorrectionRequestBody;
+import in.nirman.modules.inventory.api.dto.InventoryDtos.StockCorrectionResponse;
+import in.nirman.modules.inventory.domain.StockCorrectionRequest;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.OpeningStockRequest;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.PriceReceiptRequest;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.ReceiptResponse;
@@ -25,6 +29,7 @@ import in.nirman.modules.inventory.service.GoodsReceiptService;
 import in.nirman.modules.inventory.service.InventoryReads;
 import in.nirman.modules.inventory.service.MaterialIssueService;
 import in.nirman.modules.inventory.service.StockAdjustmentService;
+import in.nirman.modules.inventory.service.StockCorrectionService;
 import in.nirman.modules.inventory.service.StockCountService;
 import in.nirman.modules.inventory.service.StockTransferService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,6 +50,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -64,16 +70,19 @@ public class InventoryController {
     private final StockTransferService transfers;
     private final StockCountService counts;
     private final StockAdjustmentService adjustments;
+    private final StockCorrectionService corrections;
     private final InventoryReads reads;
 
     public InventoryController(GoodsReceiptService receipts, MaterialIssueService issues,
                                StockTransferService transfers, StockCountService counts,
-                               StockAdjustmentService adjustments, InventoryReads reads) {
+                               StockAdjustmentService adjustments,
+                               StockCorrectionService corrections, InventoryReads reads) {
         this.receipts = receipts;
         this.issues = issues;
         this.transfers = transfers;
         this.counts = counts;
         this.adjustments = adjustments;
+        this.corrections = corrections;
         this.reads = reads;
     }
 
@@ -275,6 +284,37 @@ public class InventoryController {
     @Operation(summary = "Administrator-only correction of last resort. Signed; reason mandatory.")
     public LedgerRow adjust(@Valid @RequestBody AdjustmentRequest request) {
         return adjustments.adjust(request);
+    }
+
+    // ------------------------------------------------------------------ corrections asked for
+
+    @GetMapping("/stock-corrections")
+    @Operation(summary = "Corrections asked for by the field, decided and undecided")
+    public List<StockCorrectionResponse> stockCorrections(
+            @RequestParam(required = false) UUID siteId,
+            @RequestParam(required = false) UUID storeId,
+            @RequestParam(required = false) StockCorrectionRequest.Status status) {
+        return corrections.list(siteId, storeId, status);
+    }
+
+    @PostMapping("/stock-corrections")
+    @Operation(summary = "Ask for a stock figure to be corrected",
+            description = "Posts nothing. The storekeeper can see the shed and cannot move a "
+                    + "balance; this is the sentence he otherwise has no way to say. An "
+                    + "administrator accepting it posts the ordinary signed ADJUSTMENT.")
+    public ResponseEntity<StockCorrectionResponse> raiseStockCorrection(
+            @Valid @RequestBody StockCorrectionRequestBody request) {
+        StockCorrectionResponse raised = corrections.raise(request);
+        return ResponseEntity
+                .created(URI.create("/api/v1/inventory/stock-corrections/" + raised.id()))
+                .body(raised);
+    }
+
+    @PostMapping("/stock-corrections/{id}/decision")
+    @Operation(summary = "Accept the correction, which posts the adjustment, or refuse it")
+    public StockCorrectionResponse decideStockCorrection(
+            @PathVariable UUID id, @Valid @RequestBody DecideStockCorrectionRequest request) {
+        return corrections.decide(id, request);
     }
 
     // ------------------------------------------------------------------ reads

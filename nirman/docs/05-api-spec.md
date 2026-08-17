@@ -72,6 +72,11 @@ an issue, a transfer or a stock count has ever named; a store that is finished w
 `POST /materials/field` names a material at the gate from a name and a unit
 (`masterdata:provisional`); the row is marked provisional and a name the organisation already
 holds comes back rather than being duplicated.
+`PUT /materials/{id}/field` is its second half — the same permission correcting the name it
+gave, and only the name: not the rate, not the unit, because changing what a material is
+measured in re-reads every quantity ever booked against it. Needs `version`. A field
+correction marks the row provisional again so the office reads the new name; an office
+caller's does not. A rename onto a name the catalogue already holds is a 409.
 
 ### /vendors, /expense-categories
 `GET|POST /vendors` (`?type&active&q`), `GET|PUT /vendors/{id}` — `vendor:write`, not
@@ -114,9 +119,11 @@ name already on file comes back rather than becoming a second line of the same r
 | GET|POST | `/inventory/equipment` | plant held at a store — **not stock**, nothing here touches the ledger. `?siteId&storeId&status`. POST is idempotent on the client id and needs `equipment:create`; the row is PENDING unless the caller may accept it |
 | GET | `/inventory/equipment/{id}` | |
 | POST | `/inventory/equipment/{id}/decision` | `{action:ACCEPT\|REJECT,remarks}` — `equipment:approve`, admin only |
-| PUT | `/inventory/equipment/{id}` | correct an entry. `equipment:write` on any row; `equipment:create` on a row the caller entered, and that correction re-opens it to PENDING and drops the old decision. Needs `version` |
+| PUT | `/inventory/equipment/{id}` | correct an entry. `equipment:write` on any row; `equipment:create` on any row at a site the caller is posted to, and that correction re-opens it to PENDING and drops the old decision. Needs `version` |
 | PUT | `/inventory/equipment/{id}/photo` | `{attachmentId}`, null to remove. Same rule as PUT above; replacing an existing picture from the field re-opens the row, adding the first one does not |
 | DELETE | `/inventory/equipment/{id}` | `equipment:write`, admin only. Soft |
+| GET|POST | `/inventory/stock-corrections` | the field asking for a stock figure to be put right. `?siteId&storeId&status`. POST needs `inventory:correct`, is idempotent on the client id, and **posts nothing**; signed `quantityDelta`, reason mandatory. One open request per store and material — a second is a 409 |
+| POST | `/inventory/stock-corrections/{id}/decision` | `{action:ACCEPT\|REJECT,remarks}` — `inventory:adjust`, because accepting *is* posting the adjustment. ACCEPT runs the ordinary ADJUSTMENT through the ledger, so a closed period or a balance that would go negative refuses it and leaves the request PENDING |
 
 ### /material-estimates
 `GET|POST /material-estimates` (`?projectId&materialId&level`) — a repeat for the same scope

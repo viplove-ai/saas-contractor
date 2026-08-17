@@ -1,5 +1,6 @@
 import {
   Alert,
+  Button,
   Chip,
   CircularProgress,
   Drawer,
@@ -15,10 +16,14 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import { useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
+import { useAuth } from '../auth/AuthContext';
 import { formatAmount, formatQuantity } from '../../shared/formatters';
 import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
 import { useLedger, useStock } from './api';
+import { CorrectMaterialNameDialog } from './CorrectMaterialNameDialog';
 import { EquipmentPanel } from './EquipmentPanel';
+import { RaiseCorrectionDialog } from './RaiseCorrectionDialog';
+import { StockCorrectionsPanel } from './StockCorrectionsPanel';
 import { StorePicker } from './StorePicker';
 import type { LedgerRow, StockRow, TxnType } from './types';
 
@@ -54,7 +59,7 @@ export function StockPage() {
   const [asOf, setAsOf] = useState(today());
   const [lowOnly, setLowOnly] = useState(false);
   const [openRow, setOpenRow] = useState<StockRow | null>(null);
-  const [tab, setTab] = useState<'MATERIAL' | 'EQUIPMENT'>('MATERIAL');
+  const [tab, setTab] = useState<'MATERIAL' | 'EQUIPMENT' | 'CORRECTIONS'>('MATERIAL');
 
   const stock = useStock(storeId || undefined, lowOnly);
 
@@ -134,14 +139,21 @@ export function StockPage() {
       */}
       <Tabs
         value={tab}
-        onChange={(_event, next: 'MATERIAL' | 'EQUIPMENT') => setTab(next)}
+        onChange={(_event, next: 'MATERIAL' | 'EQUIPMENT' | 'CORRECTIONS') => setTab(next)}
         aria-label="What is at this store"
       >
         <Tab value="MATERIAL" label="Material" />
         <Tab value="EQUIPMENT" label="Equipment" />
+        {/*
+          The third tab is not a third register. It is the queue of things the store says the
+          first one has wrong — kept beside the balances rather than on an admin screen,
+          because the man who can see the shed is the man standing on this page.
+        */}
+        <Tab value="CORRECTIONS" label="Differences" />
       </Tabs>
 
       {tab === 'EQUIPMENT' && <EquipmentPanel storeId={storeId} />}
+      {tab === 'CORRECTIONS' && <StockCorrectionsPanel storeId={storeId} siteId={siteId} />}
 
       {tab === 'MATERIAL' && (
         <>
@@ -192,7 +204,10 @@ export function StockPage() {
 }
 
 function LedgerPanel({ row, onClose }: { row: StockRow; onClose: () => void }) {
+  const { hasPermission } = useAuth();
   const ledger = useLedger(row.storeId, row.materialId);
+  const [renaming, setRenaming] = useState(false);
+  const [reporting, setReporting] = useState(false);
 
   return (
     <Stack spacing={2}>
@@ -222,6 +237,38 @@ function LedgerPanel({ row, onClose }: { row: StockRow; onClose: () => void }) {
           <LedgerLine key={movement.id} movement={movement} unit={row.baseUnitCode} />
         ))}
       </Stack>
+
+      {/*
+        The two things the man reading this list can say about it, and neither is an edit. A
+        movement is never rewritten — the whole reason a balance is believed is that what is
+        behind it can be read back — so a wrong figure is reported and the office posts the
+        correction, and a wrong name is corrected on the material rather than on the rows.
+      */}
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+        {hasPermission('inventory:correct') && (
+          <Button size="small" variant="outlined" onClick={() => setReporting(true)}>
+            Report a difference
+          </Button>
+        )}
+        {hasPermission('masterdata:provisional') && (
+          <Button size="small" onClick={() => setRenaming(true)}>
+            Correct the name
+          </Button>
+        )}
+      </Stack>
+
+      <RaiseCorrectionDialog
+        open={reporting}
+        storeId={row.storeId}
+        siteId={row.siteId ?? ''}
+        materialId={row.materialId}
+        onClose={() => setReporting(false)}
+      />
+      <CorrectMaterialNameDialog
+        open={renaming}
+        materialId={row.materialId}
+        onClose={() => setRenaming(false)}
+      />
     </Stack>
   );
 }

@@ -115,11 +115,11 @@ describe('EquipmentPanel', () => {
   });
 
   /**
-   * Accepting and removing stay the office's. Correcting no longer is — but only on the row
-   * this account entered, which is the line the server draws and this screen has to draw the
-   * same way.
+   * Accepting and removing stay the office's. Correcting is not theirs alone — the site
+   * corrects the register it can see, which is the line the server draws and this screen has
+   * to draw the same way.
    */
-  it('offers the site a correction on its own row, and no way to accept or remove', async () => {
+  it('offers the site a correction, and no way to accept or remove', async () => {
     renderPanel();
     const register = await findRegister();
 
@@ -128,11 +128,17 @@ describe('EquipmentPanel', () => {
     expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
   });
 
-  it('offers the site no correction on somebody else’s row', async () => {
+  /**
+   * And on a row somebody else entered. A site is a shift roster: the man who wrote the mixer
+   * down in March is elsewhere in June, and the breaker whose jaw has come off is visible to
+   * whoever is standing there now. His correction re-opens the row, so the office still reads
+   * it before it counts.
+   */
+  it('offers the site a correction on somebody else’s row', async () => {
     renderPanel([{ ...SITE_ENTRY, createdBy: 'u-2' }]);
-    await findRegister();
+    const register = await findRegister();
 
-    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+    expect(register.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
   });
 
   /**
@@ -256,13 +262,12 @@ describe('EquipmentPanel', () => {
   });
 
   /*
-    The camera is offered exactly where it would work. The server lets the man who entered a
-    machine photograph it — including after the office has decided, because a picture he can
-    only take in the hours before somebody clicks Accept is one he mostly cannot take — and
-    nobody else at the site. A button that appears on every row and fails on most of them
-    teaches the supervisor to distrust it.
+    The camera is offered exactly where it would work, and the server now lets it work on any
+    row at the site: after the office has decided, because a picture a man can only take in
+    the hours before somebody clicks Accept is one he mostly cannot take, and on an entry he
+    did not make, because the machine is in front of him either way.
   */
-  it('offers the camera on the entries the supervisor made, decided or not', async () => {
+  it('offers the camera on every row at the site, whoever entered it', async () => {
     renderPanel([
       SITE_ENTRY,
       { ...SITE_ENTRY, id: 'eq-2', name: 'Somebody else’s vibrator', createdBy: 'u-9' },
@@ -273,10 +278,10 @@ describe('EquipmentPanel', () => {
       within(within(table()).getByText(name).closest('tr') as HTMLElement);
 
     expect(rowFor('Concrete Mixer 10/7').getByLabelText('Photograph it')).toBeInTheDocument();
-    // His own, and the office deciding about it did not make it somebody else's.
+    // The office deciding about it did not put it out of reach.
     expect(rowFor('Already accepted mixer').getByLabelText('Photograph it')).toBeInTheDocument();
-    // Not his, whoever decided about it.
-    expect(rowFor('Somebody else’s vibrator').getByText('No photo')).toBeInTheDocument();
+    // Nor did somebody else having entered it.
+    expect(rowFor('Somebody else’s vibrator').getByLabelText('Photograph it')).toBeInTheDocument();
   });
 
   /** The office may photograph any row, decided or not: correcting the register is theirs. */

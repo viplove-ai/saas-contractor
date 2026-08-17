@@ -7,6 +7,7 @@ import in.nirman.common.PageResponse;
 import in.nirman.modules.audit.AuditService;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.AddFieldMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.ConversionResponse;
+import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CorrectFieldMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateVendorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.ExpenseCategoryResponse;
@@ -315,6 +316,61 @@ public class MasterDataService {
         material.setProvisional(true);
         materials.save(material);
         recordCreate("MATERIAL", material.getId(), material.getCode());
+        return toMaterialResponse(material);
+    }
+
+    /**
+     * The name corrected by whoever gave it, and the row put back in front of the office.
+     *
+     * <p>{@link #addFieldMaterial} let the field name a thing so the lorry at the gate was not
+     * sent away. It left the field unable to say it had named it wrong — "celment" on the
+     * picker for a year, or worse, a second row typed to get around the first, which is exactly
+     * the split balance the naming rule exists to prevent. So the same permission corrects the
+     * same field: the name, and the name only.</p>
+     *
+     * <p><b>The correction is not quiet.</b> It marks the row {@code provisional} again, the
+     * way {@code SiteEquipment.reopen()} sends a corrected machine back to the queue: the
+     * office's vetting was of a name that has since changed, so it has to be done again. An
+     * office caller — anybody holding {@code masterdata:write} — does not re-open it, for the
+     * same reason its own entry needs no approval.</p>
+     *
+     * <p>Nothing that carries a number is reachable from here, and neither is the unit or the
+     * active flag. That is the invariant this endpoint's twin was built on: the field may name
+     * a thing and never value it.</p>
+     */
+    @PreAuthorize("hasAnyAuthority('masterdata:provisional', 'masterdata:write')")
+    public MaterialResponse correctFieldMaterial(UUID id, CorrectFieldMaterialRequest request) {
+        Material material = requireMaterial(id);
+        requireVersion(material.getVersion(), request.version(), "Material", id);
+
+        String name = request.name().trim().replaceAll("\\s+", " ");
+        if (name.isEmpty()) {
+            throw new BusinessException("material.name-required",
+                    "A material needs a name to be booked against.");
+        }
+        /*
+          The duplicate check addFieldMaterial makes on the way in, made again on the way
+          through: renaming cement to "OPC 43" when the catalogue already holds an "OPC 43"
+          produces the two-rows-one-material state by the back door, and the stock in the shed
+          would answer to neither balance.
+        */
+        boolean taken = materials.findByName(orgId(), name).stream()
+                .anyMatch(other -> !other.getId().equals(id));
+        if (taken) {
+            throw BusinessException.conflict("material.name-taken",
+                    "The catalogue already holds a material called " + name
+                            + ". Book against that one — two rows for it would split its "
+                            + "stock into two balances, and neither would be what is in the "
+                            + "shed.");
+        }
+
+        String was = material.getName();
+        material.setName(name);
+        if (!currentUser.hasPermission("masterdata:write")) {
+            material.setProvisional(true);
+        }
+        audit.record("MATERIAL", material.getId(), "FIELD_RENAME", null,
+                Map.of("name", name, "was", was, "provisional", material.isProvisional()), null);
         return toMaterialResponse(material);
     }
 

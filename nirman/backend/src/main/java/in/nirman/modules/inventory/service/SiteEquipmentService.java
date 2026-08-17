@@ -196,7 +196,7 @@ public class SiteEquipmentService {
     public EquipmentResponse update(UUID id, UpdateEquipmentRequest request) {
         SiteEquipment machine = require(id);
         siteAccessGuard.assertCanAccess(machine.getSiteId());
-        boolean office = assertMayAmend(machine);
+        boolean office = amendsAsOffice();
         if (!machine.getVersion().equals(request.version())) {
             throw new OptimisticLockingFailureException(
                     "Equipment " + id + " was changed by someone else");
@@ -260,7 +260,7 @@ public class SiteEquipmentService {
     public EquipmentResponse setPhoto(UUID id, UUID attachmentId) {
         SiteEquipment machine = require(id);
         siteAccessGuard.assertCanAccess(machine.getSiteId());
-        boolean office = assertMayAmend(machine);
+        boolean office = amendsAsOffice();
         boolean replacesAPicture = machine.getPhotoAttachmentId() != null;
 
         if (attachmentId == null) {
@@ -292,28 +292,30 @@ public class SiteEquipmentService {
     /**
      * Who may change what this row says — its description or its photograph.
      *
-     * <p>The office, on anything. The man who entered it, on his own entry, whatever the
-     * office has since decided about it: he is the one who can see the machine, and an entry
-     * he may create but never amend leaves him reporting a broken mixer by telephone.</p>
+     * <p>The office, on anything. Anybody posted to the site, on any row standing at it. The
+     * caller has already been through {@link SiteAccessGuard}, so "at the site" is the whole
+     * of the restriction; whose row it is no longer decides.</p>
      *
-     * <p>Not somebody else's entry, though he stands at the same site. Two supervisors
-     * rewriting each other's rows is a register where nobody can be asked what a line means,
-     * and the office is already the answer for a row whose author has gone.</p>
+     * <p>It used to. The rule was the man who entered it and nobody else, on the argument that
+     * two supervisors rewriting each other's rows is a register where no line can be asked
+     * about. What the argument left out is that a site is a shift roster: the man who entered
+     * the mixer in March is on another site in June, the breaker he wrote down as WORKING has
+     * had its jaw off for a week, and the only person who can see that is the one refused the
+     * row. So the register carried what the absent author last believed, and the correction
+     * travelled by telephone — which is the state this module exists to end. Authorship is
+     * still on the row, still audited, and still what the office reads when a line has to be
+     * asked about; it is simply no longer a lock.</p>
+     *
+     * <p>The correction is not quiet, and that is what makes widening it safe: a field
+     * correction re-opens the row (see {@link SiteEquipment#reopen()}), so a second
+     * supervisor's rewrite of an accepted machine goes back to the office to be accepted
+     * again. Nothing reaches the register unread.</p>
      *
      * @return true when the caller is the office, whose changes are decisions rather than
      *         claims and so do not send the row back to the queue
      */
-    private boolean assertMayAmend(SiteEquipment machine) {
-        if (currentUser.hasPermission("equipment:write")) {
-            return true;
-        }
-        UUID me = currentUser.currentUserIdOrNull();
-        if (me == null || !me.equals(machine.getCreatedBy())) {
-            throw BusinessException.forbidden(
-                    "This entry is somebody else's. You can change the machines you entered "
-                            + "yourself; the rest are the office's to correct.");
-        }
-        return false;
+    private boolean amendsAsOffice() {
+        return currentUser.hasPermission("equipment:write");
     }
 
     /**

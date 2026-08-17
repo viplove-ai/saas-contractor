@@ -1,6 +1,7 @@
 package in.nirman.modules.inventory.api.dto;
 
 import in.nirman.modules.inventory.domain.DocumentWorkflow;
+import in.nirman.modules.inventory.domain.StockCorrectionRequest;
 import in.nirman.modules.inventory.domain.StockTransaction.SourceType;
 import in.nirman.modules.inventory.domain.StockTransaction.TxnType;
 import in.nirman.modules.inventory.domain.StockTransfer;
@@ -415,5 +416,60 @@ public final class InventoryDtos {
             UUID boqItemId,
             String reason,
             Instant createdAt) {
+    }
+
+    // ------------------------------------------------------------------ stock corrections
+
+    /**
+     * The field asking for a stock figure to be put right.
+     *
+     * <p>Signed like {@link AdjustmentRequest}, and for the same reason: a shed can hold less
+     * than the ledger says or more, and a screen that only allowed one direction would teach
+     * the storekeeper to report half of what he finds.</p>
+     *
+     * <p>The reason is required. A movement with nothing behind it is indistinguishable from
+     * stock walking out of the gate, and this one is being asked for by the person best
+     * placed to make that unreadable.</p>
+     */
+    public record StockCorrectionRequestBody(
+            @NotNull UUID id,
+            @NotNull UUID storeId,
+            @NotNull UUID materialId,
+            @NotNull UUID unitId,
+            @NotNull BigDecimal quantityDelta,
+            @NotNull LocalDate correctionDate,
+            @NotBlank @Size(max = 500) String reason) {
+    }
+
+    /** Accepting posts the adjustment; refusing posts nothing and keeps the row. */
+    public record DecideStockCorrectionRequest(
+            @NotNull Action action,
+            @Size(max = 500) String remarks) {
+
+        public enum Action {
+            ACCEPT,
+            REJECT
+        }
+    }
+
+    public record StockCorrectionResponse(
+            UUID id,
+            UUID siteId,
+            UUID storeId,
+            String storeName,
+            UUID materialId,
+            String materialName,
+            UUID unitId,
+            String unitCode,
+            BigDecimal quantityDelta,
+            LocalDate correctionDate,
+            String reason,
+            StockCorrectionRequest.Status status,
+            UUID postedTxnId,
+            Instant decidedAt,
+            String decisionRemarks,
+            Instant createdAt,
+            UUID createdBy,
+            Long version) {
     }
 }

@@ -16,6 +16,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -145,6 +146,93 @@ class FieldMaterialIntegrationTest extends AbstractIntegrationTest {
                         .content("{\"name\":\"   \",\"baseUnitId\":\"%s\"}"
                                 .formatted(unitId(token, BAG))))
                 .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * The other half of naming: saying the name was wrong.
+     *
+     * <p>Without it, "celment" sits on every picker until the office notices, and the man who
+     * typed it works around his own mistake by naming a second row — the split balance the
+     * duplicate check exists to prevent, arrived at from inside.</p>
+     */
+    @Test
+    @DisplayName("a supervisor corrects the name he gave, and the row goes back to be read")
+    void correctsTheNameHeGave() throws Exception {
+        String token = loginToken("vivek");
+        JsonNode named = addFieldMaterial(token, "Celment White", unitId(token, BAG));
+
+        // Vetted by the office first, so the re-opening below is visible as a change of state
+        // rather than a flag that was never taken off.
+        mockMvc.perform(put("/api/v1/materials/" + named.get("id").asText())
+                        .header("Authorization", "Bearer " + loginToken("viplove"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Celment White","baseUnitId":"%s","gstPercent":0,
+                                 "consumable":true,"active":true,"version":%d}"""
+                                .formatted(unitId(token, BAG), named.get("version").asLong())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.provisional").value(false));
+
+        JsonNode vetted = material(token, named.get("id").asText());
+        mockMvc.perform(put("/api/v1/materials/" + vetted.get("id").asText() + "/field")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"White Cement\",\"version\":%d}"
+                                .formatted(vetted.get("version").asLong())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("White Cement"))
+                // Not quiet: the office vetted a name that has since changed.
+                .andExpect(jsonPath("$.provisional").value(true));
+    }
+
+    /**
+     * The duplicate check made again on the way through. Renaming into a name the catalogue
+     * already holds is the two-rows-one-material state reached by the back door, and the stock
+     * in the shed would answer to neither balance.
+     */
+    @Test
+    @DisplayName("a correction may not rename a material onto one the catalogue already holds")
+    void refusesACorrectionOntoAnExistingName() throws Exception {
+        String token = loginToken("vivek");
+        JsonNode named = addFieldMaterial(token, "Ply Shuttering 12mm", unitId(token, BAG));
+
+        mockMvc.perform(put("/api/v1/materials/" + named.get("id").asText() + "/field")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Cement OPC 43 Grade\",\"version\":%d}"
+                                .formatted(named.get("version").asLong())))
+                .andExpect(status().isConflict());
+    }
+
+    /**
+     * The line the whole feature is drawn on: he may say what a thing is called and never what
+     * it is worth. The correction endpoint carries one field, so the rate cannot ride in on it.
+     */
+    @Test
+    @DisplayName("correcting a name reaches nothing that carries a number")
+    void aCorrectionCannotPriceAnything() throws Exception {
+        String token = loginToken("vivek");
+        JsonNode named = addFieldMaterial(token, "Admixture Type F", unitId(token, BAG));
+
+        mockMvc.perform(put("/api/v1/materials/" + named.get("id").asText() + "/field")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Admixture Type F 20L","version":%d,
+                                 "standardRate":9999,"hsnCode":"3824"}"""
+                                .formatted(named.get("version").asLong())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Admixture Type F 20L"))
+                .andExpect(jsonPath("$.standardRate").doesNotExist())
+                .andExpect(jsonPath("$.hsnCode").doesNotExist());
+    }
+
+    private JsonNode material(String token, String id) throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/v1/materials/" + id)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString());
     }
 
     private JsonNode addFieldMaterial(String token, String name, String unitId) throws Exception {

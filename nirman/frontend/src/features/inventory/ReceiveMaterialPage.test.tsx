@@ -70,6 +70,7 @@ const MATERIALS: Material[] = [
     gstPercent: 28,
     active: true,
     provisional: false,
+    version: 0,
   },
   {
     id: 'mat-steel',
@@ -81,6 +82,7 @@ const MATERIALS: Material[] = [
     gstPercent: 18,
     active: true,
     provisional: false,
+    version: 0,
   },
 ];
 

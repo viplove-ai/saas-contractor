@@ -36,6 +36,8 @@ import {
   useStores,
   useUnits,
 } from './api';
+import { CorrectMaterialNameDialog } from '../inventory/CorrectMaterialNameDialog';
+import { RaiseCorrectionDialog } from '../inventory/RaiseCorrectionDialog';
 import { MATERIAL_NOT_LISTED } from './types';
 
 /**
@@ -460,6 +462,12 @@ export function MaterialCard({
   const [storeId, setStoreId] = useState('');
   const [rows, setRows] = useState<MaterialRow[]>([]);
   const [purpose, setPurpose] = useState('');
+  /* What is already in the ledger and wrong. Two different acts, so two different dialogs:
+     a quantity is put right by asking the office to post an adjustment — the ledger is
+     append-only and nobody rewrites a movement — and a name is put right on the material,
+     once, rather than on every row that ever carried it. */
+  const [reporting, setReporting] = useState(false);
+  const [renaming, setRenaming] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
@@ -478,6 +486,8 @@ export function MaterialCard({
     so the answer there would create a row and then be refused by the ledger.
   */
   const canName = receiving && hasPermission('masterdata:provisional');
+  const canRename = hasPermission('masterdata:provisional');
+  const canCorrect = hasPermission('inventory:correct');
   const usable = rows.filter(
     (row) =>
       Number(row.quantity) > 0 &&
@@ -612,6 +622,21 @@ export function MaterialCard({
                 ))}
                 {canName && <MenuItem value={MATERIAL_NOT_LISTED}>Not in the list…</MenuItem>}
               </TextField>
+              {/*
+                Where the wrong name is actually noticed: he has just picked "Celment White"
+                off the picker and is looking at it. Correcting it here fixes the catalogue
+                row rather than adding a second one, which is the whole reason the duplicate
+                check exists.
+              */}
+              {canRename && row.materialId && row.materialId !== MATERIAL_NOT_LISTED && (
+                <Button
+                  size="small"
+                  sx={{ alignSelf: 'flex-start' }}
+                  onClick={() => setRenaming(row.materialId)}
+                >
+                  Wrong name?
+                </Button>
+              )}
               {row.materialId === MATERIAL_NOT_LISTED && (
                 <>
                   <TextField
@@ -711,6 +736,15 @@ export function MaterialCard({
         <Button startIcon={<AddIcon />} onClick={() => setRows((c) => [...c, emptyMaterial()])}>
           {rows.length === 0 ? 'Add material' : 'Add another'}
         </Button>
+        {/*
+          Only on the delivery card, for the same reason naming one is: the store's figure is
+          what a receipt made wrong, and a man reporting Tuesday's short delivery is standing
+          on the card he booked it from. Offering it twice would ask him which of two
+          identical questions he meant.
+        */}
+        {receiving && canCorrect && (
+          <Button onClick={() => setReporting(true)}>Something already entered is wrong</Button>
+        )}
         {rows.length > 0 && (
           <Button
             variant="outlined"
@@ -721,6 +755,19 @@ export function MaterialCard({
           </Button>
         )}
       </Stack>
+
+      <RaiseCorrectionDialog
+        open={reporting}
+        storeId={storeId}
+        siteId={siteId}
+        date={date}
+        onClose={() => setReporting(false)}
+      />
+      <CorrectMaterialNameDialog
+        open={Boolean(renaming)}
+        materialId={renaming ?? ''}
+        onClose={() => setRenaming(null)}
+      />
     </Card>
   );
 }

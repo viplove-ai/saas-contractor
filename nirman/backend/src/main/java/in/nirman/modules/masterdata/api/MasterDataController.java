@@ -3,6 +3,7 @@ package in.nirman.modules.masterdata.api;
 import in.nirman.common.PageResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.AddFieldMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.ConversionResponse;
+import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CorrectFieldMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateVendorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.ExpenseCategoryResponse;
@@ -166,6 +167,18 @@ public class MasterDataController {
             @Valid @RequestBody AddFieldMaterialRequest request) {
         MaterialResponse created = service.addFieldMaterial(request);
         return ResponseEntity.created(URI.create("/api/v1/materials/" + created.id())).body(created);
+    }
+
+    @PutMapping("/materials/{id}/field")
+    @Operation(summary = "Correct the name a material was given at the gate",
+            description = "The twin of naming one: the same permission, the same single field. "
+                    + "Marks the row provisional again so the office reads the new name, unless "
+                    + "the caller is the office. Nothing that carries a number is reachable "
+                    + "here, and neither is the unit — changing that re-reads every quantity "
+                    + "ever booked against the material.")
+    public MaterialResponse correctFieldMaterial(
+            @PathVariable UUID id, @Valid @RequestBody CorrectFieldMaterialRequest request) {
+        return service.correctFieldMaterial(id, request);
     }
 
     @GetMapping("/materials/{id}")
