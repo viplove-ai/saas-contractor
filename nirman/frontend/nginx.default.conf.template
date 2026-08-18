@@ -14,6 +14,10 @@ server {
 
     client_max_body_size 20m;
 
+    # add_header does not merge across levels: a location that declares one of its own
+    # inherits none of these. Anything below that needs add_header therefore repeats all
+    # four, and anything that can say what it means with `expires` uses that instead —
+    # `expires` is a different directive and leaves the inheritance intact.
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "DENY" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
@@ -23,15 +27,51 @@ server {
     gzip_types text/css application/javascript application/json image/svg+xml;
     gzip_min_length 1024;
 
-    # Hashed build assets are immutable.
+    # Hashed build assets are immutable. One Cache-Control and not an `expires` beside it:
+    # nginx would emit both lines and leave the browser to join them.
     location /assets/ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(self), geolocation=(self), microphone=()" always;
     }
 
     # The service worker must never be cached, or clients get stranded on an old build.
     location = /sw.js {
         add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(self), geolocation=(self), microphone=()" always;
+    }
+
+    # The shell carries the hashed asset names, so a cached copy of it is a cached copy of
+    # the whole build. `expires -1` sends Cache-Control: no-cache — revalidate every time,
+    # 304 when nothing moved — rather than leaving it to the browser's heuristic, which
+    # invents a freshness lifetime from the file's age and gets it wrong on a quiet week.
+    location = /index.html {
+        expires -1;
+    }
+
+    # The manifest is how a new icon reaches an installed phone at all: Chrome re-fetches it
+    # and compares, and a stale copy is a comparison against the build before last. Never
+    # cached, for the same reason as sw.js.
+    location = /brand/manifest.webmanifest {
+        expires -1;
+    }
+
+    # Versioned brand assets — the -v<n> in the filename is the cache key, so the bytes
+    # behind a given name never change and a year is safe. A new icon arrives as a new name.
+    location ~* ^/brand/.+-v[0-9]+\.(png|svg)$ {
+        expires 1y;
+    }
+
+    # Everything else under /brand/ is unversioned and may be replaced in place. Five minutes
+    # is short enough that a replacement is picked up the same session and long enough that a
+    # phone is not refetching the lockup on every navigation.
+    location /brand/ {
+        expires 5m;
     }
 
     location /api/ {
