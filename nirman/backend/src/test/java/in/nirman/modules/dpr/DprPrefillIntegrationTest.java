@@ -170,6 +170,65 @@ class DprPrefillIntegrationTest extends AbstractIntegrationTest {
     }
 
     /**
+     * The same bill, the same head, two sites — and the answer turns on whether there is a
+     * muster behind it.
+     *
+     * <p>At Kausani the men are on the roll and verified attendance has already costed their
+     * wages, so paying a labour contractor settles a figure the project has counted and must
+     * stay out of cost incurred. Flip the site to outsourced labour and the premise is gone:
+     * nobody is on a muster, nothing was costed, and the supplier's bill is the only record
+     * of what the labour cost. Excluding it there reports a site whose men were free.</p>
+     */
+    @Test
+    @DisplayName("a labour supplier's bill is cost at an outsourced site and a settlement elsewhere")
+    void aLabourBillIsCostOnlyWhereThereIsNoMuster() throws Exception {
+        String uttam = loginToken("uttam");
+        BigDecimal costBefore = decimal(prefill("uttam").get("expense"), "costIncurred");
+
+        UUID expenseId = UUID.randomUUID();
+        try {
+            mockMvc.perform(post("/api/v1/expenses")
+                            .header("Authorization", "Bearer " + uttam)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"id":"%s","siteId":"%s","expenseDate":"%s",
+                                     "categoryId":"%s","subcategoryId":"%s",
+                                     "description":"PREFILL-TEST contractor gang, June",
+                                     "billNumber":"PREFILL-TEST/2","amountBeforeTax":25000,
+                                     "gstPercent":0}"""
+                                    .formatted(expenseId, SITE_A, SEEDED_DAY,
+                                            subcategoryId("LABOUR"),
+                                            subcategoryId("LABOUR-CONTRACT"))))
+                    .andExpect(status().isCreated());
+
+            JsonNode settled = prefill("uttam").get("expense");
+            assertThat(decimal(settled, "labourDisbursements")).isEqualByComparingTo("25000.00");
+            assertThat(decimal(settled, "costIncurred"))
+                    .as("the wage was costed through the muster already")
+                    .isEqualByComparingTo(costBefore);
+
+            jdbc.update("UPDATE sites SET uses_outsourced_labour = true WHERE id = ?::uuid",
+                    SITE_A);
+
+            JsonNode outsourced = prefill("uttam").get("expense");
+            assertThat(decimal(outsourced, "labourDisbursements"))
+                    .as("there is no muster here for it to settle")
+                    .isEqualByComparingTo("0");
+            assertThat(decimal(outsourced, "costIncurred"))
+                    .isEqualByComparingTo(costBefore.add(new BigDecimal("25000.00")));
+            // Whichever way it is read, the parts still add back to the whole.
+            assertThat(decimal(outsourced, "costIncurred")
+                    .add(decimal(outsourced, "materialPurchases"))
+                    .add(decimal(outsourced, "labourDisbursements")))
+                    .isEqualByComparingTo(decimal(outsourced, "totalBooked"));
+        } finally {
+            jdbc.update("UPDATE sites SET uses_outsourced_labour = false WHERE id = ?::uuid",
+                    SITE_A);
+            jdbc.update("DELETE FROM expenses WHERE id = ?::uuid", expenseId.toString());
+        }
+    }
+
+    /**
      * Suggestions, not entries — and each with the evidence behind it. Cement issued against a
      * line proves somebody worked on it and says nothing about how much got built, so the
      * quantity stays the supervisor's own claim.

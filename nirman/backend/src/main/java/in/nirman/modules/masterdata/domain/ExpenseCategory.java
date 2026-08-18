@@ -15,6 +15,12 @@ import java.util.UUID;
  * Two-level expense taxonomy. The two flags are the double-counting guards from docs/09:
  * {@code labourPayment} rows settle wages already costed through verified attendance, and
  * {@code materialPurchase} rows become inventory value rather than direct cost.
+ *
+ * <p>{@code labourPayment} is a claim about a wage having been costed, not about the head
+ * being a labour one, so the expense module reads it against the site: where the work is let
+ * to a supplier there is no muster to have costed anything, and the bill counts as cost. The
+ * flag stays a property of the head all the same — the same head is a settlement at a site
+ * that keeps its own men.</p>
  */
 @Entity
 @Table(name = "expense_categories")

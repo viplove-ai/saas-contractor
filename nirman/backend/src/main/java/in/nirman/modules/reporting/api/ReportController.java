@@ -247,7 +247,7 @@ public class ReportController {
                         orDash(row.billNumber()), row.amountBeforeTax(), row.gstAmount(),
                         row.totalAmount(), row.paidAmount(), row.payableAmount(),
                         row.workflowStatus().name(), countsAs(row.materialPurchase(),
-                                row.labourPayment())))
+                                row.wageSettlement())))
                 .toList());
         // The four figures, spelled out where nobody can total the wrong column by hand.
         rows.add(List.of("", "", "", "", "TOTAL BOOKED", "", "", "", report.totalBooked(),
@@ -318,12 +318,17 @@ public class ReportController {
                 "advance-balances-%s".formatted(report.asOf()));
     }
 
-    /** The one-word answer to "does this row add to what the project cost". */
-    private static String countsAs(boolean materialPurchase, boolean labourPayment) {
+    /**
+     * The one-word answer to "does this row add to what the project cost".
+     *
+     * <p>A labour supplier's bill at a site with no muster reads "Cost", and correctly: the
+     * row settles no wage the project has counted, because nothing there was counted.</p>
+     */
+    private static String countsAs(boolean materialPurchase, boolean wageSettlement) {
         if (materialPurchase) {
             return "Inventory";
         }
-        return labourPayment ? "Wage settlement" : "Cost";
+        return wageSettlement ? "Wage settlement" : "Cost";
     }
 
     // ------------------------------------------------------------------ rendering

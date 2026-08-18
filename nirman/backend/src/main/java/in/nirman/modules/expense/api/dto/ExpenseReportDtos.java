@@ -29,8 +29,16 @@ public final class ExpenseReportDtos {
             Expense.Workflow workflowStatus,
             /** True when this row is inventory value rather than cost incurred. */
             boolean materialPurchase,
-            /** True when this row settles wages already costed through attendance. */
-            boolean labourPayment) {
+            /**
+             * True when this row settles wages already costed through attendance, and so is
+             * not cost incurred.
+             *
+             * <p>Not the same question as "is the head a labour disbursement". At a site
+             * that lets its labour to suppliers there is no muster and nothing was costed,
+             * so the supplier's bill is false here and counts as cost — which is why the
+             * field is named for what it decides rather than for the flag it starts from.</p>
+             */
+            boolean wageSettlement) {
     }
 
     /**
@@ -42,6 +50,11 @@ public final class ExpenseReportDtos {
      * worker settles a wage already costed through verified attendance. Add either to
      * labour and material consumption and the project is overstated — at Kausani by most of
      * ₹4,99,528 on the labour side alone.</p>
+     *
+     * <p>The labour half of that is asked of the site as well as of the head. A site working
+     * through labour suppliers keeps no muster, so nothing there was costed through
+     * attendance and the supplier's bill belongs in {@code costIncurred}: excluding it would
+     * report a site whose men cost nothing.</p>
      *
      * <p>So the register reports four figures and lets nobody merge them:
      * {@code costIncurred + materialPurchases + labourDisbursements = totalBooked}.</p>

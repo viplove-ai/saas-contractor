@@ -484,6 +484,22 @@ public class SiteService implements SiteLookup {
                 .isPresent();
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>No access guard on purpose — see the interface. Empty in, empty out: the query
+     * would otherwise be asked for an {@code IN ()} that no dialect accepts.</p>
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Set<UUID> outsourcedLabourSites(Collection<UUID> siteIds) {
+        if (siteIds == null || siteIds.isEmpty()) {
+            return Set.of();
+        }
+        return Set.copyOf(sites.findOutsourcedLabourSiteIds(currentUser.currentOrgId(),
+                Set.copyOf(siteIds)));
+    }
+
     @Override
     @Transactional(readOnly = true)
     public SiteInfo require(UUID siteId) {

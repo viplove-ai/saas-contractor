@@ -28,6 +28,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -52,7 +53,9 @@ public class ExpenseReportService {
             Total booked is what left the books, not what the project cost. Material \
             purchases become inventory and are costed again when the material is issued; \
             labour disbursements settle wages already costed through verified attendance. \
-            Cost incurred is the figure that adds to labour and material consumption \
+            A bill from a labour supplier at a site that keeps no muster settles nothing \
+            and is counted as cost, because there it is the only record of what the labour \
+            cost. Cost incurred is the figure that adds to labour and material consumption \
             without counting anything twice.""";
 
     private final ExpenseRepository expenses;
@@ -94,6 +97,10 @@ public class ExpenseReportService {
         List<Expense> found = expenses.findForPeriod(orgId(), siteId, from, to);
         Map<UUID, ExpenseCategory> categoryById = categoryIndex(found);
         Map<UUID, String> vendorNames = vendorIndex(found);
+        // Asked of the rows rather than of the report's scope: with no site given the
+        // register spans the organisation, and two sites in it may be run differently.
+        Set<UUID> outsourcedSites = sites.outsourcedLabourSites(found.stream()
+                .map(Expense::getSiteId).filter(Objects::nonNull).collect(Collectors.toSet()));
 
         List<RegisterRow> rows = found.stream()
                 .map(expense -> {
@@ -111,7 +118,8 @@ public class ExpenseReportService {
                             expense.getPaidAmount(), expense.payableAmount(),
                             expense.getWorkflowStatus(),
                             category != null && category.isMaterialPurchase(),
-                            category != null && category.isLabourPayment());
+                            category != null && category.isLabourPayment()
+                                    && !outsourcedSites.contains(expense.getSiteId()));
                 })
                 .toList();
 
@@ -119,7 +127,7 @@ public class ExpenseReportService {
         BigDecimal materialPurchases = sum(rows.stream()
                 .filter(RegisterRow::materialPurchase).toList(), RegisterRow::totalAmount);
         BigDecimal labourDisbursements = sum(rows.stream()
-                .filter(RegisterRow::labourPayment).toList(), RegisterRow::totalAmount);
+                .filter(RegisterRow::wageSettlement).toList(), RegisterRow::totalAmount);
 
         return new ExpenseRegisterReport(scopeName(siteId), from, to, rows, totalBooked,
                 totalBooked.subtract(materialPurchases).subtract(labourDisbursements),

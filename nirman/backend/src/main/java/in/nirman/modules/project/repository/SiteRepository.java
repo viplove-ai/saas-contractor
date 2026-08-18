@@ -44,5 +44,15 @@ public interface SiteRepository extends JpaRepository<Site, UUID> {
     @Query("SELECT DISTINCT s.projectId FROM Site s WHERE s.id IN :siteIds AND s.deletedAt IS NULL")
     List<UUID> findProjectIds(@Param("siteIds") Collection<UUID> siteIds);
 
+    /**
+     * The ids, of those given, that let their labour to suppliers. A projection rather than
+     * the sites themselves because the only caller wants a set to test membership against,
+     * once, for a register that may span every site in the organisation.
+     */
+    @Query("SELECT s.id FROM Site s WHERE s.orgId = :orgId AND s.id IN :siteIds "
+            + "AND s.usesOutsourcedLabour = true AND s.deletedAt IS NULL")
+    List<UUID> findOutsourcedLabourSiteIds(@Param("orgId") UUID orgId,
+                                           @Param("siteIds") Collection<UUID> siteIds);
+
     long countByProjectIdAndDeletedAtIsNull(UUID projectId);
 }

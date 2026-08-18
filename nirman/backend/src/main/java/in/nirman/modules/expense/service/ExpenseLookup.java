@@ -37,7 +37,11 @@ public interface ExpenseLookup {
      * @param companyOverhead     booked here and carried by the organisation (V36). The fourth
      *                            figure, and the reason the other three still add up
      * @param materialPurchases   becomes inventory value; costed again at issue
-     * @param labourDisbursements settles wages already costed through attendance
+     * @param labourDisbursements settles wages already costed through attendance. Empty at a
+     *                            site that lets its labour to suppliers: there is no muster
+     *                            there and so nothing was costed, which puts the supplier's
+     *                            bill in {@code costIncurred} where it is the only record of
+     *                            what the labour cost
      */
     record DailySpend(
             LocalDate date,

@@ -48,6 +48,13 @@ class ExpenseReportIntegrationTest extends AbstractIntegrationTest {
     private JdbcTemplate jdbc;
 
     @AfterEach
+    void restoreTheSite() {
+        // Two tests turn Kausani into an outsourced site for a moment. Left set, it would
+        // change what every later test means by a labour bill.
+        jdbc.update("UPDATE sites SET uses_outsourced_labour = false WHERE id = ?::uuid", SITE_A);
+    }
+
+    @AfterEach
     void removeTestExpenses() {
         jdbc.update("""
                 DELETE FROM approvals WHERE entity_id IN
@@ -95,7 +102,35 @@ class ExpenseReportIntegrationTest extends AbstractIntegrationTest {
         JsonNode rows = register(uttam).get("rows");
         JsonNode row = rowFor(rows, "cement bought");
         assertThat(row.get("materialPurchase").asBoolean()).isTrue();
-        assertThat(row.get("labourPayment").asBoolean()).isFalse();
+        assertThat(row.get("wageSettlement").asBoolean()).isFalse();
+    }
+
+    /**
+     * The same three bills at a site that lets its labour to suppliers.
+     *
+     * <p>₹25,000 to the contractor stops being a settlement, because there is no muster
+     * behind it to have settled: cost incurred is ₹35,000, not ₹10,000. The material
+     * purchase is untouched — a bag of cement becomes inventory whoever laid it.</p>
+     */
+    @Test
+    @DisplayName("a labour supplier's bill counts as cost where the site keeps no muster")
+    void anOutsourcedSiteCountsTheSuppliersBillAsCost() throws Exception {
+        String uttam = loginToken("uttam");
+        approved(uttam, "MISC-SITE", "10000", "site expenses");
+        approved(uttam, "MAT-PURCHASE", "40000", "cement bought");
+        approved(uttam, "LABOUR-CONTRACT", "25000", "contractor paid");
+        jdbc.update("UPDATE sites SET uses_outsourced_labour = true WHERE id = ?::uuid", SITE_A);
+
+        JsonNode report = register(uttam);
+
+        assertThat(decimal(report, "totalBooked")).isEqualByComparingTo("75000.00");
+        assertThat(decimal(report, "materialPurchases")).isEqualByComparingTo("40000.00");
+        assertThat(decimal(report, "labourDisbursements")).isEqualByComparingTo("0");
+        assertThat(decimal(report, "costIncurred")).isEqualByComparingTo("35000.00");
+
+        // And the row says so in the word the spreadsheet prints.
+        assertThat(rowFor(report.get("rows"), "contractor paid")
+                .get("wageSettlement").asBoolean()).isFalse();
     }
 
     /** The report explains its own arithmetic, so no client has to invent the wording. */

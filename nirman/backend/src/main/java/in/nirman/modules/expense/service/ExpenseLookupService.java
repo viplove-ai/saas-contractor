@@ -7,6 +7,7 @@ import in.nirman.modules.expense.repository.ExpenseRepository;
 import in.nirman.modules.expense.repository.ExpenseSettingsRepository;
 import in.nirman.modules.masterdata.domain.ExpenseCategory;
 import in.nirman.modules.masterdata.repository.ExpenseCategoryRepository;
+import in.nirman.modules.project.service.SiteLookup;
 import in.nirman.security.CurrentUserProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +29,13 @@ import java.util.stream.Stream;
  * flags live on the subcategory where there is one — "Worker Wage Payment" carries
  * {@code is_labour_payment}, its parent "Labour" does not, because not everything under
  * Labour is a disbursement.
+ *
+ * <p>And the labour flag is read against the site, not on its own. It means "settles a wage
+ * already costed through verified attendance", which is true wherever there is a muster and
+ * false at a site that lets its labour to suppliers: nothing there is costed through
+ * attendance, because nothing there is attendance. Excluding the supplier's bill at such a
+ * site leaves the men who built it costing nothing at all — the same overstatement docs/09
+ * chased out, run backwards.</p>
  */
 @Service
 @Transactional(readOnly = true)
@@ -41,16 +49,19 @@ public class ExpenseLookupService implements ExpenseLookup {
     private final ExpenseAttachmentRepository billLinks;
     private final ExpenseSettingsRepository settings;
     private final ExpenseCategoryRepository categories;
+    private final SiteLookup sites;
     private final CurrentUserProvider currentUser;
 
     public ExpenseLookupService(ExpenseRepository expenses, ExpenseAttachmentRepository billLinks,
                                ExpenseSettingsRepository settings,
                                ExpenseCategoryRepository categories,
+                               SiteLookup sites,
                                CurrentUserProvider currentUser) {
         this.expenses = expenses;
         this.billLinks = billLinks;
         this.settings = settings;
         this.categories = categories;
+        this.sites = sites;
         this.currentUser = currentUser;
     }
 
@@ -58,6 +69,7 @@ public class ExpenseLookupService implements ExpenseLookup {
     public DailySpend day(UUID siteId, LocalDate date) {
         List<Expense> found = expenses.findForPeriod(orgId(), siteId, date, date);
         Map<UUID, ExpenseCategory> byCategory = categoryIndex(found);
+        Set<UUID> outsourcedSites = outsourcedSites(found);
 
         BigDecimal booked = BigDecimal.ZERO;
         BigDecimal material = BigDecimal.ZERO;
@@ -70,12 +82,14 @@ public class ExpenseLookupService implements ExpenseLookup {
             ExpenseCategory category = resolveCategory(expense, byCategory);
             if (category != null && category.isMaterialPurchase()) {
                 material = material.add(expense.getTotalAmount());
-            } else if (category != null && category.isLabourPayment()) {
+            } else if (settlesCostedWage(expense, category, outsourcedSites)) {
                 labour = labour.add(expense.getTotalAmount());
             } else {
                 // Only here. A material purchase and a wage payment are already out of cost
                 // incurred, and their value belongs to this site's store and this site's
                 // muster — which is why the service refuses to charge either to the company.
+                // A supplier's bill at an outsourced site arrives here instead, and the same
+                // refusal makes its company share zero, so the whole of it lands on the site.
                 company = company.add(expense.companyCost());
             }
             if (expense.getWorkflowStatus() != Expense.Workflow.APPROVED) {
@@ -92,6 +106,7 @@ public class ExpenseLookupService implements ExpenseLookup {
     public PeriodSpend period(UUID siteId, LocalDate from, LocalDate to) {
         List<Expense> found = expenses.findForPeriod(orgId(), siteId, from, to);
         Map<UUID, ExpenseCategory> byCategory = categoryIndex(found);
+        Set<UUID> outsourcedSites = outsourcedSites(found);
 
         BigDecimal booked = BigDecimal.ZERO;
         BigDecimal material = BigDecimal.ZERO;
@@ -107,7 +122,7 @@ public class ExpenseLookupService implements ExpenseLookup {
             ExpenseCategory category = resolveCategory(expense, byCategory);
             if (category != null && category.isMaterialPurchase()) {
                 material = material.add(expense.getTotalAmount());
-            } else if (category != null && category.isLabourPayment()) {
+            } else if (settlesCostedWage(expense, category, outsourcedSites)) {
                 labour = labour.add(expense.getTotalAmount());
             } else {
                 company = company.add(expense.companyCost());
@@ -131,6 +146,7 @@ public class ExpenseLookupService implements ExpenseLookup {
     public List<DailyCost> dailyCostIncurred(UUID siteId, LocalDate from, LocalDate to) {
         List<Expense> found = expenses.findForPeriod(orgId(), siteId, from, to);
         Map<UUID, ExpenseCategory> byCategory = categoryIndex(found);
+        Set<UUID> outsourcedSites = outsourcedSites(found);
 
         Map<LocalDate, BigDecimal> byDay = new LinkedHashMap<>();
         for (LocalDate day = from; !day.isAfter(to); day = day.plusDays(1)) {
@@ -138,9 +154,13 @@ public class ExpenseLookupService implements ExpenseLookup {
         }
         for (Expense expense : found) {
             ExpenseCategory category = resolveCategory(expense, byCategory);
-            // Material purchases and wage payments are costed elsewhere, so neither belongs on
-            // a cost trend. Adding them would draw a line the project never spent.
-            if (category != null && (category.isMaterialPurchase() || category.isLabourPayment())) {
+            // Material purchases and wage settlements are costed elsewhere, so neither belongs
+            // on a cost trend. Adding them would draw a line the project never spent — and
+            // dropping a labour supplier's bill would flatten a line the site did spend.
+            if (category != null && category.isMaterialPurchase()) {
+                continue;
+            }
+            if (settlesCostedWage(expense, category, outsourcedSites)) {
                 continue;
             }
             // The site's share, not the total: the half of a diesel bill that ran the office
@@ -174,6 +194,30 @@ public class ExpenseLookupService implements ExpenseLookup {
     private static boolean hasBillNumber(String billNumber) {
         return billNumber != null && !billNumber.isBlank()
                 && !PLACEHOLDER_BILLS.contains(billNumber.trim().toUpperCase());
+    }
+
+    /**
+     * Whether this row settles a wage the project has already counted, and so must stay out
+     * of cost incurred.
+     *
+     * <p>The head says it is a labour disbursement; the site says whether that means
+     * anything. Where a muster roll exists, verified attendance has already costed the wage
+     * and paying it a second time into cost would double it. Where the work is let to a
+     * supplier there is no muster, nothing was costed, and the bill is the only record of
+     * what the labour cost — so it is cost, like any other bill.</p>
+     */
+    private static boolean settlesCostedWage(Expense expense, ExpenseCategory category,
+                                             Set<UUID> outsourcedSites) {
+        return category != null && category.isLabourPayment()
+                && !outsourcedSites.contains(expense.getSiteId());
+    }
+
+    /** One question for the whole page of expenses, however many sites they came from. */
+    private Set<UUID> outsourcedSites(List<Expense> found) {
+        return sites.outsourcedLabourSites(found.stream()
+                .map(Expense::getSiteId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
     }
 
     private static ExpenseCategory resolveCategory(Expense expense,

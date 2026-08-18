@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -86,4 +87,21 @@ public interface SiteLookup {
      * paid against.</p>
      */
     boolean isLiveInOrg(UUID siteId);
+
+    /**
+     * Which of the given sites let their labour to suppliers rather than keeping a muster
+     * roll, as {@code SiteInfo#usesOutsourcedLabour} says of one site.
+     *
+     * <p>Unguarded, and for the same reason {@link #isLiveInOrg} is: this is a fact about
+     * how a place is run, not a record kept there, and the expense module asks it of every
+     * site an organisation-wide register touched — which is by definition more sites than
+     * the caller is posted to. Nothing here reaches a figure.</p>
+     *
+     * <p>The expense module needs it because the double-counting guard behind
+     * {@code is_labour_payment} rests on a premise that is false at such a site: a payment
+     * to a labour supplier settles wages already costed through attendance only where there
+     * is attendance. Ids not in the caller's organisation, deleted or simply unknown come
+     * back absent, which is the safe answer — the guard stays on.</p>
+     */
+    Set<UUID> outsourcedLabourSites(Collection<UUID> siteIds);
 }
