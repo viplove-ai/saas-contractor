@@ -118,6 +118,12 @@ export interface Expense {
   revisedAt?: string;
   revisionReason?: string;
   workflowStatus: ExpenseWorkflow;
+  /**
+   * Who typed it. Absent on a row from before auditing, or on a user since removed — the
+   * screen says so rather than showing the id, which names nobody.
+   */
+  createdBy?: string;
+  createdByName?: string;
   /** Which level is waiting, and on whom. Absent once the record is through. */
   pendingLevel?: number;
   pendingWithRole?: string;

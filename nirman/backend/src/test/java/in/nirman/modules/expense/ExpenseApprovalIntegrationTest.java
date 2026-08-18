@@ -113,6 +113,28 @@ class ExpenseApprovalIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.workflowStatus").value("L1_APPROVED"));
     }
 
+    /**
+     * The approver is agreeing to a figure he did not watch being incurred, so the row has to
+     * say who typed it. The name travels with the expense rather than as an id the screen
+     * would have to resolve — a queue of forty bills would be forty more calls to name three
+     * people, and an id on the screen names nobody.
+     */
+    @Test
+    @DisplayName("an expense waiting for a decision says who typed it")
+    void expenseNamesItsAuthor() throws Exception {
+        String vivek = loginToken("vivek");
+        String id = createExpense(vivek, "4000", "cartage");
+        submit(vivek, id).andExpect(status().isOk())
+                .andExpect(jsonPath("$.createdByName").value("Vivek Aggarwal"));
+
+        // And it is still there for whoever is deciding, not only for the man who typed it.
+        mockMvc.perform(get("/api/v1/expenses/" + id)
+                        .header("Authorization", "Bearer " + loginToken("uttam")))
+                .andExpect(jsonPath("$.createdByName").value("Vivek Aggarwal"))
+                .andExpect(jsonPath("$.createdBy").value(
+                        "20000000-0000-0000-0000-000000000003"));
+    }
+
     @Test
     @DisplayName("an approved expense cannot be silently edited")
     void approvedExpenseCannotBeEdited() throws Exception {

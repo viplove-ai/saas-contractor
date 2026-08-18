@@ -1,3 +1,4 @@
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import {
   Alert,
   Button,
@@ -24,11 +25,32 @@ import {
   useSites,
 } from './api';
 import { AllocationChip } from './AllocationChip';
+import { BillPreview } from './BillPreview';
 import type { ApprovalAction, CostAllocation, Expense } from './types';
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+/**
+ * One of the three decisions, sized so that all three fit a phone's width in one row.
+ *
+ * <p>On a phone they share the width equally — {@code flex: 1} rather than a fixed size, so
+ * the row holds together at 320px as well as at 430 — and the padding and the label give way
+ * before the row does, because a button whose text has wrapped mid-word is how "Return to
+ * fix" stops reading as one answer. The 48px tap target survives all of it.</p>
+ *
+ * <p>From {@code sm} up they go back to their own widths. A desk has room to spare and
+ * stretching three buttons across nine hundred pixels does not use it — it just makes Reject
+ * as large a target as Approve on the screen where nobody was ever short of room.</p>
+ */
+const DECISION_BUTTON = {
+  minHeight: 48,
+  flex: { xs: 1, sm: '0 0 auto' },
+  px: { xs: 0.5, sm: 2 },
+  whiteSpace: 'nowrap',
+  fontSize: { xs: '0.8125rem', sm: '0.875rem' },
+} as const;
 
 /**
  * The queue: what is waiting on you, and what is waiting to be paid.
@@ -150,11 +172,25 @@ export function ApprovalsPage() {
                 {formatAmount(expense.totalAmount)}
               </Typography>
               <Typography variant="body2">{expense.description}</Typography>
+              {/*
+                Who typed it, on the row rather than a click away. The approver is agreeing to
+                a figure he did not watch being incurred, and the author is half of what he is
+                weighing — the same bill from the storekeeper and from a supervisor two days
+                off the site are not the same bill. Named when it is known and admitted when it
+                is not, because a blank line reads as nobody having typed it.
+              */}
+              <Stack direction="row" spacing={0.5} alignItems="center">
+                <PersonOutlineIcon fontSize="small" color="disabled" />
+                <Typography variant="body2" color="text.secondary">
+                  Typed by {expense.createdByName ?? 'somebody no longer on the rolls'}
+                </Typography>
+              </Stack>
               <Typography variant="body2" color="text.secondary">
                 {expense.billNumber
                   ? `Bill ${expense.billNumber}`
                   : (expense.noBillReason ?? 'No bill')}
               </Typography>
+              <BillPreview attachments={expense.attachments} />
 
               {canDecide && (
                 <>
@@ -205,13 +241,19 @@ export function ApprovalsPage() {
                       setRemarks((current) => ({ ...current, [expense.id]: e.target.value }))
                     }
                   />
-                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                  {/*
+                    Three decisions, side by side on a phone as well as on a desk. They used
+                    to wrap, which put Reject alone on its own line under the other two and
+                    made it look like the row's main action; equal widths on one line is the
+                    shape the decision actually has — three answers of the same weight.
+                  */}
+                  <Stack direction="row" spacing={1}>
                     <Button
                       variant="contained"
                       color="secondary"
                       disabled={decide.isPending || splitIncomplete(expense)}
                       onClick={() => act(expense, 'APPROVE')}
-                      sx={{ minHeight: 48 }}
+                      sx={DECISION_BUTTON}
                     >
                       Approve
                     </Button>
@@ -223,16 +265,16 @@ export function ApprovalsPage() {
                       variant="outlined"
                       disabled={decide.isPending}
                       onClick={() => act(expense, 'RETURN')}
-                      sx={{ minHeight: 48 }}
+                      sx={DECISION_BUTTON}
                     >
-                      Send back to fix
+                      Return to fix
                     </Button>
                     <Button
                       variant="outlined"
                       color="error"
                       disabled={decide.isPending}
                       onClick={() => act(expense, 'REJECT')}
-                      sx={{ minHeight: 48 }}
+                      sx={DECISION_BUTTON}
                     >
                       Reject
                     </Button>

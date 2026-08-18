@@ -8,6 +8,7 @@ import in.nirman.modules.expense.api.dto.ExpenseDtos.ExpenseResponse;
 import in.nirman.modules.expense.domain.Expense;
 import in.nirman.modules.expense.domain.ExpenseAttachment;
 import in.nirman.modules.expense.repository.ExpenseAttachmentRepository;
+import in.nirman.modules.identity.repository.UserRepository;
 import in.nirman.modules.masterdata.repository.ExpenseCategoryRepository;
 import in.nirman.modules.masterdata.repository.VendorRepository;
 import org.springframework.stereotype.Component;
@@ -33,15 +34,18 @@ public class ExpenseResponses {
     private final ApprovalRepository approvals;
     private final VendorRepository vendors;
     private final ExpenseCategoryRepository categories;
+    private final UserRepository users;
 
     public ExpenseResponses(ExpenseAttachmentRepository billLinks,
                             AttachmentRepository attachments, ApprovalRepository approvals,
-                            VendorRepository vendors, ExpenseCategoryRepository categories) {
+                            VendorRepository vendors, ExpenseCategoryRepository categories,
+                            UserRepository users) {
         this.billLinks = billLinks;
         this.attachments = attachments;
         this.approvals = approvals;
         this.vendors = vendors;
         this.categories = categories;
+        this.users = users;
     }
 
     public ExpenseResponse toResponse(Expense expense) {
@@ -61,6 +65,7 @@ public class ExpenseResponses {
                 expense.getAllocationNote(), expense.getAllocatedAt(),
                 expense.getRevision(), expense.getRevisedAt(), expense.getRevisionReason(),
                 expense.getWorkflowStatus(),
+                expense.getCreatedBy(), userName(expense.getCreatedBy()),
                 pending == null ? null : pending.getLevel(),
                 pending == null ? null : pending.getAssignedRole(),
                 expense.getSubmittedAt(), expense.getApprovedAt(), expense.getRejectionReason(),
@@ -90,5 +95,17 @@ public class ExpenseResponses {
     private String categoryName(UUID categoryId) {
         return categoryId == null ? null
                 : categories.findById(categoryId).map(c -> c.getName()).orElse(null);
+    }
+
+    /**
+     * The author's name, or nothing.
+     *
+     * <p>Null on the rows migrated in before auditing was switched on, and on a user since
+     * removed from the organisation. The screen says "author not recorded" rather than
+     * printing a bare id, because a name nobody can read is worse than an admitted gap.</p>
+     */
+    private String userName(UUID userId) {
+        return userId == null ? null
+                : users.findById(userId).map(user -> user.getFullName()).orElse(null);
     }
 }

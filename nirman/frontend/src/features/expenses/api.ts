@@ -32,6 +32,7 @@ export const expenseKeys = {
   pending: ['approvals', 'pending'] as const,
   payments: (expenseId: string) => ['payments', expenseId] as const,
   vendorBalances: ['vendors', 'balances'] as const,
+  attachmentUrl: (attachmentId: string) => ['attachments', attachmentId, 'url'] as const,
 };
 
 const REFERENCE_STALE_TIME = 15 * 60_000;
@@ -513,5 +514,28 @@ export function useVendorBalances() {
   return useQuery({
     queryKey: expenseKeys.vendorBalances,
     queryFn: async () => (await apiClient.get<VendorBalance[]>('/vendors/balances')).data,
+  });
+}
+
+/**
+ * A short-lived link to a bill already uploaded.
+ *
+ * <p>Asked for per attachment, when something is about to draw it, rather than carried on the
+ * expense rows: the server signs it fresh and re-checks the caller's sites on the way, and it
+ * dies in ten minutes — so a queue of forty bills would otherwise mint forty links for the
+ * two an approver actually opens.</p>
+ *
+ * <p>Cached for five minutes, comfortably inside the link's own life, so opening the same
+ * bill twice while deciding on it is one call.</p>
+ */
+export function useAttachmentUrl(attachmentId: string | undefined) {
+  return useQuery({
+    queryKey: expenseKeys.attachmentUrl(attachmentId ?? ''),
+    queryFn: async () =>
+      (await apiClient.get<{ url: string; fileName: string }>(`/attachments/${attachmentId}/url`))
+        .data,
+    enabled: Boolean(attachmentId),
+    staleTime: 5 * 60_000,
+    gcTime: 5 * 60_000,
   });
 }

@@ -79,6 +79,17 @@ const SUBMITTED = expense({
   pendingLevel: 1,
   pendingWithRole: 'ENGINEER',
   billNumber: 'SS/856',
+  createdByName: 'Uttam Singh',
+  attachments: [
+    {
+      id: 'ea-1',
+      attachmentId: 'att-1',
+      docType: 'BILL',
+      fileName: 'bill-ss-856.jpg',
+      contentType: 'image/jpeg',
+      sizeBytes: 240_000,
+    },
+  ],
 });
 
 const L1 = expense({
@@ -119,6 +130,11 @@ function mockGets() {
   get.mockImplementation((url: string, config?: { params?: { status?: ExpenseWorkflow } }) => {
     if (url === '/sites') return Promise.resolve({ data: SITES });
     if (url === '/approvals/pending') return Promise.resolve({ data: [{ id: 'a1' }] });
+    if (url === '/attachments/att-1/url') {
+      return Promise.resolve({
+        data: { url: 'https://minio.local/signed/att-1', fileName: 'bill-ss-856.jpg' },
+      });
+    }
     if (url === '/expenses') {
       const status = config?.params?.status;
       if (status === 'SUBMITTED') return Promise.resolve({ data: page([SUBMITTED]) });
@@ -151,12 +167,12 @@ describe('ApprovalsPage', () => {
     expect(screen.getByText('Level 2 · admin')).toBeInTheDocument();
   });
 
-  it('offers approve, send back and reject as three distinct decisions', async () => {
+  it('offers approve, return and reject as three distinct decisions', async () => {
     renderPage();
     await screen.findByText('EXP-2025-0001');
 
     expect(screen.getAllByRole('button', { name: 'Approve' })).not.toHaveLength(0);
-    expect(screen.getAllByRole('button', { name: 'Send back to fix' })).not.toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: 'Return to fix' })).not.toHaveLength(0);
     expect(screen.getAllByRole('button', { name: 'Reject' })).not.toHaveLength(0);
   });
 
@@ -185,7 +201,7 @@ describe('ApprovalsPage', () => {
     renderPage();
     await screen.findByText('EXP-2025-0001');
 
-    await user.click(screen.getAllByRole('button', { name: 'Send back to fix' })[0]!);
+    await user.click(screen.getAllByRole('button', { name: 'Return to fix' })[0]!);
     await waitFor(() => expect(post).toHaveBeenCalledOnce());
     expect(post.mock.calls[0]![1]).toMatchObject({ action: 'RETURN' });
   });
@@ -196,7 +212,7 @@ describe('ApprovalsPage', () => {
     renderPage();
     await screen.findByText('EXP-2025-0001');
 
-    await user.click(screen.getAllByRole('button', { name: 'Send back to fix' })[0]!);
+    await user.click(screen.getAllByRole('button', { name: 'Return to fix' })[0]!);
     await waitFor(() => expect(post).toHaveBeenCalledOnce());
     expect(post.mock.calls[0]![1]).not.toHaveProperty('allocation');
   });
@@ -259,5 +275,45 @@ describe('ApprovalsPage', () => {
     await waitFor(() => expect(post).toHaveBeenCalledOnce());
     expect(post.mock.calls[0]![0]).toBe('/payments');
     expect(post.mock.calls[0]![1]).toMatchObject({ expenseId: 'e3', amount: 30000 });
+  });
+  /**
+   * The approver is agreeing to a figure he did not watch being incurred, and who typed it is
+   * half of what he is weighing.
+   */
+  it('names who typed each waiting expense', async () => {
+    renderPage();
+    await screen.findByText('EXP-2025-0001');
+
+    expect(screen.getByText('Typed by Uttam Singh')).toBeInTheDocument();
+  });
+
+  /** A user since removed from the rolls is admitted, never left as a blank line. */
+  it('says so when the author is not on the rolls', async () => {
+    renderPage();
+    await screen.findByText('EXP-2025-0002');
+
+    expect(screen.getByText('Typed by somebody no longer on the rolls')).toBeInTheDocument();
+  });
+
+  /**
+   * A bill number is not evidence. The picture is asked for per attachment and shown where the
+   * decision is being made, so the challan photographed instead of the invoice is caught here
+   * rather than after approval.
+   */
+  it('shows the photographed bill beside the decision', async () => {
+    renderPage();
+    await screen.findByText('EXP-2025-0001');
+
+    const bill = await screen.findByAltText('bill-ss-856.jpg');
+    expect(bill).toHaveAttribute('src', 'https://minio.local/signed/att-1');
+    expect(get).toHaveBeenCalledWith('/attachments/att-1/url');
+  });
+
+  /** Nothing attached is a fact the approver weighs, not an empty space on the card. */
+  it('says when no bill was photographed', async () => {
+    renderPage();
+    await screen.findByText('EXP-2025-0002');
+
+    expect(screen.getAllByText('No photograph of the bill')).not.toHaveLength(0);
   });
 });

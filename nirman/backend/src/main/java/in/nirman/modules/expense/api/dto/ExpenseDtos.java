@@ -226,6 +226,13 @@ public final class ExpenseDtos {
             Instant revisedAt,
             String revisionReason,
             Expense.Workflow workflowStatus,
+            /**
+             * Who typed it. Carried as a name because the approver is being asked to trust a
+             * figure he did not see incurred, and "whose bill is this" is the first question
+             * he asks about one — a user id would leave him telephoning the site to find out.
+             */
+            UUID createdBy,
+            String createdByName,
             /** Which level is waiting, and on whom. Null once the record is through. */
             Integer pendingLevel,
             String pendingWithRole,
