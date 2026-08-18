@@ -1,6 +1,6 @@
 /** Mirrors the DPR module's response shapes. */
 
-export type DprWorkflow = 'DRAFT' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED';
+export type DprWorkflow = 'DRAFT' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED' | 'APPROVED';
 
 /** Exactly the server's enum. A value it does not know is refused on save, not stored. */
 export type Weather = 'CLEAR' | 'CLOUDY' | 'RAIN' | 'HEAVY_RAIN' | 'EXTREME_HEAT';
@@ -69,14 +69,28 @@ export function isEditable(status: DprWorkflow): boolean {
 /**
  * Whether this user may still write to the report, and which half of it.
  *
- * <p>The report has two authors. A draft is the supervisor's: he records what the day was and
- * hands it over. A submitted report is the engineer's, and he has to be able to write to it —
- * work done and the day's observations are his, and a handover he could not finish would leave
- * every report permanently half-written. The server enforces exactly this; here it decides
- * which buttons exist.</p>
+ * <p>The report has two authors and, once it has been handed over, both of them at once. The
+ * engineer has the work and the observations — a handover he could not write to would leave
+ * every report permanently half-written. The day's account stays with whoever is standing on
+ * the site: the same supervisor or the one who relieved him, because the weather typed wrong at
+ * six and the second mixer that arrived at four are facts he can see and the office cannot.</p>
+ *
+ * <p>It closes at the signature, not at the handover. The server enforces exactly this; here it
+ * decides which buttons exist.</p>
  */
-export function isWritable(status: DprWorkflow, canVerify: boolean): boolean {
-  return isEditable(status) || (status === 'SUBMITTED' && canVerify);
+export function isWritable(status: DprWorkflow): boolean {
+  return isEditable(status) || status === 'SUBMITTED';
+}
+
+/**
+ * Whether the office still has to accept it.
+ *
+ * <p>The engineer's signature claims the work; it is no longer the end of the document. A
+ * report sits VERIFIED until somebody holding {@code dpr:approve} countersigns it, and that
+ * approval claims nothing — the quantities were already in the measurement book.</p>
+ */
+export function awaitsOffice(status: DprWorkflow): boolean {
+  return status === 'VERIFIED';
 }
 
 export interface Site {
@@ -372,6 +386,9 @@ export interface Dpr {
   verifiedBy?: string;
   verifiedByName?: string;
   verifiedAt?: string;
+  /** The office's countersignature. Absent until it is given; it claims nothing when it is. */
+  approvedByName?: string;
+  approvedAt?: string;
   rejectionReason?: string;
   progressPosted?: number;
   version: number;

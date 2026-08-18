@@ -29,15 +29,29 @@ import { useSelectedSite } from '../../shared/siteSelection';
 import { StatusChip, type RecordStatus } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
 import { DeleteRecordDialog } from '../../shared/DeleteRecordDialog';
-import { downloadDprPdf, useDecideDpr, useDeleteDpr, useDpr, useDprs, useSites } from './api';
+import {
+  downloadDprPdf,
+  useApproveDpr,
+  useDecideDpr,
+  useDeleteDpr,
+  useDpr,
+  useDprs,
+  useSites,
+} from './api';
 import { causeLabel, isEditable, isWritable } from './types';
 import type { Dpr, DprWorkflow, WorkItemResponse } from './types';
 
+/*
+  Verified and approved are two different places to be, and the register has to say which. A
+  signed report has claimed its work and is waiting on the office; an approved one is finished.
+  Reading them as one chip would hide the whole of what the office is being asked to do.
+*/
 const STATUS_CHIP: Record<DprWorkflow, RecordStatus> = {
   DRAFT: 'DRAFT',
   SUBMITTED: 'SUBMITTED',
   VERIFIED: 'VERIFIED',
   REJECTED: 'REJECTED',
+  APPROVED: 'APPROVED',
 };
 
 /**
@@ -93,6 +107,7 @@ export function DprListPage() {
   const [siteId, setSiteId] = useSelectedSite(sites.data, { allowAll: true });
   const reports = useDprs(siteId || undefined, status);
   const canVerify = hasPermission('dpr:verify');
+  const canApprove = hasPermission('dpr:approve');
   const canDelete = hasPermission('dpr:delete');
 
   const columns: RecordColumn<Dpr>[] = [
@@ -153,7 +168,7 @@ export function DprListPage() {
       align: 'right',
       card: 'actions',
       cell: (report) =>
-        isWritable(report.workflowStatus, canVerify) && (
+        isWritable(report.workflowStatus) && (
           <Button
             component={Link}
             to={`/dpr/${report.id}`}
@@ -166,7 +181,11 @@ export function DprListPage() {
               coming back to it; a submitted report is finished as far as its writer is
               concerned and is waiting on the engineer for the half only he can write.
             */}
-            {report.workflowStatus === 'SUBMITTED' ? 'Complete and sign' : 'Continue'}
+            {report.workflowStatus === 'SUBMITTED'
+              ? canVerify
+                ? 'Complete and sign'
+                : 'Correct the day'
+              : 'Continue'}
           </Button>
         ),
     },
@@ -234,6 +253,7 @@ export function DprListPage() {
           <ReportPanel
             id={openId}
             canVerify={canVerify}
+            canApprove={canApprove}
             canDelete={canDelete}
             onClose={() => setOpenId(null)}
           />
@@ -246,16 +266,19 @@ export function DprListPage() {
 function ReportPanel({
   id,
   canVerify,
+  canApprove,
   canDelete,
   onClose,
 }: {
   id: string;
   canVerify: boolean;
+  canApprove: boolean;
   canDelete: boolean;
   onClose: () => void;
 }) {
   const report = useDpr(id);
   const decide = useDecideDpr();
+  const approve = useApproveDpr();
   const deleteDpr = useDeleteDpr();
   const [rejecting, setRejecting] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -300,7 +323,7 @@ function ReportPanel({
         <Button size="small" startIcon={<DownloadIcon />} onClick={() => void download()}>
           Print
         </Button>
-        {isWritable(data.workflowStatus, canVerify) && (
+        {isWritable(data.workflowStatus) && (
           <Button
             component={Link}
             to={`/dpr/${data.id}`}
@@ -493,6 +516,40 @@ function ReportPanel({
             Send back
           </Button>
         </Stack>
+      )}
+
+      {/*
+        The step above the engineer. A signed report used to be the end of the line, so the
+        office first met a fortnight of figures in a monthly return with nothing on record
+        saying it had accepted them.
+
+        The button says what it does not do, because that is the part somebody will assume
+        wrongly: the work was claimed when the engineer signed, and this accepts a document
+        whose quantities already count.
+      */}
+      {canApprove && data.workflowStatus === 'VERIFIED' && (
+        <Stack spacing={1}>
+          <Button
+            variant="contained"
+            sx={{ alignSelf: 'flex-start' }}
+            disabled={approve.isPending}
+            onClick={() => approve.mutate(data.id)}
+          >
+            {approve.isPending ? 'Approving…' : 'Approve for the office'}
+          </Button>
+          <Typography variant="body2" color="text.secondary">
+            {data.verifiedByName ?? 'The engineer'} signed this on{' '}
+            {data.verifiedAt?.slice(0, 10) ?? 'an earlier day'}, which is when its measured
+            lines were claimed. Approving accepts the document; it claims nothing further.
+          </Typography>
+        </Stack>
+      )}
+
+      {data.workflowStatus === 'APPROVED' && (
+        <Typography variant="body2" color="text.secondary">
+          Approved by {data.approvedByName ?? 'the office'}
+          {data.approvedAt ? ` on ${data.approvedAt.slice(0, 10)}` : ''}.
+        </Typography>
       )}
 
       <Dialog open={rejecting} onClose={() => setRejecting(false)} fullWidth maxWidth="sm">

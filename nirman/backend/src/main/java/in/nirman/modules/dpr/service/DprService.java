@@ -47,9 +47,9 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Daily progress reports: draft, submit, verify.
+ * Daily progress reports: draft, submit, verify, approve.
  *
- * <p>Six rules carry the weight.</p>
+ * <p>Seven rules carry the weight.</p>
  *
  * <p><b>The report has two halves and two authors.</b> The supervisor says what the day
  * <i>was</i> — whether the site worked, in what conditions, and what plant stood on the site —
@@ -62,6 +62,19 @@ import java.util.UUID;
  * frozen before either happens. {@code dpr:draft} and {@code dpr:verify} already named those two
  * people, so no new permission was needed to draw the line — only enforcement, which lives in
  * {@link #update}.</p>
+ *
+ * <p><b>The day's account stays with the site until the report is signed.</b> The handover used
+ * to freeze it, and a supervisor who noticed at seven in the evening that the weather was wrong
+ * or that a second mixer had stood there all day had nowhere to put it. Any {@code dpr:draft}
+ * holder posted to the site may still write that half of a SUBMITTED report — the same
+ * supervisor or the one who relieved him, because a site is a shift roster. The engineer may
+ * not: he signs somebody else's account of a day he may not have been on. The <b>figures</b>
+ * still freeze at the handover, which is a different promise and unchanged.</p>
+ *
+ * <p><b>The engineer's signature is not the end of the document; the office's approval is.</b>
+ * {@code dpr:approve} accepts a VERIFIED report, and it claims nothing — the quantities reached
+ * the measurement book when the engineer signed, and this is the countersignature on figures
+ * that already count.</p>
  *
  * <p><b>A day the site did not work is a different document, not an empty one.</b> It carries a
  * cause off a closed list and no work items at all, and it is submitted and signed like any
@@ -263,13 +276,27 @@ public class DprService {
             throw new OptimisticLockingFailureException("DPR " + id + " was changed by someone else");
         }
 
-        boolean stillTheSupervisors = report.getWorkflowStatus().isEditable();
+        /*
+          Who is writing which half, and it is no longer decided by the workflow state alone.
+
+          Before the handover the report is one person's and he writes all of it he is allowed
+          to. After it, the two halves are held by two people at once: the engineer has the
+          work and the observations, and the day's account stays with whoever stood on the site
+          — the same supervisor or the one who relieved him, because a site is a shift roster
+          and the man who can see the second mixer is the man there now.
+
+          The engineer is still refused it. He signs somebody else's account of a day he may
+          not have been on, and an engineer who could quietly rewrite the weather he is signing
+          under is not countersigning anything.
+        */
+        boolean beforeHandover = report.getWorkflowStatus().isEditable();
+        boolean writesTheDaysAccount = beforeHandover || !currentUser.hasPermission("dpr:verify");
         // Null means "leave it as it is", not "the site worked". A flag that defaulted to true
         // on a field a client omitted would turn a rained-off day into a working one on the
         // next save, which is the one mistake this column exists to make impossible.
         boolean operational = request.siteOperational() == null
                 ? report.isSiteOperational() : request.siteOperational();
-        if (stillTheSupervisors) {
+        if (writesTheDaysAccount) {
             assertCauseGiven(operational, request.nonOperationalCause(),
                     request.nonOperationalNote());
             // The engineer can have put work on this report before sending it back, and the
@@ -309,15 +336,20 @@ public class DprService {
             replaceWorkItems(report, request.workItems());
         }
 
-        // A submitted report's figures are the document's own from the moment it was handed
-        // over. The engineer adding what was built does not re-open the day's arithmetic.
-        if (stillTheSupervisors) {
+        /*
+          A submitted report's figures are the document's own from the moment it was handed
+          over — neither the engineer adding what was built nor the supervisor correcting the
+          weather re-opens the day's arithmetic. A muster corrected afterwards shows up as a
+          difference between the report and today's records, which is information; a report
+          whose totals moved after it was sent is a document nobody can rely on.
+        */
+        if (beforeHandover) {
             refreshSnapshot(report);
         }
 
         audit.record(ENTITY_TYPE, id, "UPDATE", null,
                 Map.of("dprNumber", report.getDprNumber(),
-                        "half", stillTheSupervisors ? "supervisor" : "engineer",
+                        "half", writesTheDaysAccount ? "supervisor" : "engineer",
                         "workItems", request.workItems() == null ? 0 : request.workItems().size()),
                 null);
         return responses.toResponse(report);
@@ -328,10 +360,13 @@ public class DprService {
     public DprResponse attachPhoto(UUID id, AttachPhotoRequest request) {
         DailyProgressReport report = require(id);
         siteAccessGuard.assertCanAccess(report.getSiteId());
-        if (report.getWorkflowStatus() == Workflow.VERIFIED) {
+        // Signed is signed, whether or not the office has countersigned it since: a
+        // photograph added afterwards would not be part of what anybody put their name to.
+        if (!report.getWorkflowStatus().acceptsTheDaysAccount()) {
             throw new BusinessException("dpr.not-attachable",
-                    "Report " + report.getDprNumber() + " has been verified. A photograph added "
-                            + "now would not be part of what was signed.");
+                    "Report " + report.getDprNumber() + " has been "
+                            + report.getWorkflowStatus().name().toLowerCase()
+                            + ". A photograph added now would not be part of what was signed.");
         }
         if (photos.existsByDprIdAndAttachmentId(id, request.attachmentId())) {
             return responses.toResponse(report);   // the retried upload
@@ -476,6 +511,43 @@ public class DprService {
         return responses.toResponse(report);
     }
 
+    /**
+     * The office's final approval, on a report the engineer has already signed.
+     *
+     * <p><b>It does not claim anything.</b> The measured quantities reached the measurement book
+     * at verification and are still there; this is the countersignature on a document whose
+     * figures already count. Holding the claim back until the office acted would put the
+     * contract's progress in the hands of somebody who was not on the site — the man who
+     * measured the work is the man who can answer for it, and that is why he is the one who
+     * claims it.</p>
+     *
+     * <p>What it is for is the gap above him. A signed report used to be the end of the line,
+     * so the office first met a fortnight's figures in a monthly return and had no recorded
+     * moment of having accepted them. Now it has one, with a name and a time on it.</p>
+     *
+     * <p>Its own permission. Verifying is the engineer saying what was built and approving is
+     * the office accepting it; an organisation that got the second by granting the first would
+     * have a two-signature document carrying one signature.</p>
+     */
+    @PreAuthorize("hasAuthority('dpr:approve')")
+    public DprResponse approve(UUID id) {
+        DailyProgressReport report = require(id);
+        siteAccessGuard.assertCanAccess(report.getSiteId());
+        if (report.getWorkflowStatus() != Workflow.VERIFIED) {
+            throw new BusinessException("dpr.not-approvable",
+                    "Report " + report.getDprNumber() + " is "
+                            + report.getWorkflowStatus().name().toLowerCase()
+                            + (report.getWorkflowStatus() == Workflow.APPROVED
+                            ? ", so it has been approved already."
+                            : ", so there is nothing signed here for the office to accept."));
+        }
+
+        report.approve(Instant.now(), currentUser.currentUserIdOrNull());
+        audit.record(ENTITY_TYPE, id, "APPROVE", null,
+                Map.of("dprNumber", report.getDprNumber()), null);
+        return responses.toResponse(report);
+    }
+
     // ------------------------------------------------------------------ internals
 
     /** The measured rows only. A row that describes work without measuring it claims nothing. */
@@ -590,16 +662,12 @@ public class DprService {
      */
     private void assertWritable(DailyProgressReport report) {
         Workflow status = report.getWorkflowStatus();
-        if (status.isEditable()
-                || (status == Workflow.SUBMITTED && currentUser.hasPermission("dpr:verify"))) {
+        if (status.acceptsTheDaysAccount()) {
             return;
         }
         throw new BusinessException("dpr.not-editable",
                 "Report " + report.getDprNumber() + " has been " + status.name().toLowerCase()
-                        + " and is not yours to edit. "
-                        + (status == Workflow.SUBMITTED
-                        ? "It is with the engineer, who completes and signs it."
-                        : "Its figures are what was signed."));
+                        + " and is not yours to edit. Its figures are what was signed.");
     }
 
     /**

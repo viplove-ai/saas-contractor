@@ -399,14 +399,17 @@ export function DprWizardPage() {
 
   const existingReport = saved || !covered ? null : (existing.data ?? null);
   /**
-   * A report that was handed over, opened by the man it was handed to.
+   * A report that has been handed over, opened by anybody who may still write to it.
    *
-   * <p>He is not asked what to do about it. "Carry on / start fresh / delete" is the question
-   * put to somebody who finds his own unfinished draft; a submitted report is not unfinished
-   * by accident, it is waiting on him, and the answer is always to open it.</p>
+   * <p>Nobody is asked what to do about it. "Carry on / start fresh / delete" is the question
+   * put to somebody who finds his own unfinished draft; a submitted report is not unfinished by
+   * accident. For the engineer it is waiting on him, and for the supervisor it is the day he
+   * has come back to correct — and neither answer is ever "throw it away and start again",
+   * which on a report that has gone would be destroying a document somebody is working from.
+   * </p>
    */
   const handedToMe = Boolean(
-    existingReport && existingReport.workflowStatus === 'SUBMITTED' && canVerify,
+    existingReport && existingReport.workflowStatus === 'SUBMITTED',
   );
 
   useEffect(() => {
@@ -419,16 +422,24 @@ export function DprWizardPage() {
 
   /** The report the screen is standing on, whichever door it came through. */
   const report = saved ?? existingReport;
-  /** Handed over: the supervisor's half is frozen and the rest of it is the engineer's. */
+  /** Handed over: the work and the observations are the engineer's from here. */
   const handedOver = report?.workflowStatus === 'SUBMITTED';
   /** A report covers the day and it is past this user's editing — a dead end, and it says so. */
-  const closed = Boolean(report && !isWritable(report.workflowStatus, canVerify));
+  const closed = Boolean(report && !isWritable(report.workflowStatus));
   /** The question is on screen and nothing moves until it is answered. */
   const mustChoose = !saved && covered && draftChoice === 'UNDECIDED' && !handedToMe;
   /** Nothing moves while the day belongs to a report the supervisor has not answered for. */
   const blocked = closed || mustChoose;
-  /** What the day was is the supervisor's, and only until he hands it over. */
-  const conditionsWritable = !handedOver && !blocked;
+  /*
+    What the day was stays with the site until the report is signed — the weather typed wrong
+    at six, the second mixer that arrived at four. It used to freeze at the handover, which
+    left the man who could see those things telephoning them to somebody.
+
+    The engineer is the exception, and the server draws the same line: he signs somebody
+    else's account of a day he may not have been standing on, so on a handed-over report his
+    screen shows it and does not offer to change it.
+  */
+  const conditionsWritable = !blocked && !(handedOver && canVerify);
 
   const steps = stepsFor(canVerify, siteOperational);
   // Flipping the day to "no work" while standing on the observations step would otherwise
@@ -540,7 +551,7 @@ export function DprWizardPage() {
       const next = await update.mutateAsync({
         id: saved.id,
         input: {
-          ...(handedOver ? {} : conditions()),
+          ...(conditionsWritable ? conditions() : {}),
           ...(canVerify ? observations() : {}),
           version: saved.version,
         },
@@ -702,16 +713,29 @@ export function DprWizardPage() {
 
       {/*
         The engineer's half of the handover, said plainly. He did not write what is above the
-        work step and he cannot change it — the day's conditions were the supervisor's
-        statement and they froze with the figures when it was sent.
+        work step and he does not change it — that is the site's account of a day he may not
+        have been standing on, and he is about to sign under it.
       */}
       {handedOver && canVerify && (
         <Alert severity="info">
           <AlertTitle>{report?.dprNumber} is waiting on you</AlertTitle>
           {report?.preparedByName ?? 'The supervisor'} recorded what the day was and handed it
-          over. What was built and the day&rsquo;s observations are yours to write; the
-          conditions and the figures were frozen when it was sent, so send it back if they are
-          wrong.
+          over. What was built and the day&rsquo;s observations are yours to write. The
+          conditions are the site&rsquo;s and stay theirs until you sign; the figures were
+          frozen when it was sent.
+        </Alert>
+      )}
+
+      {/*
+        And the supervisor's side of the same moment. The report has gone and he can still say
+        what the day was — the weather he typed wrong at six, the second mixer that arrived at
+        four — because he is the one who can see it. It closes when the engineer signs.
+      */}
+      {handedOver && !canVerify && (
+        <Alert severity="info">
+          <AlertTitle>{report?.dprNumber} has gone to the engineer</AlertTitle>
+          What was built is his to write now. You can still correct what the day was until he
+          signs it; the figures froze when it was sent.
         </Alert>
       )}
 
@@ -958,7 +982,7 @@ export function DprWizardPage() {
                 onClick={() => void saveDraftWithPhotos()}
                 disabled={busy || blocked || !siteId || causeMissing}
               >
-                Save draft
+                {handedOver && !canVerify ? 'Save the correction' : 'Save draft'}
               </Button>
               {/*
                 The two ends of the report, and only one of them is on screen at a time. The

@@ -403,16 +403,24 @@ describe('DprWizardPage', () => {
     expect(screen.queryByRole('button', { name: 'Start fresh' })).not.toBeInTheDocument();
   });
 
-  /** A supervisor cannot write to a report he has handed over, either. */
-  it('closes a handed-over report to the supervisor who sent it', async () => {
+  /**
+   * A handed-over report is still the site's account of the day.
+   *
+   * <p>It used to close to him at the handover, so the weather he had typed wrong at six and
+   * the second mixer that turned up at four went by telephone or nowhere. It closes at the
+   * engineer's signature instead, and the screen says which of the two halves is still his.</p>
+   */
+  it('keeps the day’s account open to the supervisor after he hands the report over', async () => {
     mockGets(
       prefill({ reportExists: true, existingDprId: 'dpr-existing' }),
       existingDraft('SUBMITTED'),
     );
     renderPage();
 
-    expect(await screen.findByText(/is no longer yours to edit/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+    expect(await screen.findByText(/has gone to the engineer/)).toBeInTheDocument();
+    expect(screen.queryByText(/is no longer yours to edit/)).not.toBeInTheDocument();
+    // Named for what it is. "Save draft" on a report that has gone reads as a second draft.
+    expect(screen.getByRole('button', { name: 'Save the correction' })).toBeEnabled();
   });
 
   // ---------------------------------------------------------------- the day it did not work

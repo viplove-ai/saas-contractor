@@ -395,7 +395,7 @@ class DprWorkflowIntegrationTest extends AbstractIntegrationTest {
      * day, billed to nobody, and the man standing next to it is the one who knows them.
      */
     @Test
-    @DisplayName("plant on site is the supervisor's to record, and freezes with his half")
+    @DisplayName("plant on site is the supervisor's to record, and stays his after the handover")
     void plantIsTheSupervisorsHalf() throws Exception {
         String supervisor = loginToken("vivek");
         String engineer = loginToken("uttam");
@@ -406,37 +406,97 @@ class DprWorkflowIntegrationTest extends AbstractIntegrationTest {
         assertThat(report(supervisor, id).get("machinery")).hasSize(1);
 
         submit(supervisor, id);
-        long version = report(engineer, id).get("version").asLong();
 
-        // And once handed over it is frozen with the rest of what he said about the day.
+        // The engineer may not rewrite it, handed over or not: he signs somebody else's
+        // account of a day he may not have been standing on.
         mockMvc.perform(put("/api/v1/dprs/" + id)
                         .header("Authorization", "Bearer " + engineer)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"machinery":[{"machineryName":"Excavator","count":1,
                                   "hoursUsed":8,"idleHours":0}],"version":%d}"""
-                                .formatted(version)))
+                                .formatted(report(engineer, id).get("version").asLong())))
                 .andExpect(status().isUnprocessableEntity());
 
         assertThat(report(engineer, id).get("machinery").get(0).get("machineryName").asText())
                 .isEqualTo("Concrete mixer");
+
+        // The site may, because the second mixer that arrived at four is a fact about the day
+        // and the man who saw it is the one holding the handset.
+        mockMvc.perform(put("/api/v1/dprs/" + id)
+                        .header("Authorization", "Bearer " + supervisor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"machinery":[{"machineryName":"Concrete mixer","count":1,
+                                  "hoursUsed":6,"idleHours":2},
+                                 {"machineryName":"Excavator","count":1,
+                                  "hoursUsed":8,"idleHours":0}],"version":%d}"""
+                                .formatted(report(supervisor, id).get("version").asLong())))
+                .andExpect(status().isOk());
+
+        assertThat(report(engineer, id).get("machinery")).hasSize(2);
     }
 
-    /** A supervisor has no business in a report that is with the engineer. */
+    /**
+     * The day's account stays with the site until the report is signed.
+     *
+     * <p>It used to stop at the handover, and a supervisor who saw at seven in the evening that
+     * he had typed the wrong weather had nowhere to put it. Nothing about authorship is
+     * consulted — the rule is the permission and the site posting — so the man who relieved him
+     * writes it on the same terms.</p>
+     */
     @Test
-    @DisplayName("a supervisor cannot edit a report he has handed over")
-    void aHandedOverReportIsNotTheSupervisorsAnyMore() throws Exception {
+    @DisplayName("a supervisor still corrects the day's account after handing the report over")
+    void aHandedOverReportStillTakesTheDaysAccount() throws Exception {
         String supervisor = loginToken("vivek");
         String id = openDay(supervisor, freeDay());
-        long version = report(supervisor, id).get("version").asLong();
         submit(supervisor, id);
+
+        long version = report(supervisor, id).get("version").asLong();
+        mockMvc.perform(put("/api/v1/dprs/" + id)
+                        .header("Authorization", "Bearer " + supervisor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"weather":"HEAVY_RAIN","version":%d}""".formatted(version)))
+                .andExpect(status().isOk());
+
+        JsonNode after = report(supervisor, id);
+        assertThat(after.get("weather").asText()).isEqualTo("HEAVY_RAIN");
+        assertThat(after.get("workflowStatus").asText())
+                .as("correcting the day does not take the report out of the engineer's queue")
+                .isEqualTo("SUBMITTED");
+    }
+
+    /**
+     * The figures are a different promise from the day's account, and it did not move.
+     *
+     * <p>They freeze at the handover because the report is a document: a muster corrected
+     * afterwards has to show up as a difference between the report and today's records, not by
+     * rewriting what somebody was sent. So a supervisor correcting the weather on a submitted
+     * report must not quietly re-run the snapshot along with it.</p>
+     */
+    @Test
+    @DisplayName("correcting the day after handover does not re-open the frozen figures")
+    void theFiguresStayFrozenWhenTheDaysAccountIsCorrected() throws Exception {
+        String supervisor = loginToken("vivek");
+        String id = openDay(supervisor, freeDay());
+        submit(supervisor, id);
+        JsonNode atHandover = report(supervisor, id);
 
         mockMvc.perform(put("/api/v1/dprs/" + id)
                         .header("Authorization", "Bearer " + supervisor)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"weather":"HEAVY_RAIN","version":%d}""".formatted(version + 1)))
-                .andExpect(status().isUnprocessableEntity());
+                                {"weather":"HEAVY_RAIN","temperatureC":19,"version":%d}"""
+                                .formatted(atHandover.get("version").asLong())))
+                .andExpect(status().isOk());
+
+        JsonNode after = report(supervisor, id);
+        assertThat(after.get("snapshotFrozen").asBoolean()).isTrue();
+        assertThat(decimal(after, "labourCost"))
+                .isEqualByComparingTo(decimal(atHandover, "labourCost"));
+        assertThat(after.get("labourPresentCount").asInt())
+                .isEqualTo(atHandover.get("labourPresentCount").asInt());
     }
 
     /**
@@ -669,6 +729,119 @@ class DprWorkflowIntegrationTest extends AbstractIntegrationTest {
                 SELECT count(*) FROM daily_progress_reports WHERE site_id = ?::uuid
                 """, Integer.class, SITE_A);
         return LocalDate.of(2025, 4, 1).plusDays(offset == null ? 0 : offset);
+    }
+
+    // ---------------------------------------------------------------- the office's approval
+
+    /**
+     * The step above the engineer, and the whole of what it changes.
+     *
+     * <p>A signed report used to be the end of the line, so the office first met a fortnight of
+     * figures in a monthly return with no recorded moment of having accepted them. Now it has
+     * one — and it claims nothing, which is the assertion that matters here: the brickwork
+     * reached the measurement book when the engineer signed, and the approval leaves it exactly
+     * where it was.</p>
+     */
+    @Test
+    @DisplayName("the office approves a signed report, and the approval claims nothing")
+    void theOfficeApprovesWhatTheEngineerSigned() throws Exception {
+        String supervisor = loginToken("vivek");
+        String engineer = loginToken("uttam");
+        String office = loginToken("viplove");
+        LocalDate day = freeDay();
+
+        String id = draft(supervisor, engineer, day, "7");
+        submit(supervisor, id);
+        verify(engineer, id);
+
+        BigDecimal claimedAtSignature = completedQuantity(BOQ_BRICKWORK);
+
+        mockMvc.perform(post("/api/v1/dprs/" + id + "/approval")
+                        .header("Authorization", "Bearer " + office))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.workflowStatus").value("APPROVED"))
+                .andExpect(jsonPath("$.approvedAt").isNotEmpty())
+                // The signature is still on the document; approving did not replace it.
+                .andExpect(jsonPath("$.verifiedAt").isNotEmpty());
+
+        assertThat(completedQuantity(BOQ_BRICKWORK)).isEqualByComparingTo(claimedAtSignature);
+        assertThat(entriesFor(id))
+                .as("the measurement book moved at the signature and not again")
+                .isEqualTo(1);
+    }
+
+    /**
+     * Approving is its own permission. The engineer signed it; a second signature by the same
+     * man is not a second pair of eyes, which is the only reason the step exists.
+     */
+    @Test
+    @DisplayName("neither the site nor the engineer can give the office's approval")
+    void approvingIsTheOfficesAlone() throws Exception {
+        String supervisor = loginToken("vivek");
+        String engineer = loginToken("uttam");
+        LocalDate day = freeDay();
+
+        String id = draft(supervisor, engineer, day, "4");
+        submit(supervisor, id);
+        verify(engineer, id);
+
+        mockMvc.perform(post("/api/v1/dprs/" + id + "/approval")
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isForbidden());
+    }
+
+    /** There is nothing to countersign until somebody has signed. */
+    @Test
+    @DisplayName("a report still with the engineer cannot be approved, and neither can one twice")
+    void approvalNeedsASignatureAndHappensOnce() throws Exception {
+        String supervisor = loginToken("vivek");
+        String engineer = loginToken("uttam");
+        String office = loginToken("viplove");
+        LocalDate day = freeDay();
+
+        String id = draft(supervisor, engineer, day, "5");
+        submit(supervisor, id);
+
+        mockMvc.perform(post("/api/v1/dprs/" + id + "/approval")
+                        .header("Authorization", "Bearer " + office))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.detail")
+                        .value(org.hamcrest.Matchers.containsString("nothing signed")));
+
+        verify(engineer, id);
+        mockMvc.perform(post("/api/v1/dprs/" + id + "/approval")
+                        .header("Authorization", "Bearer " + office))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/dprs/" + id + "/approval")
+                        .header("Authorization", "Bearer " + office))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.detail")
+                        .value(org.hamcrest.Matchers.containsString("already")));
+    }
+
+    /** An approved report is a signed document, and nobody writes on it. */
+    @Test
+    @DisplayName("an approved report takes no more edits, from either author")
+    void anApprovedReportIsClosed() throws Exception {
+        String supervisor = loginToken("vivek");
+        String engineer = loginToken("uttam");
+        String office = loginToken("viplove");
+        LocalDate day = freeDay();
+
+        String id = draft(supervisor, engineer, day, "6");
+        submit(supervisor, id);
+        verify(engineer, id);
+        long version = report(office, id).get("version").asLong();
+        mockMvc.perform(post("/api/v1/dprs/" + id + "/approval")
+                        .header("Authorization", "Bearer " + office))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/v1/dprs/" + id)
+                        .header("Authorization", "Bearer " + supervisor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"weather":"HEAVY_RAIN","version":%d}""".formatted(version + 1)))
+                .andExpect(status().isUnprocessableEntity());
     }
 
     /**

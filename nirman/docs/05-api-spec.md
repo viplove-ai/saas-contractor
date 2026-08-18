@@ -157,8 +157,19 @@ beside it and a `scopeComplete` flag saying whether the figure is the whole stor
 ### /dprs
 `GET|POST /dprs` (`?siteId&status&from&to`), `GET|PUT /dprs/{id}`,
 `GET /dprs/prefill?siteId&date` → labour, material, expense rollup for the day,
-`POST /dprs/{id}/submit`, `POST /dprs/{id}/verify`, `POST /dprs/{id}/photos`,
-`GET /dprs/{id}/pdf`.
+`POST /dprs/{id}/submit`, `POST /dprs/{id}/verify`, `POST /dprs/{id}/approval`,
+`POST /dprs/{id}/photos`, `GET /dprs/{id}/pdf`.
+
+`PUT /dprs/{id}` writes whichever half the caller owns. Work items and the narrative need
+`dpr:verify`; the day's account — the operational status, the conditions and the plant — is
+writable by any `dpr:draft` holder posted to the site while the report is `DRAFT`, `REJECTED`
+**or** `SUBMITTED`, and never by a `dpr:verify` holder after the handover, who is about to sign
+under it. The two halves are applied separately, so a save carrying only one of them cannot
+delete the other.
+
+`POST /dprs/{id}/approval` is the office's final acceptance — `dpr:approve`, on a `VERIFIED`
+report, once. It claims nothing: the measured quantities reached the measurement book at
+`verify` and are untouched by it.
 
 The prefill is **derived on every call**, never cached: the exit criterion is that it matches
 the underlying records exactly, and a late correction, a rejection or a worker added to the

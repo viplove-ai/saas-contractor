@@ -104,8 +104,15 @@ public class DprResponses {
                 report.getWorkflowStatus(), report.getPreparedBy(),
                 userName(report.getPreparedBy()), report.getSubmittedAt(), report.getVerifiedBy(),
                 userName(report.getVerifiedBy()), report.getVerifiedAt(),
+                report.getApprovedBy(), userName(report.getApprovedBy()), report.getApprovedAt(),
                 report.getRejectionReason(),
-                report.getWorkflowStatus() == DailyProgressReport.Workflow.VERIFIED ? posted : null,
+                // The count of what this report put into the measurement book, which happened
+                // at the signature. An approved report still carries it: the office accepting
+                // the document did not claim anything, and hiding the figure once it does
+                // would read as the claim having been withdrawn.
+                report.getWorkflowStatus() == DailyProgressReport.Workflow.VERIFIED
+                        || report.getWorkflowStatus() == DailyProgressReport.Workflow.APPROVED
+                        ? posted : null,
                 report.getVersion(),
                 lines.stream().map(line -> toWorkItem(line, named)).toList(),
                 labourFor(report.getId()),

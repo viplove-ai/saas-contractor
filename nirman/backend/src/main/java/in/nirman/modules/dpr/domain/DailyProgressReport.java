@@ -45,13 +45,36 @@ public class DailyProgressReport extends BaseEntity {
     public enum Workflow {
         DRAFT,
         SUBMITTED,
+        /** Signed by the engineer. The quantities are claimed; the office has not seen it yet. */
         VERIFIED,
         /** Sent back by the engineer. Editable again, and re-submittable. */
-        REJECTED;
+        REJECTED,
+        /** Countersigned by the office. The end of the document. */
+        APPROVED;
 
         /** Draft and rejected reports are still the preparer's to change. */
         public boolean isEditable() {
             return this == DRAFT || this == REJECTED;
+        }
+
+        /**
+         * Whether the account of the day — the conditions, whether the site worked, the plant
+         * that stood on it — is still open to being written.
+         *
+         * <p>A draft is obviously open. A handed-over report is too, and that is the change: it
+         * used to freeze at the handover, so a supervisor who noticed at seven in the evening
+         * that he had typed the wrong weather, or that the second mixer had been on site all
+         * day, had nowhere to put it and told somebody by telephone instead. It stops at the
+         * signature now — the engineer signs the whole document, what the day was as well as
+         * what was built, and after that it is what was signed.</p>
+         *
+         * <p>The <b>figures</b> are a different matter and still freeze at the handover. A
+         * corrected muster does not walk into a report that has gone; it shows up as a
+         * difference between the document and today's records, which is information rather
+         * than a fault.</p>
+         */
+        public boolean acceptsTheDaysAccount() {
+            return this == DRAFT || this == REJECTED || this == SUBMITTED;
         }
     }
 
@@ -247,6 +270,12 @@ public class DailyProgressReport extends BaseEntity {
     @Column(name = "verified_at")
     private Instant verifiedAt;
 
+    @Column(name = "approved_at")
+    private Instant approvedAt;
+
+    @Column(name = "approved_by")
+    private UUID approvedBy;
+
     @Column(name = "rejection_reason")
     private String rejectionReason;
 
@@ -346,6 +375,19 @@ public class DailyProgressReport extends BaseEntity {
         this.verifiedAt = at;
         this.verifiedBy = by;
         this.rejectionReason = null;
+    }
+
+    /**
+     * The office accepting what the engineer signed.
+     *
+     * <p>It does not touch {@code verifiedAt} or the measurement book. The quantities were
+     * claimed when the engineer put his name to them — he measured them and can answer for
+     * them — and this is the countersignature on top, not the moment they begin to count.</p>
+     */
+    public void approve(Instant at, UUID by) {
+        this.workflowStatus = Workflow.APPROVED;
+        this.approvedAt = at;
+        this.approvedBy = by;
     }
 
     public void reject(Instant at, UUID by, String reason) {
@@ -507,6 +549,14 @@ public class DailyProgressReport extends BaseEntity {
 
     public Instant getVerifiedAt() {
         return verifiedAt;
+    }
+
+    public Instant getApprovedAt() {
+        return approvedAt;
+    }
+
+    public UUID getApprovedBy() {
+        return approvedBy;
     }
 
     public String getRejectionReason() {

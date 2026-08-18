@@ -274,8 +274,12 @@ public class DashboardService {
         }
 
         return new DprTile(inRange.size(),
+                // Signed, and an approved report is still signed. Counting only VERIFIED would
+                // drop a report out of every column on the tile the day the office accepted it,
+                // and the site would read that as a report gone missing.
                 (int) inRange.stream().filter(d -> d.getWorkflowStatus()
-                        == DailyProgressReport.Workflow.VERIFIED).count(),
+                        == DailyProgressReport.Workflow.VERIFIED
+                        || d.getWorkflowStatus() == DailyProgressReport.Workflow.APPROVED).count(),
                 (int) inRange.stream().filter(d -> d.getWorkflowStatus()
                         == DailyProgressReport.Workflow.SUBMITTED).count(),
                 (int) inRange.stream().filter(d -> d.getWorkflowStatus().isEditable()).count(),

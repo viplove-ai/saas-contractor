@@ -357,4 +357,74 @@ describe('DprListPage', () => {
       await screen.findByText(/1 claim\(s\) posted to the measurement book/),
     ).toBeInTheDocument();
   });
+
+  /**
+   * The step above the engineer. A signed report used to be the end of the line, so the office
+   * first met a fortnight of figures in a monthly return with nothing on record saying it had
+   * accepted them.
+   *
+   * <p>The wording is asserted because it is the part somebody will assume wrongly: the work
+   * was claimed at the signature, and approving accepts a document whose quantities already
+   * count.</p>
+   */
+  it('offers the office the final approval on a report the engineer has signed', async () => {
+    permissions = ['dpr:draft', 'dpr:approve'];
+    mockGets(
+      dpr({
+        id: 'd1',
+        dprNumber: 'DPR-2025-9002',
+        workflowStatus: 'VERIFIED',
+        verifiedByName: 'Uttam Rana',
+        verifiedAt: '2025-06-11T05:00:00Z',
+        progressPosted: 1,
+      }),
+    );
+    post.mockResolvedValue({ data: { ...SUBMITTED, workflowStatus: 'APPROVED' } });
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+
+    await openReport(user, 'DPR-2025-9002');
+    expect(await screen.findByText(/claims nothing further/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Approve for the office' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    expect(post.mock.calls[0]![0]).toBe('/dprs/d1/approval');
+  });
+
+  /** Approving is the office's own permission: the man who signed it cannot countersign it. */
+  it('offers the engineer no approval of his own signature', async () => {
+    permissions = ['dpr:draft', 'dpr:verify'];
+    mockGets(
+      dpr({ id: 'd1', dprNumber: 'DPR-2025-9002', workflowStatus: 'VERIFIED', progressPosted: 1 }),
+    );
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+
+    await openReport(user, 'DPR-2025-9002');
+    await screen.findAllByText('DPR-2025-9002');
+    expect(
+      screen.queryByRole('button', { name: 'Approve for the office' }),
+    ).not.toBeInTheDocument();
+  });
+
+  /** An approved report says who accepted it. A status chip alone answers "when" and not "who". */
+  it('names the office that approved a finished report', async () => {
+    mockGets(
+      dpr({
+        id: 'd1',
+        dprNumber: 'DPR-2025-9002',
+        workflowStatus: 'APPROVED',
+        approvedByName: 'Viplove Chaudhary',
+        approvedAt: '2025-06-12T05:00:00Z',
+      }),
+    );
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+
+    await openReport(user, 'DPR-2025-9002');
+
+    expect(
+      await screen.findByText(/Approved by Viplove Chaudhary on 2025-06-12/),
+    ).toBeInTheDocument();
+  });
 });

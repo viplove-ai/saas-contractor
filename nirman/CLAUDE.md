@@ -192,13 +192,32 @@ if the tests pass:
   supervisor's and sits on step one beside the weather rather than under the work.
   `dpr:draft` and `dpr:verify` already named those two people, so the line
   needed no new permission, only enforcement in `DprService.update`: a caller without
-  `dpr:verify` may not write work items or the narrative, and a `SUBMITTED` report is
-  writable **only** by a `dpr:verify` holder, because a handover he could not finish would leave
-  every report half-written. The two halves are applied separately rather than checked together
-  — that is what stops a supervisor's save, sending an empty work list because his screen has no
-  work step, from deleting lines the engineer put on a report he sent back. The supervisor's half
-  freezes at the handover along with the snapshot. The "a report that says nothing" check moved
-  from `submit` to `decide` with it: nobody has written the work half at handover time.
+  `dpr:verify` may not write work items or the narrative, and a `SUBMITTED` report is writable by
+  both of them at once — the engineer for the work, because a handover he could not finish would
+  leave every report half-written, and any `dpr:draft` holder posted to the site for the day's
+  account. The two halves are applied separately rather than checked together — that is what
+  stops a supervisor's save, sending an empty work list because his screen has no work step, from
+  deleting lines the engineer put on a report he sent back. The "a report that says nothing"
+  check sits on `decide` rather than `submit`: nobody has written the work half at handover time.
+- **The day's account stays with the site until the report is signed; the figures freeze at the
+  handover.** Two different promises, and only the second one is about the snapshot. Whoever
+  holds `dpr:draft` at that site may still correct the weather, the operational status and the
+  plant on a `SUBMITTED` report — the same supervisor or the one who relieved him, because a
+  site is a shift roster and the second mixer that arrived at four is a thing he can see and the
+  office cannot. It used to freeze at the handover, and the correction went by telephone. The
+  **engineer** may not write that half at any point (`assertSupervisorHalfUntouched`): he signs
+  somebody else's account of a day he may not have been standing on. `Workflow.acceptsTheDaysAccount()`
+  is the one place the rule lives. The rolled-up figures still freeze at submission, and
+  `refreshSnapshot` runs only before the handover — a muster corrected afterwards shows up as a
+  difference between the document and today's records, which is information, not a fault.
+- **The engineer's signature claims the work; the office's approval ends the document.** `VERIFIED`
+  is no longer terminal: `dpr:approve` (V37, the office's alone) countersigns it and the report
+  becomes `APPROVED`. The approval **claims nothing** — the measured quantities reached the
+  measurement book at verification and stay exactly where they were, because the man who measured
+  the work is the man who can answer for it, and holding the claim back until an office acted
+  would put the contract's progress with somebody who was not there. What it buys is the recorded
+  moment of acceptance the office never had: before it, a fortnight of signed figures was first
+  met in a monthly return. It is refused on anything but a `VERIFIED` report and refused twice.
 - **The observations step asks two questions, and used to ask seven.** What survives is
   instructions received from the department and the plan for tomorrow — the two things the
   office cannot learn from any other record. The summary of work restated the work rows above
@@ -395,6 +414,14 @@ ordinary ADJUSTMENT through `StockAdjustmentService`. **One new permission, not 
 approving a correction *is* posting the adjustment, so it is held by `inventory:adjust`, which
 is already exactly that question. A second one would let an organisation grant the decision to
 somebody who cannot make the posting it commits them to.
+
+`V37` gives the report the step above the engineer. It widens `ck_dpr_workflow` to admit
+`APPROVED`, adds `approved_at`/`approved_by` with a check that an approval is by somebody at a
+time, and mints **one permission**, `dpr:approve`, for the office alone — not folded into
+`dpr:verify`, because verifying is the engineer saying what was built and approving is the
+office accepting it, and an organisation that got the second by granting the first would have a
+two-signature document carrying one signature. It moves no measurement-book row: the quantities
+were claimed at the signature and V37 does not touch them.
 
 Hibernate is `ddl-auto: validate`. Flyway owns the schema; an entity that drifts from a
 migration fails at startup.

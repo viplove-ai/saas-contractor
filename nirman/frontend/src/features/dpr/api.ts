@@ -160,6 +160,25 @@ export function useDecideDpr() {
 }
 
 /**
+ * The office's final approval of a report the engineer has signed.
+ *
+ * <p>It claims nothing — the measured quantities reached the measurement book at verification —
+ * so the BOQ queries are deliberately not invalidated here. Only the report and the tiles that
+ * count reports by state have moved.</p>
+ */
+export function useApproveDpr() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await apiClient.post<Dpr>(`/dprs/${id}/approval`, {})).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: dprKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+
+/**
  * Downloads the printed report.
  *
  * <p>Fetched through the api client rather than opened in a new tab, because the PDF route

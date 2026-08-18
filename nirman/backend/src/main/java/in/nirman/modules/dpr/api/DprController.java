@@ -114,6 +114,15 @@ public class DprController {
         return dprs.decide(id, request);
     }
 
+    @PostMapping("/{id}/approval")
+    @Operation(summary = "The office's final approval of a report the engineer has signed",
+            description = "Claims nothing. The measured quantities reached the measurement book "
+                    + "at verification — this is the countersignature on a document whose "
+                    + "figures already count, and it needs dpr:approve rather than dpr:verify.")
+    public DprResponse approve(@PathVariable UUID id) {
+        return dprs.approve(id);
+    }
+
     @PostMapping("/{id}/photos")
     @Operation(summary = "Link an uploaded site photograph to the day's report")
     public DprResponse attachPhoto(@PathVariable UUID id,
