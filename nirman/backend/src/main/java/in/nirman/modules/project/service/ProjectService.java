@@ -184,9 +184,13 @@ public class ProjectService implements ProjectProvisioning {
         project.setTenderReference(request.tenderReference());
         project.setContractValue(request.contractValue());
         project.setQuotedPercent(request.quotedPercent());
+        project.setEstimatedCost(request.estimatedCost());
         project.setBudgetAmount(request.budgetAmount());
         project.setStartDate(request.startDate());
         project.setExpectedCompletionDate(request.expectedCompletionDate());
+        applyContractCalendar(project, request.workNature(), request.bidOpeningDate(),
+                request.allotmentLetterDate(), request.completionCertificateDate(),
+                request.defectLiabilityMonths());
         project.setProjectManagerId(request.projectManagerId());
         project.setDescription(request.description());
         validateDates(project);
@@ -211,10 +215,14 @@ public class ProjectService implements ProjectProvisioning {
         project.setTenderReference(request.tenderReference());
         project.setContractValue(request.contractValue());
         project.setQuotedPercent(request.quotedPercent());
+        project.setEstimatedCost(request.estimatedCost());
         project.setBudgetAmount(request.budgetAmount());
         project.setStartDate(request.startDate());
         project.setExpectedCompletionDate(request.expectedCompletionDate());
         project.setActualCompletionDate(request.actualCompletionDate());
+        applyContractCalendar(project, request.workNature(), request.bidOpeningDate(),
+                request.allotmentLetterDate(), request.completionCertificateDate(),
+                request.defectLiabilityMonths());
         project.setProjectManagerId(request.projectManagerId());
         if (request.status() != null) {
             project.setStatus(request.status());
@@ -247,7 +255,8 @@ public class ProjectService implements ProjectProvisioning {
         }
         List<Site> live = sites.findByOrgIdAndProjectIdAndDeletedAtIsNullOrderByCode(
                 project.getOrgId(), project.getId());
-        deletionGuard.assertProjectDeletable(live.stream().map(Site::getId).toList());
+        deletionGuard.assertProjectDeletable(project.getId(),
+                live.stream().map(Site::getId).toList());
 
         // One instant for the project and its sites: that shared timestamp is what a restore
         // later reads to tell these sites apart from one deleted on its own months ago.
@@ -301,6 +310,30 @@ public class ProjectService implements ProjectProvisioning {
     }
 
     // ------------------------------------------------------------------ internals
+
+    /**
+     * The dates the treasury register's release schedule hangs off.
+     *
+     * <p>Refused rather than silently reordered when the letters disagree with each other: an
+     * allotment letter dated before the bids were opened is a typing mistake, and accepting it
+     * would put an earnest money release date in the past and drop the deposit into the
+     * office's overdue list on the day the contract was created.</p>
+     */
+    private void applyContractCalendar(Project project, Project.WorkNature workNature,
+                                       java.time.LocalDate bidOpening,
+                                       java.time.LocalDate allotmentLetter,
+                                       java.time.LocalDate completionCertificate,
+                                       Integer defectLiabilityMonths) {
+        if (bidOpening != null && allotmentLetter != null && allotmentLetter.isBefore(bidOpening)) {
+            throw new BusinessException("project.allotment-before-bid-opening",
+                    "The allotment letter cannot be dated before the bids were opened.");
+        }
+        project.setWorkNature(workNature);
+        project.setBidOpeningDate(bidOpening);
+        project.setAllotmentLetterDate(allotmentLetter);
+        project.setCompletionCertificateDate(completionCertificate);
+        project.setDefectLiabilityMonths(defectLiabilityMonths);
+    }
 
     private Project requireVisibleProject(UUID id) {
         Project project = projects.findByIdAndOrgIdAndDeletedAtIsNull(id, currentUser.currentOrgId())

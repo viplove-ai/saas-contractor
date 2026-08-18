@@ -109,10 +109,24 @@ export const projectSchema = z
     tenderReference: z.string().trim().max(120, 'At most 120 characters').optional(),
     contractValue: optionalAmount,
     quotedPercent: optionalPercent,
+    estimatedCost: optionalAmount,
     budgetAmount: optionalAmount,
     startDate: optionalDate,
     expectedCompletionDate: optionalDate,
     actualCompletionDate: optionalDate,
+    // The contract's own calendar. Every deposit release date on the treasury screen hangs
+    // off one of these, and each is a letter somebody holds rather than something inferable.
+    workNature: z.enum(['CONSTRUCTION', 'MAINTENANCE']).optional().or(z.literal('')),
+    bidOpeningDate: optionalDate,
+    allotmentLetterDate: optionalDate,
+    completionCertificateDate: optionalDate,
+    defectLiabilityMonths: z
+      .string()
+      .trim()
+      .regex(/^\d{1,3}$/, 'A whole number of months')
+      .refine((value) => Number(value) <= 120, 'At most 120 months')
+      .optional()
+      .or(z.literal('')),
     projectManagerId: z.string().optional(),
     status: z.enum(['PLANNED', 'ACTIVE', 'ON_HOLD', 'COMPLETED', 'CLOSED']),
     description: z.string().trim().optional(),
@@ -123,6 +137,18 @@ export const projectSchema = z
       !form.expectedCompletionDate ||
       form.startDate <= form.expectedCompletionDate,
     { path: ['expectedCompletionDate'], message: 'Completion cannot precede the start' },
+  )
+  /*
+    Caught here as well as on the server. An allotment letter dated before the bids were
+    opened is a typing slip, and accepting it would date the earnest money's release in the
+    past — dropping the deposit into the office's overdue list the day the contract is created.
+  */
+  .refine(
+    (form) =>
+      !form.bidOpeningDate ||
+      !form.allotmentLetterDate ||
+      form.bidOpeningDate <= form.allotmentLetterDate,
+    { path: ['allotmentLetterDate'], message: 'The allotment cannot precede the bid opening' },
   );
 
 export type ProjectForm = z.infer<typeof projectSchema>;

@@ -82,6 +82,12 @@ const GROUPS: Group[] = [
     hint: 'Cost, progress and what the records are missing',
     tiles: [
       { title: 'Company dashboard', to: '/dashboard', permission: 'dashboard:company' },
+      /*
+        A different question from the company dashboard, which is about what the work cost.
+        This is about money that is not with us at all — and it is the accountant's screen as
+        much as the administrator's, which is why it is offered on the read permission.
+      */
+      { title: 'Treasury', to: '/treasury', permission: 'security:read' },
       { title: 'Site dashboard', to: '/dashboard/site', permission: 'dashboard:site' },
       { title: 'Data quality', to: '/dashboard/quality', permission: 'dashboard:dataquality' },
     ],

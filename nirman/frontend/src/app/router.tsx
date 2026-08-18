@@ -131,6 +131,16 @@ export const router = createBrowserRouter([
           screen('projects/:projectId/planning', async () => ({
             Component: (await import('../features/planning/PlanningPage')).PlanningPage,
           })),
+          // One contract's deposits. Its own route rather than a panel on the project page,
+          // for the reason planning has one: features do not import from one another.
+          screen('projects/:projectId/securities', async () => ({
+            Component: (await import('../features/treasury/ProjectSecuritiesPage'))
+              .ProjectSecuritiesPage,
+          })),
+          screen('treasury', async () => ({
+            Component: (await import('../features/treasury/TreasuryDashboardPage'))
+              .TreasuryDashboardPage,
+          })),
           screen('sites', async () => ({
             Component: (await import('../features/admin/SitesPage')).SitesPage,
           })),

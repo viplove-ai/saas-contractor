@@ -36,10 +36,23 @@ public final class ProjectDtos {
             BigDecimal contractValue,
             /** Above (+) or below (-) the estimate. Null means nobody has said. */
             BigDecimal quotedPercent,
+            /** The cost put to tender. The guarantee stands on this or the contract, whichever is higher. */
+            BigDecimal estimatedCost,
             BigDecimal budgetAmount,
             LocalDate startDate,
             LocalDate expectedCompletionDate,
             LocalDate actualCompletionDate,
+            /*
+             * The contract's own calendar. Every deposit release date hangs off one of these,
+             * and each is a letter somebody holds in his hand rather than something inferable
+             * from a programme that slipped.
+             */
+            Project.WorkNature workNature,
+            LocalDate bidOpeningDate,
+            LocalDate allotmentLetterDate,
+            /** The department's letter — not the day work stopped. */
+            LocalDate completionCertificateDate,
+            Integer defectLiabilityMonths,
             UUID projectManagerId,
             Project.Status status,
             String description,
@@ -71,9 +84,15 @@ public final class ProjectDtos {
             @PositiveOrZero @Digits(integer = 16, fraction = 2) BigDecimal contractValue,
             /** Not @PositiveOrZero: bidding below the estimate is the ordinary case. */
             @Digits(integer = 4, fraction = 3) BigDecimal quotedPercent,
+            @PositiveOrZero @Digits(integer = 16, fraction = 2) BigDecimal estimatedCost,
             @PositiveOrZero @Digits(integer = 16, fraction = 2) BigDecimal budgetAmount,
             LocalDate startDate,
             LocalDate expectedCompletionDate,
+            Project.WorkNature workNature,
+            LocalDate bidOpeningDate,
+            LocalDate allotmentLetterDate,
+            LocalDate completionCertificateDate,
+            @Min(0) @Max(120) Integer defectLiabilityMonths,
             UUID projectManagerId,
             String description) {
     }
@@ -86,10 +105,16 @@ public final class ProjectDtos {
             @Size(max = 120) String tenderReference,
             @PositiveOrZero @Digits(integer = 16, fraction = 2) BigDecimal contractValue,
             @Digits(integer = 4, fraction = 3) BigDecimal quotedPercent,
+            @PositiveOrZero @Digits(integer = 16, fraction = 2) BigDecimal estimatedCost,
             @PositiveOrZero @Digits(integer = 16, fraction = 2) BigDecimal budgetAmount,
             LocalDate startDate,
             LocalDate expectedCompletionDate,
             LocalDate actualCompletionDate,
+            Project.WorkNature workNature,
+            LocalDate bidOpeningDate,
+            LocalDate allotmentLetterDate,
+            LocalDate completionCertificateDate,
+            @Min(0) @Max(120) Integer defectLiabilityMonths,
             UUID projectManagerId,
             Project.Status status,
             String description,

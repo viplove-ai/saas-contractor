@@ -19,6 +19,14 @@ public class Project extends BaseEntity {
 
     public enum Status { PLANNED, ACTIVE, ON_HOLD, COMPLETED, CLOSED }
 
+    /**
+     * Which release rule the performance guarantee follows — a year after a construction
+     * contract completes, six months after the department's letter on a maintenance one.
+     * Null means nobody has said, and the treasury register then proposes no release date
+     * rather than guessing at one.
+     */
+    public enum WorkNature { CONSTRUCTION, MAINTENANCE }
+
     @Column(name = "org_id", nullable = false, updatable = false)
     private UUID orgId;
 
@@ -54,8 +62,41 @@ public class Project extends BaseEntity {
     @Column(name = "quoted_percent", precision = 7, scale = 3)
     private BigDecimal quotedPercent;
 
+    /**
+     * The estimated cost put to tender. Not the same figure as {@link #contractValue}, and the
+     * difference is the whole of the guarantee arithmetic: a performance guarantee is five per
+     * cent of this <em>or</em> of the contract, whichever is higher, so bidding thirty per cent
+     * below leaves the guarantee standing on the full estimate.
+     */
+    @Column(name = "estimated_cost", precision = 18, scale = 2)
+    private BigDecimal estimatedCost;
+
     @Column(name = "budget_amount", precision = 18, scale = 2)
     private BigDecimal budgetAmount;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "work_nature", length = 20)
+    private WorkNature workNature;
+
+    /** The allotment letter is due within ten days of this, and the earnest money with it. */
+    @Column(name = "bid_opening_date")
+    private LocalDate bidOpeningDate;
+
+    /** The letter that turns a bid into a contract: it frees the EMD and starts the PG clock. */
+    @Column(name = "allotment_letter_date")
+    private LocalDate allotmentLetterDate;
+
+    /**
+     * The department's completion letter, which is not the day the work stopped. Kept apart
+     * from {@link #actualCompletionDate} on purpose — the contractor knows when he finished,
+     * and only the department's letter starts the clock a guarantee is released against.
+     */
+    @Column(name = "completion_certificate_date")
+    private LocalDate completionCertificateDate;
+
+    /** How long the retention is held after completion. Varies with the item and the work. */
+    @Column(name = "defect_liability_months")
+    private Integer defectLiabilityMonths;
 
     @Column(name = "start_date")
     private LocalDate startDate;
@@ -156,6 +197,62 @@ public class Project extends BaseEntity {
 
     public void setQuotedPercent(BigDecimal quotedPercent) {
         this.quotedPercent = quotedPercent;
+    }
+
+    public BigDecimal getEstimatedCost() {
+        return estimatedCost;
+    }
+
+    public void setEstimatedCost(BigDecimal estimatedCost) {
+        this.estimatedCost = estimatedCost;
+    }
+
+    public WorkNature getWorkNature() {
+        return workNature;
+    }
+
+    public void setWorkNature(WorkNature workNature) {
+        this.workNature = workNature;
+    }
+
+    public LocalDate getBidOpeningDate() {
+        return bidOpeningDate;
+    }
+
+    public void setBidOpeningDate(LocalDate bidOpeningDate) {
+        this.bidOpeningDate = bidOpeningDate;
+    }
+
+    public LocalDate getAllotmentLetterDate() {
+        return allotmentLetterDate;
+    }
+
+    public void setAllotmentLetterDate(LocalDate allotmentLetterDate) {
+        this.allotmentLetterDate = allotmentLetterDate;
+    }
+
+    public LocalDate getCompletionCertificateDate() {
+        return completionCertificateDate;
+    }
+
+    public void setCompletionCertificateDate(LocalDate completionCertificateDate) {
+        this.completionCertificateDate = completionCertificateDate;
+    }
+
+    public Integer getDefectLiabilityMonths() {
+        return defectLiabilityMonths;
+    }
+
+    public void setDefectLiabilityMonths(Integer defectLiabilityMonths) {
+        this.defectLiabilityMonths = defectLiabilityMonths;
+    }
+
+    /**
+     * The day a guarantee's release clock starts: the department's completion letter where one
+     * has arrived, and otherwise the day work actually finished. Null while the work runs.
+     */
+    public LocalDate guaranteeClockStart() {
+        return completionCertificateDate != null ? completionCertificateDate : actualCompletionDate;
     }
 
     public BigDecimal getBudgetAmount() {
