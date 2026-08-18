@@ -14,7 +14,9 @@ import in.nirman.modules.treasury.api.dto.TreasuryDtos.ReleaseRequest;
 import in.nirman.modules.treasury.api.dto.TreasuryDtos.RetainedRequest;
 import in.nirman.modules.treasury.api.dto.TreasuryDtos.SecurityResponse;
 import in.nirman.modules.treasury.api.dto.TreasuryDtos.UpdateSecurityRequest;
+import in.nirman.modules.treasury.domain.BankDeposit;
 import in.nirman.modules.treasury.domain.ProjectSecurity;
+import in.nirman.modules.treasury.repository.BankDepositRepository;
 import in.nirman.modules.treasury.repository.ProjectSecurityRepository;
 import in.nirman.security.CurrentUserProvider;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -48,15 +50,18 @@ import java.util.UUID;
 public class ProjectSecurityService {
 
     private final ProjectSecurityRepository securities;
+    private final BankDepositRepository deposits;
     private final ProjectLookup projects;
     private final NitLookup tenders;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
 
-    public ProjectSecurityService(ProjectSecurityRepository securities, ProjectLookup projects,
+    public ProjectSecurityService(ProjectSecurityRepository securities,
+                                  BankDepositRepository deposits, ProjectLookup projects,
                                   NitLookup tenders, CurrentUserProvider currentUser,
                                   AuditService audit) {
         this.securities = securities;
+        this.deposits = deposits;
         this.projects = projects;
         this.tenders = tenders;
         this.currentUser = currentUser;
@@ -218,15 +223,29 @@ public class ProjectSecurityService {
     @PreAuthorize("hasAuthority('security:write')")
     public SecurityResponse lodge(UUID id, LodgeRequest request) {
         ProjectSecurity security = require(id, request.version());
-        security.lodge(request.lodgedOn(), request.referenceNo(), request.bankName(),
-                request.branch(), request.maturityOn());
+        BankDeposit certificate = pledgeable(request.bankDepositId(), id);
+        // What was on the certificate, copied once at the moment it was pledged rather than
+        // read through the link on every render. Only where the form left the box empty: a
+        // figure somebody typed is a reading of the paper in his hand and beats ours. It is a
+        // snapshot and never maintained — the register is where the certificate's own facts
+        // are corrected, and this row records what was pledged on the day.
+        security.lodge(request.lodgedOn(),
+                orElse(request.referenceNo(),
+                        certificate == null ? null : certificate.getDepositNumber()),
+                orElse(request.bankName(), certificate == null ? null : certificate.getBankName()),
+                orElse(request.branch(), certificate == null ? null : certificate.getBranch()),
+                request.maturityOn() != null || certificate == null
+                        ? request.maturityOn() : certificate.getMaturityOn(),
+                request.bankDepositId());
         if (request.expectedReleaseOn() != null) {
             security.setExpectedReleaseOn(request.expectedReleaseOn());
         }
         audit.record("PROJECT_SECURITY", security.getId(), "LODGE", null,
                 Map.of("on", request.lodgedOn().toString(),
                         "amount", security.getHeldAmount(),
-                        "reference", String.valueOf(request.referenceNo())), null);
+                        "reference", String.valueOf(request.referenceNo()),
+                        "fdr", certificate == null ? "none" : certificate.getDepositNumber()),
+                null);
         return respond(security);
     }
 
@@ -329,6 +348,45 @@ public class ProjectSecurityService {
      * it went on to fund, and asking only for its own project would leave that name blank on
      * the very response that set it.
      */
+    /**
+     * The certificate a security is about to be pledged, checked against the two ways a pledge
+     * can be wrong.
+     *
+     * <p>A closed certificate is money the bank has already paid out, so pledging it would
+     * report a department as holding something that does not exist. And one live pledge at a
+     * time: an FDR lodged against two contracts at once would be counted twice in the money
+     * blocked, and the second department would be holding a certificate the first one has.</p>
+     */
+    private BankDeposit pledgeable(UUID depositId, UUID securityId) {
+        if (depositId == null) {
+            return null;
+        }
+        BankDeposit certificate = deposits.findByIdAndOrgId(depositId, orgId())
+                .orElseThrow(() -> BusinessException.notFound("Fixed deposit", depositId));
+        if (certificate.isClosed()) {
+            throw new BusinessException("security.deposit-closed",
+                    "%s was closed on %s. A certificate the bank has paid out cannot be lodged "
+                            .formatted(certificate.getDepositNumber(), certificate.getClosedOn())
+                            + "with anybody.");
+        }
+        securities.findByBankDepositIdInOrderByCreatedAtAsc(List.of(depositId)).stream()
+                .filter(other -> other.getStatus() == ProjectSecurity.Status.LODGED)
+                .filter(other -> !other.getId().equals(securityId))
+                .findFirst()
+                .ifPresent(other -> {
+                    throw BusinessException.conflict("security.deposit-already-pledged",
+                            "%s is already lodged against another contract. Release it there "
+                                    .formatted(certificate.getDepositNumber())
+                                    + "first — one certificate cannot be with two departments "
+                                    + "at once.");
+                });
+        return certificate;
+    }
+
+    private static String orElse(String typed, String fromCertificate) {
+        return typed == null || typed.isBlank() ? fromCertificate : typed;
+    }
+
     private SecurityResponse respond(ProjectSecurity security) {
         List<UUID> involved = security.getRedeployedToProjectId() == null
                 ? List.of(security.getProjectId())
@@ -391,6 +449,7 @@ public class ProjectSecurityService {
                 security.getReleaseReference(),
                 security.getRedeployedToProjectId(),
                 destination == null ? null : destination.code(),
+                security.getBankDepositId(),
                 security.getForfeitedReason(),
                 security.getNotes(),
                 daysToRelease,

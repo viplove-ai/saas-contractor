@@ -16,6 +16,7 @@ import { formatAmount } from '../../shared/formatters';
 import {
   today,
   useCreateSecurity,
+  useDepositRegister,
   useForfeitSecurity,
   useLodgeSecurity,
   useRecordRetained,
@@ -24,7 +25,13 @@ import {
   useUpdateSecurity,
 } from './api';
 import { INSTRUMENT_LABEL, TYPE_LABEL } from './palette';
-import type { Security, SecurityInstrument, SecurityProposal, SecurityType } from './types';
+import type {
+  BankDeposit,
+  Security,
+  SecurityInstrument,
+  SecurityProposal,
+  SecurityType,
+} from './types';
 
 /** Everything the field may be lodged as. A retention is not here: it is not lodged at all. */
 const LODGEABLE: SecurityInstrument[] = ['FDR', 'BANK_GUARANTEE', 'DD', 'CASH'];
@@ -181,6 +188,7 @@ export function SecurityActionDialog({
   const [maturityOn, setMaturityOn] = useState('');
   const [expectedReleaseOn, setExpectedReleaseOn] = useState('');
   const [amount, setAmount] = useState('');
+  const [bankDepositId, setBankDepositId] = useState('');
   const [toProjectId, setToProjectId] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -194,6 +202,7 @@ export function SecurityActionDialog({
     setMaturityOn(security.maturityOn ?? '');
     setExpectedReleaseOn(security.expectedReleaseOn ?? '');
     setAmount(String(action === 'retained' ? security.heldAmount : security.amount));
+    setBankDepositId(security.bankDepositId ?? '');
     setToProjectId('');
     setReason('');
     setError(null);
@@ -226,6 +235,7 @@ export function SecurityActionDialog({
             branch: branch || undefined,
             maturityOn: maturityOn || undefined,
             expectedReleaseOn: expectedReleaseOn || undefined,
+            bankDepositId: bankDepositId || undefined,
             version,
           });
           break;
@@ -291,6 +301,25 @@ export function SecurityActionDialog({
                 InputLabelProps={{ shrink: true }}
                 value={date}
                 onChange={(event) => setDate(event.target.value)}
+              />
+              {/*
+                Naming the certificate off the register is what lets one FDR's move from a
+                refused tender to the guarantee on the job that was won read as a single thread
+                rather than as the same number typed twice. Optional: cash and bank guarantees
+                have no certificate behind them, and one the register has not caught up with is
+                still lodged by typing its number below.
+              */}
+              <CertificatePicker
+                value={bankDepositId}
+                onChange={(next, certificate) => {
+                  setBankDepositId(next);
+                  if (certificate) {
+                    setReference(certificate.depositNumber);
+                    setBankName(certificate.bankName);
+                    setBranch(certificate.branch ?? '');
+                    setMaturityOn(certificate.maturityOn ?? '');
+                  }
+                }}
               />
               <TextField
                 label="Deposit / guarantee number"
@@ -492,3 +521,46 @@ const CONFIRMS: Record<SecurityAction, string> = {
   forfeit: 'Record the forfeiture',
   edit: 'Save',
 };
+
+/**
+ * Which certificate out of the register is being pledged.
+ *
+ * <p>Only the ones that can be: a closed deposit is money the bank has already paid out, and one
+ * another department is holding cannot be lodged twice — the server refuses both, and offering
+ * them here would be offering a choice that fails on submit.</p>
+ *
+ * <p>Choosing one fills the bank details beside it, since they are on the certificate and
+ * retyping them is how the two come to disagree.</p>
+ */
+function CertificatePicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (id: string, certificate: BankDeposit | null) => void;
+}) {
+  const register = useDepositRegister();
+  const available = (register.data?.deposits ?? []).filter(
+    (row) => row.status === 'HELD' && (!row.pledgedTo || row.id === value),
+  );
+
+  return (
+    <TextField
+      select
+      label="Fixed deposit (optional)"
+      value={value}
+      onChange={(event) => {
+        const next = event.target.value;
+        onChange(next, available.find((row) => row.id === next) ?? null);
+      }}
+      helperText="Off the FDR register, so the certificate's own history follows it here."
+    >
+      <MenuItem value="">Not off the register</MenuItem>
+      {available.map((row) => (
+        <MenuItem key={row.id} value={row.id}>
+          {row.depositNumber} · {row.bankName} · {formatAmount(row.amount)}
+        </MenuItem>
+      ))}
+    </TextField>
+  );
+}

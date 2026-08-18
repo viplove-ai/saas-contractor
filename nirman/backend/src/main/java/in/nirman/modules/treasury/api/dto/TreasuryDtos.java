@@ -53,6 +53,12 @@ public final class TreasuryDtos {
             String releaseReference,
             UUID redeployedToProjectId,
             String redeployedToProjectCode,
+            /**
+             * The certificate out of the FDR register pledged against this, where one is. Its
+             * number is {@code referenceNo} — copied off the certificate when it was pledged,
+             * so a contract's own screen reads without a second call.
+             */
+            UUID bankDepositId,
             String forfeitedReason,
             String notes,
             Integer daysToRelease,
@@ -91,6 +97,13 @@ public final class TreasuryDtos {
             @NotNull Long version) {
     }
 
+    /**
+     * @param bankDepositId the certificate out of the FDR register being pledged, where the
+     *                      deposit is one. Optional: a retention is not an instrument at all,
+     *                      cash and bank guarantees have no FDR behind them, and the register
+     *                      may simply not have been filled in yet — in which case the bank
+     *                      details typed here are all there is, exactly as before V42.
+     */
     public record LodgeRequest(
             @NotNull LocalDate lodgedOn,
             @Size(max = 80) String referenceNo,
@@ -98,6 +111,7 @@ public final class TreasuryDtos {
             @Size(max = 160) String branch,
             LocalDate maturityOn,
             LocalDate expectedReleaseOn,
+            UUID bankDepositId,
             @NotNull Long version) {
     }
 

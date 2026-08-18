@@ -16,6 +16,7 @@ import { tokens } from '../../app/theme';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount } from '../../shared/formatters';
 import { RecordTable, type RecordColumn } from '../../shared/RecordTable';
+import { TreasuryTabs } from './TreasuryTabs';
 import { ReleaseCalendarChart } from './ReleaseCalendarChart';
 import { today, useTreasuryDashboard } from './api';
 import {
@@ -51,6 +52,7 @@ export function TreasuryDashboardPage() {
   return (
     <Stack spacing={2} sx={{ pb: 4 }}>
       <Typography variant="h1">Treasury</Typography>
+      <TreasuryTabs />
       <Typography variant="body2" color="text.secondary">
         Earnest money, guarantees and retentions across every contract — what is out, when it
         comes back, and what is free to bid with.

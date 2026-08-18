@@ -116,6 +116,17 @@ public class ProjectSecurity extends BaseEntity {
     @Column(name = "redeployed_to_project_id")
     private UUID redeployedToProjectId;
 
+    /**
+     * The fixed deposit pledged against this security, where one is (V42).
+     *
+     * <p>Set when the deposit is lodged and never cleared afterwards — not even on release.
+     * Clearing it would erase the one thread that ties an FDR's second contract to its first,
+     * which is the whole reason the register exists. Whether the certificate is pledged
+     * <em>today</em> is read off this row's status, not off the presence of the link.</p>
+     */
+    @Column(name = "bank_deposit_id")
+    private UUID bankDepositId;
+
     @Column(name = "forfeited_reason", length = 500)
     private String forfeitedReason;
 
@@ -142,7 +153,7 @@ public class ProjectSecurity extends BaseEntity {
      * and it arrives through {@link #recordRetained}.
      */
     public void lodge(LocalDate on, String referenceNo, String bankName, String branch,
-                      LocalDate maturityOn) {
+                      LocalDate maturityOn, UUID bankDepositId) {
         if (status != Status.DUE) {
             throw new BusinessException("security.not-due",
                     "This deposit is already " + status.name().toLowerCase() + ".");
@@ -153,6 +164,7 @@ public class ProjectSecurity extends BaseEntity {
         this.bankName = bankName;
         this.branch = branch;
         this.maturityOn = maturityOn;
+        this.bankDepositId = bankDepositId;
         this.heldAmount = amount;
     }
 
@@ -370,6 +382,15 @@ public class ProjectSecurity extends BaseEntity {
 
     public String getReleaseReference() {
         return releaseReference;
+    }
+
+    public UUID getBankDepositId() {
+        return bankDepositId;
+    }
+
+    /** Links a certificate to a deposit already lodged, where the register was filled in after. */
+    public void pledge(UUID bankDepositId) {
+        this.bankDepositId = bankDepositId;
     }
 
     public UUID getRedeployedToProjectId() {

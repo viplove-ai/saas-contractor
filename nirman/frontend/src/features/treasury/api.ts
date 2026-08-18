@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { compressPhoto } from '../../offline/uploads';
 import { apiClient } from '../../shared/apiClient';
 import type {
+  BankDeposit,
+  DepositRegister,
   Security,
   SecurityInstrument,
   SecurityProposal,
@@ -12,6 +15,9 @@ export const treasuryKeys = {
   dashboard: (asOf: string) => ['treasury', 'dashboard', asOf] as const,
   forProject: (projectId: string) => ['treasury', 'project', projectId] as const,
   proposal: (projectId: string) => ['treasury', 'proposal', projectId] as const,
+  deposits: () => ['treasury', 'deposits'] as const,
+  /** One signed link per attachment, shared by the thumbnail and the full view drawn from it. */
+  attachmentUrl: (attachmentId: string) => ['attachments', attachmentId, 'url'] as const,
 };
 
 /**
@@ -119,6 +125,13 @@ export interface LodgeInput {
   branch?: string | undefined;
   maturityOn?: string | undefined;
   expectedReleaseOn?: string | undefined;
+  /**
+   * The certificate out of the FDR register being pledged, where the deposit is one. Leaving it
+   * unset is the older behaviour and still right for cash, a bank guarantee, or a certificate
+   * nobody has entered into the register yet — the bank details typed alongside are then all
+   * there is.
+   */
+  bankDepositId?: string | undefined;
   version: number;
 }
 
@@ -207,4 +220,128 @@ export function useProjectDirectory(enabled = true) {
 /** Today, as the ISO date the API and every date input both want. */
 export function today(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+// ------------------------------------------------------------------ the FDR register
+
+/**
+ * Every fixed deposit the company holds, with what each is pledged against.
+ *
+ * <p>Uncached like every other treasury read, and for the sharper version of the same reason: a
+ * stale register is what somebody consults before telling a bank to close a certificate.</p>
+ */
+export function useDepositRegister(enabled = true) {
+  return useQuery({
+    queryKey: treasuryKeys.deposits(),
+    queryFn: async () => (await apiClient.get<DepositRegister>('/bank-deposits')).data,
+    enabled,
+  });
+}
+
+export interface DepositInput {
+  depositNumber: string;
+  bankName: string;
+  branch?: string | undefined;
+  amount: number;
+  issuedOn: string;
+  maturityOn?: string | undefined;
+  interestRate?: number | undefined;
+  notes?: string | undefined;
+}
+
+/**
+ * Every write refreshes the register and the company dashboard both. A certificate closed or
+ * pledged moves a company total as surely as it moves its own row, and an office reading a
+ * total that has not budged after entering a five-lakh FDR will enter it twice.
+ */
+function useDepositMutation<TInput>(send: (input: TInput) => Promise<BankDeposit>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: send,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: treasuryKeys.deposits() });
+      void queryClient.invalidateQueries({ queryKey: ['treasury', 'dashboard'] });
+    },
+  });
+}
+
+export function useCreateDeposit() {
+  return useDepositMutation(
+    async (input: DepositInput) =>
+      (await apiClient.post<BankDeposit>('/bank-deposits', input)).data,
+  );
+}
+
+export function useUpdateDeposit() {
+  return useDepositMutation(
+    async (input: DepositInput & { id: string; version: number }) =>
+      (await apiClient.put<BankDeposit>(`/bank-deposits/${input.id}`, input)).data,
+  );
+}
+
+export function useCloseDeposit() {
+  return useDepositMutation(
+    async (input: { id: string; closedOn: string; reason?: string | undefined; version: number }) =>
+      (await apiClient.post<BankDeposit>(`/bank-deposits/${input.id}/close`, input)).data,
+  );
+}
+
+export function useReopenDeposit() {
+  return useDepositMutation(
+    async (input: { id: string; version: number }) =>
+      (await apiClient.post<BankDeposit>(`/bank-deposits/${input.id}/reopen`, input)).data,
+  );
+}
+
+/**
+ * The photograph second, and only once the certificate exists — the order every other picture in
+ * the app takes. An attachment with no owner is a stray file somebody can clean up; a register
+ * row pointing at a file that was never stored is a broken picture nobody can fix.
+ */
+export function useAddDepositPhoto() {
+  return useDepositMutation(
+    async (input: { depositId: string; file: File; caption?: string | undefined }) => {
+      const photo = await compressPhoto(input.file);
+      const form = new FormData();
+      form.append('file', photo.blob, photo.fileName);
+      const uploaded = await apiClient.post<{ id: string }>('/attachments', form, {
+        params: { ownerEntityType: 'BANK_DEPOSIT', kind: 'PHOTO' },
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return (
+        await apiClient.post<BankDeposit>(`/bank-deposits/${input.depositId}/photos`, {
+          attachmentId: uploaded.data.id,
+          caption: input.caption,
+        })
+      ).data;
+    },
+  );
+}
+
+export function useRemoveDepositPhoto() {
+  return useDepositMutation(
+    async (input: { depositId: string; attachmentId: string }) =>
+      (
+        await apiClient.delete<BankDeposit>(
+          `/bank-deposits/${input.depositId}/photos/${input.attachmentId}`,
+        )
+      ).data,
+  );
+}
+
+/**
+ * A signed link to one stored photograph.
+ *
+ * <p>Its own hook here rather than the inventory module's: features do not import from one
+ * another, and a certificate is not a fact about the store.</p>
+ */
+export function useAttachmentUrl(attachmentId: string | undefined) {
+  return useQuery({
+    queryKey: treasuryKeys.attachmentUrl(attachmentId ?? ''),
+    queryFn: async () =>
+      (await apiClient.get<{ url: string; fileName: string }>(`/attachments/${attachmentId}/url`))
+        .data,
+    enabled: Boolean(attachmentId),
+    staleTime: 5 * 60 * 1000,
+  });
 }

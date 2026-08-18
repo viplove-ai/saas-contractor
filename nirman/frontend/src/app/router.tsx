@@ -141,6 +141,13 @@ export const router = createBrowserRouter([
             Component: (await import('../features/treasury/TreasuryDashboardPage'))
               .TreasuryDashboardPage,
           })),
+          // The bank's own view of the same money: every certificate the company holds, pledged
+          // to a contract or to nothing. A tab beside the dashboard rather than a panel on it,
+          // because "what have we got" is a different question from "what has this job locked
+          // up" and the two are read by the same person at different moments.
+          screen('treasury/fdrs', async () => ({
+            Component: (await import('../features/treasury/FdrRegisterPage')).FdrRegisterPage,
+          })),
           screen('sites', async () => ({
             Component: (await import('../features/admin/SitesPage')).SitesPage,
           })),

@@ -41,6 +41,8 @@ export interface Security {
   releaseReference?: string;
   redeployedToProjectId?: string;
   redeployedToProjectCode?: string;
+  /** The certificate out of the FDR register pledged against this, where one is. */
+  bankDepositId?: string;
   forfeitedReason?: string;
   notes?: string;
   /** Negative once the release date has passed. Null unless the deposit is lodged. */
@@ -135,4 +137,72 @@ export interface TreasuryDashboard {
   needsAttention: Security[];
   reusable: Security[];
   caveat: string;
+}
+
+/** A contract's hold on a certificate, live or finished. */
+export interface DepositPledge {
+  securityId: string;
+  projectId: string;
+  projectCode?: string;
+  projectName?: string;
+  securityType: SecurityType;
+  status: SecurityStatus;
+  lodgedOn?: string;
+  releasedOn?: string;
+}
+
+export interface DepositPhoto {
+  attachmentId: string;
+  caption?: string;
+}
+
+export type DepositStatus = 'HELD' | 'CLOSED';
+
+/**
+ * One fixed deposit the company holds, whatever it is pledged against.
+ *
+ * <p>{@link Security} is a contract's side of the story. This is the bank's, and it outlives any
+ * one contract: {@code pledgedTo} is who has it now — absent when it is in hand and free for the
+ * next tender — and {@code history} is every contract it has ever been lodged with, which is
+ * what makes one certificate's reuse legible as a single thread.</p>
+ */
+export interface BankDeposit {
+  id: string;
+  depositNumber: string;
+  bankName: string;
+  branch?: string;
+  amount: number;
+  issuedOn: string;
+  maturityOn?: string;
+  interestRate?: number;
+  status: DepositStatus;
+  closedOn?: string;
+  closedReason?: string;
+  notes?: string;
+  pledgedTo?: DepositPledge;
+  history: DepositPledge[];
+  photos: DepositPhoto[];
+  /** Negative once matured. Absent where no maturity date has been read off the certificate. */
+  daysToMaturity?: number;
+  version: number;
+}
+
+/**
+ * @param idleAmount what is held and pledged to nothing — the money free for the next tender,
+ *                   which the per-contract register could not answer at all
+ */
+export interface DepositSummary {
+  heldCount: number;
+  heldAmount: number;
+  pledgedCount: number;
+  pledgedAmount: number;
+  idleCount: number;
+  idleAmount: number;
+  closedCount: number;
+  maturingSoonCount: number;
+}
+
+export interface DepositRegister {
+  deposits: BankDeposit[];
+  summary: DepositSummary;
 }
