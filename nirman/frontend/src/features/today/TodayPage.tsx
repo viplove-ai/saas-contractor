@@ -522,7 +522,7 @@ function Figure({ label, value, tone }: { label: string; value: string; tone?: s
 }
 
 /** The drawn rule under a heading. One path, no library, no asset to ship. */
-export function HandRule({ width = 340, color = tokens.signal }: { width?: number; color?: string }) {
+export function HandRule({ width = 340, color = 'var(--accent-600, #C2410C)' }: { width?: number; color?: string }) {
   return (
     <Box
       component="svg"

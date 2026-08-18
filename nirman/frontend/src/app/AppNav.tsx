@@ -111,7 +111,7 @@ export function BottomNav({ signoffCount = 0 }: { signoffCount?: number }) {
               textDecoration: 'none',
               // The active mark is a drawn stroke across the top of the cell, pulled up over
               // the bar's own border so the two read as one line, not as two.
-              borderTop: active ? `4px solid ${tokens.signal}` : '4px solid transparent',
+              borderTop: active ? '4px solid var(--accent-600, #C2410C)' : '4px solid transparent',
               mt: '-1.8px',
             }}
           >
@@ -125,7 +125,7 @@ export function BottomNav({ signoffCount = 0 }: { signoffCount?: number }) {
                 sx={{
                   fontSize: '0.78rem',
                   fontWeight: active ? 700 : 500,
-                  color: active ? 'secondary.main' : 'text.secondary',
+                  color: active ? 'var(--accent-600, #C2410C)' : 'text.secondary',
                 }}
               >
                 {item.label}
