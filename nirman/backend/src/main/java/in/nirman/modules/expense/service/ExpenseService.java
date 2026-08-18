@@ -41,7 +41,6 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -80,10 +79,6 @@ public class ExpenseService {
     /** How far either side of an expense date a near-miss counts as suspicious. */
     private static final int SIMILAR_WINDOW_DAYS = 7;
 
-    /** Bill-number placeholders the field writes repeatedly. Mirrors uq_expense_vendor_bill. */
-    private static final Set<String> PLACEHOLDER_BILLS =
-            Set.of("-", "--", "NIL", "NA", "N/A", "LOCAL", "CASH", "");
-
     private final ExpenseRepository expenses;
     private final ExpenseAttachmentRepository billLinks;
     private final ExpenseSettingsRepository settings;
@@ -99,6 +94,7 @@ public class ExpenseService {
     private final PeriodLockGuard periodLockGuard;
     private final DocumentNumberService documentNumbers;
     private final ExpenseResponses responses;
+    private final ExpenseEvidencePolicy evidence;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
 
@@ -107,8 +103,8 @@ public class ExpenseService {
                           SiteLookup sites, BoqLookup boqItems,
                           ExpenseCategoryRepository categories, SiteAccessGuard siteAccessGuard,
                           PeriodLockGuard periodLockGuard, DocumentNumberService documentNumbers,
-                          ExpenseResponses responses, CurrentUserProvider currentUser,
-                          AuditService audit) {
+                          ExpenseResponses responses, ExpenseEvidencePolicy evidence,
+                          CurrentUserProvider currentUser, AuditService audit) {
         this.expenses = expenses;
         this.billLinks = billLinks;
         this.settings = settings;
@@ -120,6 +116,7 @@ public class ExpenseService {
         this.periodLockGuard = periodLockGuard;
         this.documentNumbers = documentNumbers;
         this.responses = responses;
+        this.evidence = evidence;
         this.currentUser = currentUser;
         this.audit = audit;
     }
@@ -361,7 +358,7 @@ public class ExpenseService {
                 request.billNumber(), request.billDate(), request.amountBeforeTax(),
                 request.gstPercent(), request.paymentMode(), request.noBillReason(),
                 request.remarks());
-        assertHasEvidence(expense);
+        evidence.assertHasEvidence(expense);
 
         expense.submit(Instant.now(), currentUser.currentUserIdOrNull());
         ApprovalEngine.Chain chain = approvals.submit(new ApprovalEngine.Request(ENTITY_TYPE,
@@ -466,7 +463,7 @@ public class ExpenseService {
                             + expense.getWorkflowStatus().name().toLowerCase().replace('_', ' ')
                             + ".");
         }
-        assertHasEvidence(expense);
+        evidence.assertHasEvidence(expense);
 
         expense.submit(Instant.now(), currentUser.currentUserIdOrNull());
         ApprovalEngine.Chain chain = approvals.submit(new ApprovalEngine.Request(ENTITY_TYPE,
@@ -653,28 +650,6 @@ public class ExpenseService {
     }
 
     /**
-     * Above the threshold an expense needs a bill number or a written reason there is none —
-     * and a photograph counts, because a challan with no number on it is still evidence.
-     */
-    private void assertHasEvidence(Expense expense) {
-        ExpenseSettings config = settings();
-        if (expense.getTotalAmount().compareTo(config.getBillRequiredAbove()) <= 0) {
-            return;
-        }
-        boolean hasBillNumber = !isBlank(expense.getBillNumber())
-                && !PLACEHOLDER_BILLS.contains(expense.getBillNumber().trim().toUpperCase());
-        if (hasBillNumber || billLinks.existsByExpenseId(expense.getId())) {
-            return;
-        }
-        if (isBlank(expense.getNoBillReason())) {
-            throw new BusinessException("expense.bill-required",
-                    "Above %s an expense needs a bill number, a photograph of the bill, or a "
-                            .formatted(config.getBillRequiredAbove().toPlainString())
-                            + "written reason there is none.");
-        }
-    }
-
-    /**
      * Two checks, because they catch different mistakes.
      *
      * <p>The exact one — same vendor, same bill number — is what the unique index enforces,
@@ -690,8 +665,7 @@ public class ExpenseService {
         }
         Map<UUID, DuplicateCandidate> found = new LinkedHashMap<>();
 
-        if (!isBlank(billNumber)
-                && !PLACEHOLDER_BILLS.contains(billNumber.trim().toUpperCase())) {
+        if (ExpenseEvidencePolicy.namesARealBill(billNumber)) {
             expenses.findSameBill(orgId(), vendorId, billNumber).stream()
                     .filter(candidate -> !candidate.getId().equals(excludeId))
                     .forEach(candidate -> found.put(candidate.getId(),

@@ -30,6 +30,15 @@ import java.time.Instant;
  * The engine counted levels; this decides that being past level 1 of 2 is called
  * {@code L1_APPROVED} and that being past the last one is {@code APPROVED}.</p>
  *
+ * <p><b>It is also where an approval is refused for want of evidence.</b> Both doors onto the
+ * engine — the record's own screen and the shared queue — arrive here, so this is the one
+ * place that sees every decision, and V40 dropped the database check that used to do it. The
+ * check answered "this record conflicts with one that already exists", which was true of
+ * nothing: it was a bill number missing, and the approver was told about a duplicate. The
+ * question is asked again here rather than trusted from submission time because the
+ * organisation can move its threshold while a bill is in the queue, and what an approval
+ * means is that the row satisfies the rule now.</p>
+ *
  * <p>{@code MANDATORY} propagation, and a plain {@code @EventListener} rather than a
  * transactional one: this must run inside the deciding transaction. An event delivered after
  * commit would leave a window in which the chain says approved and the expense says
@@ -43,13 +52,16 @@ public class ExpenseApprovalListener {
     private final ExpenseRepository expenses;
     private final AdvanceSettlementRepository settlements;
     private final SiteAdvanceService advances;
+    private final ExpenseEvidencePolicy evidence;
 
     public ExpenseApprovalListener(ExpenseRepository expenses,
                                    AdvanceSettlementRepository settlements,
-                                   SiteAdvanceService advances) {
+                                   SiteAdvanceService advances,
+                                   ExpenseEvidencePolicy evidence) {
         this.expenses = expenses;
         this.settlements = settlements;
         this.advances = advances;
+        this.evidence = evidence;
     }
 
     @EventListener
@@ -64,8 +76,13 @@ public class ExpenseApprovalListener {
 
     private void applyToExpense(ApprovalDecided event) {
         expenses.findById(event.entityId()).ifPresentOrElse(
-                expense -> expense.applyDecision(statusFor(event), Instant.now(),
-                        event.actionBy(), event.remarks()),
+                expense -> {
+                    if (event.outcome() == Approval.Status.APPROVED) {
+                        evidence.assertHasEvidence(expense);
+                    }
+                    expense.applyDecision(statusFor(event), Instant.now(),
+                            event.actionBy(), event.remarks());
+                },
                 () -> log.error("Approval decided on expense {} that no longer exists",
                         event.entityId()));
     }

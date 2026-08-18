@@ -41,10 +41,6 @@ import java.util.stream.Stream;
 @Transactional(readOnly = true)
 public class ExpenseLookupService implements ExpenseLookup {
 
-    /** Bill-number placeholders the field writes repeatedly. Mirrors {@link ExpenseService}. */
-    private static final Set<String> PLACEHOLDER_BILLS =
-            Set.of("-", "--", "NIL", "NA", "N/A", "LOCAL", "CASH", "");
-
     private final ExpenseRepository expenses;
     private final ExpenseAttachmentRepository billLinks;
     private final ExpenseSettingsRepository settings;
@@ -184,17 +180,12 @@ public class ExpenseLookupService implements ExpenseLookup {
                 .getBillRequiredAbove();
         return (int) expenses.findForPeriod(orgId(), siteId, from, to).stream()
                 .filter(expense -> expense.getTotalAmount().compareTo(threshold) > 0)
-                .filter(expense -> !hasBillNumber(expense.getBillNumber()))
+                .filter(expense -> !ExpenseEvidencePolicy.namesARealBill(expense.getBillNumber()))
                 .filter(expense -> !billLinks.existsByExpenseId(expense.getId()))
                 .count();
     }
 
     // ------------------------------------------------------------------ internals
-
-    private static boolean hasBillNumber(String billNumber) {
-        return billNumber != null && !billNumber.isBlank()
-                && !PLACEHOLDER_BILLS.contains(billNumber.trim().toUpperCase());
-    }
 
     /**
      * Whether this row settles a wage the project has already counted, and so must stay out
