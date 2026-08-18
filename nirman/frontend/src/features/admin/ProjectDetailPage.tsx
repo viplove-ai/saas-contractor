@@ -1,4 +1,5 @@
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import InsightsIcon from '@mui/icons-material/Insights';
 import DescriptionIcon from '@mui/icons-material/Description';
 import {
@@ -30,6 +31,12 @@ const STATUS_COLOR: Record<ProjectStatus, 'success' | 'default' | 'warning' | 'e
   ON_HOLD: 'warning',
   COMPLETED: 'default',
   CLOSED: 'error',
+};
+
+/** Empty string included so an unset nature reads as a blank field, not as a missing key. */
+const WORK_NATURE_LABEL: Record<string, string> = {
+  CONSTRUCTION: 'Construction — guarantee released a year after completion',
+  MAINTENANCE: "Maintenance — guarantee released six months after the department's letter",
 };
 
 const STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -204,19 +211,30 @@ export function ProjectDetailPage() {
         </Box>
         </Stack>
         {/*
-          The one action this page offers. It sits beside the contract rather than under the
-          BOQ because the plan is about the whole job — the time allowed, the money to find —
+          Both sit beside the contract rather than under the BOQ, because both are about the
+          whole job — the time allowed, the money to find, the money already found and lodged —
           and not about any one priced line.
         */}
-        <Button
-          component={Link}
-          to={`/projects/${p.id}/planning`}
-          variant="outlined"
-          startIcon={<InsightsIcon />}
-          sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
-        >
-          Planning &amp; execution
-        </Button>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexShrink: 0 }}>
+          <Button
+            component={Link}
+            to={`/projects/${p.id}/planning`}
+            variant="outlined"
+            startIcon={<InsightsIcon />}
+            sx={{ whiteSpace: 'nowrap' }}
+          >
+            Planning &amp; execution
+          </Button>
+          <Button
+            component={Link}
+            to={`/projects/${p.id}/securities`}
+            variant="outlined"
+            startIcon={<AccountBalanceIcon />}
+            sx={{ whiteSpace: 'nowrap' }}
+          >
+            Deposits &amp; guarantees
+          </Button>
+        </Stack>
       </Stack>
 
       <Paper variant="outlined" sx={{ p: 2 }}>
@@ -230,10 +248,35 @@ export function ProjectDetailPage() {
             ['Agreement no.', p.agreementNo],
             ['Tender reference', p.tenderReference],
             ['Contract value', p.contractValue == null ? null : formatAmount(p.contractValue)],
+            [
+              'Estimated cost put to tender',
+              p.estimatedCost == null ? null : formatAmount(p.estimatedCost),
+            ],
             ['Budget', p.budgetAmount == null ? null : formatAmount(p.budgetAmount)],
             ['Start date', p.startDate],
             ['Expected completion', p.expectedCompletionDate],
             ['Actual completion', p.actualCompletionDate],
+          ]}
+        />
+        {/*
+          The contract's own calendar, kept apart from the figures above. Every deposit release
+          date is worked out from these four, so a blank here is the reason a guarantee on the
+          treasury screen shows no date rather than a wrong one.
+        */}
+        <Divider sx={{ my: 2 }} />
+        <Typography variant="overline" color="text.secondary">
+          Contract calendar
+        </Typography>
+        <FieldGrid
+          fields={[
+            ['Nature of work', WORK_NATURE_LABEL[p.workNature ?? ''] ?? null],
+            ['Bid opening', p.bidOpeningDate],
+            ['Allotment letter', p.allotmentLetterDate],
+            ["Completion certificate", p.completionCertificateDate],
+            [
+              'Defect liability',
+              p.defectLiabilityMonths == null ? null : `${p.defectLiabilityMonths} months`,
+            ],
           ]}
         />
         {p.description && (

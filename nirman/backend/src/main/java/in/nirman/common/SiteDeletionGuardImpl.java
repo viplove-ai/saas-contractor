@@ -70,7 +70,8 @@ public class SiteDeletionGuardImpl implements SiteDeletionGuard {
     }
 
     @Override
-    public void assertProjectDeletable(Collection<UUID> siteIds) {
+    public void assertProjectDeletable(UUID projectId, Collection<UUID> siteIds) {
+        assertNoSecurities(projectId);
         List<String> blocked = new ArrayList<>();
         for (UUID siteId : siteIds) {
             List<String> found = countsAt(siteId);
@@ -85,6 +86,26 @@ public class SiteDeletionGuardImpl implements SiteDeletionGuard {
                 "This project cannot be deleted: " + String.join("; ", blocked)
                         + ". Work already booked cannot be taken off the books — set the "
                         + "project to Closed instead, which keeps the figures.");
+    }
+
+    /**
+     * A deposit lodged against the agreement, which hangs off the contract rather than off any
+     * site. Settled rows do not hold the project: a released or forfeited deposit is closed
+     * history, and refusing on it would make every finished contract permanently undeletable.
+     */
+    private void assertNoSecurities(UUID projectId) {
+        Long open = jdbc.queryForObject(
+                "SELECT count(*) FROM project_securities "
+                        + "WHERE project_id = ? AND status IN ('DUE', 'LODGED')",
+                Long.class, projectId);
+        if (open == null || open == 0) {
+            return;
+        }
+        throw new BusinessException("project.has-securities",
+                "This project has " + open + (open == 1 ? " deposit" : " deposits")
+                        + " outstanding against it — earnest money, a guarantee or a retention "
+                        + "the department is still holding. Release or forfeit them first, or "
+                        + "set the project to Closed, which keeps the figures.");
     }
 
     // ------------------------------------------------------------------ internals

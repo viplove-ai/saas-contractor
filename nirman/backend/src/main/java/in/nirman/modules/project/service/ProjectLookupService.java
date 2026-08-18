@@ -1,10 +1,13 @@
 package in.nirman.modules.project.service;
 
+import in.nirman.modules.project.domain.Project;
 import in.nirman.modules.project.repository.ProjectRepository;
 import in.nirman.security.CurrentUserProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -30,5 +33,36 @@ public class ProjectLookupService implements ProjectLookup {
                 .map(project -> new ProjectContract(project.getId(), project.getName(),
                         project.getContractValue(), project.getQuotedPercent(),
                         project.getStartDate(), project.getExpectedCompletionDate()));
+    }
+
+    @Override
+    public Optional<ContractCalendar> calendar(UUID projectId) {
+        return projects.findByIdAndOrgIdAndDeletedAtIsNull(projectId, currentUser.currentOrgId())
+                .map(ProjectLookupService::toCalendar);
+    }
+
+    @Override
+    public List<ContractCalendar> calendars(Collection<UUID> projectIds) {
+        if (projectIds.isEmpty()) {
+            return List.of();
+        }
+        return projects.findByIdInAndOrgIdAndDeletedAtIsNull(projectIds, currentUser.currentOrgId())
+                .stream().map(ProjectLookupService::toCalendar).toList();
+    }
+
+    @Override
+    public List<ContractCalendar> allCalendars() {
+        return projects.findByOrgIdAndDeletedAtIsNullOrderByCode(currentUser.currentOrgId())
+                .stream().map(ProjectLookupService::toCalendar).toList();
+    }
+
+    private static ContractCalendar toCalendar(Project project) {
+        return new ContractCalendar(project.getId(), project.getCode(), project.getName(),
+                project.getStatus().name(), project.getEstimatedCost(), project.getContractValue(),
+                project.getQuotedPercent(),
+                project.getWorkNature() == null ? null : project.getWorkNature().name(),
+                project.getBidOpeningDate(), project.getAllotmentLetterDate(),
+                project.getActualCompletionDate(), project.getCompletionCertificateDate(),
+                project.guaranteeClockStart(), project.getDefectLiabilityMonths());
     }
 }

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -30,6 +31,11 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
     boolean existsByOrgIdAndCode(UUID orgId, String code);
 
     Optional<Project> findByOrgIdAndCode(UUID orgId, String code);
+
+    /** For the treasury register, which needs a contract beside every deposit it lists. */
+    List<Project> findByIdInAndOrgIdAndDeletedAtIsNull(Collection<UUID> ids, UUID orgId);
+
+    List<Project> findByOrgIdAndDeletedAtIsNullOrderByCode(UUID orgId);
 
     /**
      * {@code q} is an empty string when nothing is being searched for, never null: a null

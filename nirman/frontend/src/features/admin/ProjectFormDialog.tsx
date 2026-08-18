@@ -56,10 +56,16 @@ const EMPTY: ProjectForm = {
   tenderReference: '',
   contractValue: '',
   quotedPercent: '',
+  estimatedCost: '',
   budgetAmount: '',
   startDate: '',
   expectedCompletionDate: '',
   actualCompletionDate: '',
+  workNature: '',
+  bidOpeningDate: '',
+  allotmentLetterDate: '',
+  completionCertificateDate: '',
+  defectLiabilityMonths: '',
   projectManagerId: '',
   status: 'ACTIVE',
   description: '',
@@ -187,10 +193,16 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
             tenderReference: project.tenderReference ?? '',
             contractValue: project.contractValue?.toString() ?? '',
             quotedPercent: project.quotedPercent?.toString() ?? '',
+            estimatedCost: project.estimatedCost?.toString() ?? '',
             budgetAmount: project.budgetAmount?.toString() ?? '',
             startDate: project.startDate ?? '',
             expectedCompletionDate: project.expectedCompletionDate ?? '',
             actualCompletionDate: project.actualCompletionDate ?? '',
+            workNature: project.workNature ?? '',
+            bidOpeningDate: project.bidOpeningDate ?? '',
+            allotmentLetterDate: project.allotmentLetterDate ?? '',
+            completionCertificateDate: project.completionCertificateDate ?? '',
+            defectLiabilityMonths: project.defectLiabilityMonths?.toString() ?? '',
             projectManagerId: project.projectManagerId ?? '',
             status: project.status,
             description: project.description ?? '',
@@ -271,9 +283,17 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
       tenderReference: values.tenderReference || undefined,
       contractValue: toAmount(values.contractValue),
       quotedPercent: toAmount(values.quotedPercent),
+      estimatedCost: toAmount(values.estimatedCost),
       budgetAmount: toAmount(values.budgetAmount),
       startDate: values.startDate || undefined,
       expectedCompletionDate: values.expectedCompletionDate || undefined,
+      workNature: values.workNature || undefined,
+      bidOpeningDate: values.bidOpeningDate || undefined,
+      allotmentLetterDate: values.allotmentLetterDate || undefined,
+      completionCertificateDate: values.completionCertificateDate || undefined,
+      defectLiabilityMonths: values.defectLiabilityMonths
+        ? Number(values.defectLiabilityMonths)
+        : undefined,
       projectManagerId: values.projectManagerId || undefined,
       description: values.description || undefined,
     };
@@ -496,6 +516,16 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
               }}
             />
             <TextField
+              label="Estimated cost put to tender (optional)"
+              InputLabelProps={FLOATING_LABEL}
+              error={!!errors.estimatedCost}
+              helperText={
+                errors.estimatedCost?.message ??
+                'The guarantee stands on this or the contract, whichever is higher.'
+              }
+              {...register('estimatedCost')}
+            />
+            <TextField
               label="Budget (optional)"
               InputLabelProps={FLOATING_LABEL}
               error={!!errors.budgetAmount}
@@ -523,6 +553,78 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
               error={!!errors.expectedCompletionDate}
               helperText={errors.expectedCompletionDate?.message}
               {...register('expectedCompletionDate')}
+            />
+          </Stack>
+
+          {/*
+            The contract's own calendar. It sits on the project rather than on the treasury
+            screen because these are facts about the agreement — each one a letter somebody
+            holds — and every deposit's release date is worked out from them. Offered when
+            adding as well as when editing: a bid opening date is known before the contract is.
+          */}
+          <Typography variant="overline" color="text.secondary">
+            Contract calendar
+          </Typography>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <Controller
+              control={control}
+              name="workNature"
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  select
+                  fullWidth
+                  label="Nature of work (optional)"
+                  helperText="Sets when the guarantee is released: a year, or six months."
+                >
+                  <MenuItem value="">Not stated</MenuItem>
+                  <MenuItem value="CONSTRUCTION">Construction — a year after completion</MenuItem>
+                  <MenuItem value="MAINTENANCE">
+                    Maintenance — six months after the letter
+                  </MenuItem>
+                </TextField>
+              )}
+            />
+            <TextField
+              label="Defect liability (months, optional)"
+              InputLabelProps={FLOATING_LABEL}
+              error={!!errors.defectLiabilityMonths}
+              helperText={
+                errors.defectLiabilityMonths?.message ??
+                'When the security deposit withheld from bills comes back.'
+              }
+              {...register('defectLiabilityMonths')}
+            />
+          </Stack>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <TextField
+              label="Bid opening (optional)"
+              type="date"
+              InputLabelProps={FLOATING_LABEL}
+              error={!!errors.bidOpeningDate}
+              helperText={errors.bidOpeningDate?.message ?? 'The allotment is due ten days on.'}
+              {...register('bidOpeningDate')}
+            />
+            <TextField
+              label="Allotment letter (optional)"
+              type="date"
+              InputLabelProps={FLOATING_LABEL}
+              error={!!errors.allotmentLetterDate}
+              helperText={
+                errors.allotmentLetterDate?.message ?? 'Frees the earnest money; starts the PG.'
+              }
+              {...register('allotmentLetterDate')}
+            />
+            <TextField
+              label="Completion certificate (optional)"
+              type="date"
+              InputLabelProps={FLOATING_LABEL}
+              error={!!errors.completionCertificateDate}
+              helperText={
+                errors.completionCertificateDate?.message ??
+                "The department's letter, not the day work stopped."
+              }
+              {...register('completionCertificateDate')}
             />
           </Stack>
 

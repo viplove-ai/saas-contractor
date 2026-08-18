@@ -77,6 +77,12 @@ export interface AdminStore {
 
 export type ProjectStatus = 'PLANNED' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CLOSED';
 
+/**
+ * Which release rule a contract's guarantee follows: a year past completion on construction
+ * work, six months past the department's letter on maintenance.
+ */
+export type WorkNature = 'CONSTRUCTION' | 'MAINTENANCE';
+
 /** A contract. Sites hang off it, and every transaction reaches a project through its site. */
 export interface AdminProject {
   id: string;
@@ -89,10 +95,22 @@ export interface AdminProject {
   contractValue?: number;
   /** The bid: above (+) or below (-) the estimate. Every rupee of a plan moves with it. */
   quotedPercent?: number;
+  /**
+   * The cost put to tender. Not the contract value: a performance guarantee is five per cent
+   * of this *or* of the contract, whichever is higher, so bidding low does not shrink it.
+   */
+  estimatedCost?: number;
   budgetAmount?: number;
   startDate?: string;
   expectedCompletionDate?: string;
   actualCompletionDate?: string;
+  /** Which release rule the guarantee follows. Undefined means nobody has said. */
+  workNature?: WorkNature;
+  bidOpeningDate?: string;
+  allotmentLetterDate?: string;
+  /** The department's completion letter — not the day the work stopped. */
+  completionCertificateDate?: string;
+  defectLiabilityMonths?: number;
   projectManagerId?: string;
   status: ProjectStatus;
   description?: string;

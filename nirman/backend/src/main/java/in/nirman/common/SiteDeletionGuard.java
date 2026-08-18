@@ -30,7 +30,13 @@ public interface SiteDeletionGuard {
      * error rather than one per attempt — an administrator clearing a four-site project
      * should learn on the first try which sites are the problem.
      *
-     * @throws BusinessException 422 naming each site that carries records
+     * <p>The project id is checked as well as its sites, because one kind of history hangs off
+     * the contract rather than off any place: a deposit lodged with the department belongs to
+     * the agreement, and a project with a live FDR against it is the opposite of the mistake
+     * deletion exists for. Hiding it would leave the treasury register reporting money against
+     * a contract nobody can open.</p>
+     *
+     * @throws BusinessException 422 naming each site that carries records, or the deposits
      */
-    void assertProjectDeletable(Collection<UUID> siteIds);
+    void assertProjectDeletable(UUID projectId, Collection<UUID> siteIds);
 }
