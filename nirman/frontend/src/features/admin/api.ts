@@ -219,15 +219,12 @@ export interface ProjectInput {
   tenderReference?: string | undefined;
   contractValue?: number | undefined;
   quotedPercent?: number | undefined;
-  estimatedCost?: number | undefined;
+  quotedCost?: number | undefined;
   budgetAmount?: number | undefined;
   startDate?: string | undefined;
   expectedCompletionDate?: string | undefined;
   actualCompletionDate?: string | undefined;
   workNature?: WorkNature | undefined;
-  bidOpeningDate?: string | undefined;
-  allotmentLetterDate?: string | undefined;
-  completionCertificateDate?: string | undefined;
   defectLiabilityMonths?: number | undefined;
   projectManagerId?: string | undefined;
   status?: ProjectStatus | undefined;

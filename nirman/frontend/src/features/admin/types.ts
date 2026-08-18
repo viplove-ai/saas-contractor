@@ -96,20 +96,17 @@ export interface AdminProject {
   /** The bid: above (+) or below (-) the estimate. Every rupee of a plan moves with it. */
   quotedPercent?: number;
   /**
-   * The cost put to tender. Not the contract value: a performance guarantee is five per cent
-   * of this *or* of the contract, whichever is higher, so bidding low does not shrink it.
+   * What the work pays at the rate bid: the contract value moved by the quoted percent. The
+   * guarantee stands on this *or* on the contract value, whichever is higher, so bidding low
+   * does not shrink it.
    */
-  estimatedCost?: number;
+  quotedCost?: number;
   budgetAmount?: number;
   startDate?: string;
   expectedCompletionDate?: string;
   actualCompletionDate?: string;
   /** Which release rule the guarantee follows. Undefined means nobody has said. */
   workNature?: WorkNature;
-  bidOpeningDate?: string;
-  allotmentLetterDate?: string;
-  /** The department's completion letter — not the day the work stopped. */
-  completionCertificateDate?: string;
   defectLiabilityMonths?: number;
   projectManagerId?: string;
   status: ProjectStatus;

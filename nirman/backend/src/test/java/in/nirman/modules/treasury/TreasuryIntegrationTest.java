@@ -404,14 +404,21 @@ class TreasuryIntegrationTest extends AbstractIntegrationTest {
 
     // ------------------------------------------------------------------ helpers
 
-    private String createContract(String token, String code, String estimate, String contract)
+    /**
+     * The notice's figure goes in {@code contractValue} and the bid in {@code quotedCost} —
+     * V41's naming, and the way the NIT import has always filled the first of the two. The
+     * dates are the work's own: V41 dropped the three letter dates the release schedule used
+     * to be counted from, so the earnest money is now due back when work starts and the
+     * guarantee a year past completion.
+     */
+    private String createContract(String token, String code, String estimate, String bid)
             throws Exception {
         String body = """
                 {"code":"%s","name":"%s treasury fixture","contractValue":%s,
-                 "estimatedCost":%s,"quotedPercent":-30,"workNature":"CONSTRUCTION",
-                 "bidOpeningDate":"2026-01-05","allotmentLetterDate":"2026-01-12",
-                 "completionCertificateDate":"2027-06-30","defectLiabilityMonths":12}
-                """.formatted(code, code, contract, estimate);
+                 "quotedCost":%s,"quotedPercent":-30,"workNature":"CONSTRUCTION",
+                 "startDate":"2026-01-12","expectedCompletionDate":"2027-06-30",
+                 "defectLiabilityMonths":12}
+                """.formatted(code, code, estimate, bid);
         return perform(post("/api/v1/projects"), token, body).get("id").asText();
     }
 

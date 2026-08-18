@@ -248,10 +248,7 @@ export function ProjectDetailPage() {
             ['Agreement no.', p.agreementNo],
             ['Tender reference', p.tenderReference],
             ['Contract value', p.contractValue == null ? null : formatAmount(p.contractValue)],
-            [
-              'Estimated cost put to tender',
-              p.estimatedCost == null ? null : formatAmount(p.estimatedCost),
-            ],
+            ['Quoted cost', p.quotedCost == null ? null : formatAmount(p.quotedCost)],
             ['Budget', p.budgetAmount == null ? null : formatAmount(p.budgetAmount)],
             ['Start date', p.startDate],
             ['Expected completion', p.expectedCompletionDate],
@@ -260,8 +257,9 @@ export function ProjectDetailPage() {
         />
         {/*
           The contract's own calendar, kept apart from the figures above. Every deposit release
-          date is worked out from these four, so a blank here is the reason a guarantee on the
-          treasury screen shows no date rather than a wrong one.
+          date is worked out from these together with the start and completion dates, so a
+          blank here is the reason a guarantee on the treasury screen shows no date rather than
+          a wrong one.
         */}
         <Divider sx={{ my: 2 }} />
         <Typography variant="overline" color="text.secondary">
@@ -270,9 +268,6 @@ export function ProjectDetailPage() {
         <FieldGrid
           fields={[
             ['Nature of work', WORK_NATURE_LABEL[p.workNature ?? ''] ?? null],
-            ['Bid opening', p.bidOpeningDate],
-            ['Allotment letter', p.allotmentLetterDate],
-            ["Completion certificate", p.completionCertificateDate],
             [
               'Defect liability',
               p.defectLiabilityMonths == null ? null : `${p.defectLiabilityMonths} months`,

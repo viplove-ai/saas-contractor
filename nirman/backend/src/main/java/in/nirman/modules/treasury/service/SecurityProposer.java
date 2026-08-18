@@ -34,9 +34,6 @@ public final class SecurityProposer {
     static final BigDecimal DEFAULT_SD_PERCENT = new BigDecimal("2.5");
     static final BigDecimal DEFAULT_APG_THRESHOLD_PERCENT = new BigDecimal("80");
 
-    /** Days the department has to issue the allotment letter, after which the EMD is a question. */
-    static final int ALLOTMENT_DAYS_AFTER_BID_OPENING = 10;
-
     static final int CONSTRUCTION_GUARANTEE_MONTHS = 12;
     static final int MAINTENANCE_GUARANTEE_MONTHS = 6;
 
@@ -51,20 +48,26 @@ public final class SecurityProposer {
     /**
      * Everything the four rules read.
      *
-     * @param estimatedCost    the cost put to tender. The guarantee is five per cent of this
-     *                         <em>or</em> of the contract, whichever is higher, so bidding low
-     *                         does not shrink it — pass it whenever it is known.
-     * @param contractValue    the accepted tendered amount
-     * @param completionOn     the day the guarantee clock starts: the department's completion
-     *                         letter where one exists, and the day work actually finished
-     *                         where it does not
+     * @param tenderEstimate   the cost the notice put to tender. The guarantee is five per
+     *                         cent of this <em>or</em> of the accepted bid, whichever is
+     *                         higher, so bidding low does not shrink it — pass it whenever it
+     *                         is known.
+     * @param acceptedBid      what the work pays at the rate bid: the estimate moved by the
+     *                         contractor's quote, held on the project as {@code quoted_cost}
+     * @param workStartDate    the day work began, which is what the earnest money's release is
+     *                         now dated from. V41 removed the allotment letter, the date that
+     *                         actually frees the EMD, because it was never entered; work having
+     *                         started says the same thing from the other side, since the
+     *                         contract had been awarded by then.
+     * @param completionOn     the day the guarantee clock starts: the day work actually
+     *                         finished where that is recorded, and the expected completion
+     *                         until then
      */
     public record ContractFacts(
-            BigDecimal estimatedCost,
-            BigDecimal contractValue,
+            BigDecimal tenderEstimate,
+            BigDecimal acceptedBid,
             WorkNature workNature,
-            LocalDate bidOpeningDate,
-            LocalDate allotmentLetterDate,
+            LocalDate workStartDate,
             LocalDate completionOn,
             Integer defectLiabilityMonths,
             NoticeTerms notice) {
@@ -124,7 +127,7 @@ public final class SecurityProposer {
 
     private static Proposal earnestMoney(ContractFacts facts) {
         NoticeTerms notice = notice(facts);
-        BigDecimal tenderValue = facts.estimatedCost();
+        BigDecimal tenderValue = facts.tenderEstimate();
         BigDecimal amount;
         String basis;
         if (notice.emdAmount() != null) {
@@ -144,16 +147,16 @@ public final class SecurityProposer {
     }
 
     /**
-     * The earnest money comes back once the bid stops being live: on the allotment letter where
-     * one has been issued, and otherwise ten days after the bids were opened, which is the
-     * window the department works to.
+     * The earnest money comes back once the bid stops being live, which the allotment letter
+     * used to date. Work having started says the same thing and is a date somebody enters: the
+     * contract had been awarded by the day the men were on the site.
+     *
+     * <p>It is the later of the two readings — the letter arrives first — so a deposit still
+     * held on the day work starts is genuinely overdue by then, which is the direction this
+     * ought to err in. No start date recorded, no release date proposed.</p>
      */
     private static LocalDate emdReleaseDate(ContractFacts facts) {
-        if (facts.allotmentLetterDate() != null) {
-            return facts.allotmentLetterDate();
-        }
-        return facts.bidOpeningDate() == null ? null
-                : facts.bidOpeningDate().plusDays(ALLOTMENT_DAYS_AFTER_BID_OPENING);
+        return facts.workStartDate();
     }
 
     private static Proposal performanceGuarantee(ContractFacts facts) {
@@ -186,8 +189,8 @@ public final class SecurityProposer {
      * every deep bid — which is exactly the bid that is short of working capital.
      */
     private static BigDecimal guaranteeBase(ContractFacts facts) {
-        BigDecimal estimate = facts.estimatedCost();
-        BigDecimal contract = facts.contractValue();
+        BigDecimal estimate = facts.tenderEstimate();
+        BigDecimal contract = facts.acceptedBid();
         if (estimate == null) {
             return contract;
         }
@@ -198,8 +201,8 @@ public final class SecurityProposer {
     }
 
     private static String describeGuaranteeBase(ContractFacts facts) {
-        BigDecimal estimate = facts.estimatedCost();
-        BigDecimal contract = facts.contractValue();
+        BigDecimal estimate = facts.tenderEstimate();
+        BigDecimal contract = facts.acceptedBid();
         if (estimate == null) {
             return "the contract amount";
         }
@@ -236,8 +239,8 @@ public final class SecurityProposer {
      */
     private static java.util.Optional<Proposal> additionalGuarantee(ContractFacts facts) {
         NoticeTerms notice = notice(facts);
-        BigDecimal estimate = facts.estimatedCost();
-        BigDecimal contract = facts.contractValue();
+        BigDecimal estimate = facts.tenderEstimate();
+        BigDecimal contract = facts.acceptedBid();
         if (estimate == null || contract == null || estimate.signum() == 0) {
             return java.util.Optional.empty();
         }
@@ -286,7 +289,7 @@ public final class SecurityProposer {
                 ? notice.securityDepositPercent() : DEFAULT_SD_PERCENT;
         boolean fromNotice = notice.securityDepositPercent() != null;
 
-        BigDecimal contract = facts.contractValue();
+        BigDecimal contract = facts.acceptedBid();
         BigDecimal amount = contract == null ? BigDecimal.ZERO : percentOf(percent, contract);
         String basis = contract == null
                 ? "No contract value recorded, so the deduction cannot be worked out."

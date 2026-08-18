@@ -35,23 +35,25 @@ public interface ProjectLookup {
      * the caller has its own vocabulary for both, and passing an entity's enum over the fence
      * would make the project module's internals part of another module's compile.</p>
      *
-     * @param completionOn the day a guarantee's clock starts — the department's completion
-     *                     letter where one has arrived, and otherwise the day work actually
-     *                     finished. Null while the work is still running.
+     * @param quotedCost   what the work pays at the rate bid: {@code contractValue}, which is
+     *                      the notice's own figure, moved by {@code quotedPercent}
+     * @param workStartDate the day work began. It stands in for the allotment letter V41
+     *                      removed: the contract had been awarded by the day work started, and
+     *                      this is a date the office actually enters.
+     * @param completionOn the day a guarantee's clock starts — the day work actually finished
+     *                     where that is recorded, and the expected completion until then.
      */
     record ContractCalendar(
             UUID id,
             String code,
             String name,
             String status,
-            BigDecimal estimatedCost,
+            BigDecimal quotedCost,
             BigDecimal contractValue,
             BigDecimal quotedPercent,
             String workNature,
-            LocalDate bidOpeningDate,
-            LocalDate allotmentLetterDate,
+            LocalDate workStartDate,
             LocalDate actualCompletionDate,
-            LocalDate completionCertificateDate,
             LocalDate completionOn,
             Integer defectLiabilityMonths) {
     }

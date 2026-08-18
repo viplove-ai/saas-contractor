@@ -58,11 +58,10 @@ public class ProjectLookupService implements ProjectLookup {
 
     private static ContractCalendar toCalendar(Project project) {
         return new ContractCalendar(project.getId(), project.getCode(), project.getName(),
-                project.getStatus().name(), project.getEstimatedCost(), project.getContractValue(),
+                project.getStatus().name(), project.getQuotedCost(), project.getContractValue(),
                 project.getQuotedPercent(),
                 project.getWorkNature() == null ? null : project.getWorkNature().name(),
-                project.getBidOpeningDate(), project.getAllotmentLetterDate(),
-                project.getActualCompletionDate(), project.getCompletionCertificateDate(),
+                project.getStartDate(), project.getActualCompletionDate(),
                 project.guaranteeClockStart(), project.getDefectLiabilityMonths());
     }
 }

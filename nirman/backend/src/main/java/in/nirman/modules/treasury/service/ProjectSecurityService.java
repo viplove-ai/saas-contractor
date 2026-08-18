@@ -114,31 +114,41 @@ public class ProjectSecurityService {
     }
 
     /**
-     * The estimated cost, from the best source that has one.
+     * The estimated cost put to tender — the notice's own figure, which is what every deposit
+     * here is reckoned against.
      *
-     * <p>Three, in order of authority: what the administrator typed on the project, what the
-     * notice said, and — failing both — the contract value backed out of the bid, since a
-     * percentage-rate tender prices the contract at the estimate adjusted by the quote. The
-     * third is arithmetic on two figures the project already holds and is exact whenever the
-     * bid was recorded; it is last because it is a derivation and the first two are readings.</p>
+     * <p>It is {@code contract_value} on the project: {@code NitImportService} writes the
+     * notice's estimated cost into that column and the project form's box says so in as many
+     * words. V38 added a second column under the CPWD name and this service read the pair the
+     * other way round, backing one out of the other by dividing by the quote. Both cannot be
+     * true, and the import decides what is actually in the columns — so V41 renamed the second
+     * to {@code quoted_cost}, which is what it holds.</p>
+     *
+     * <p>The notice's own reading is the fallback for a project created before any of this,
+     * where nobody typed the figure at all.</p>
      */
-    static BigDecimal estimatedCost(ContractCalendar contract, BigDecimal noticeEstimate) {
-        if (contract.estimatedCost() != null) {
-            return contract.estimatedCost();
-        }
-        if (noticeEstimate != null) {
-            return noticeEstimate;
+    static BigDecimal tenderEstimate(ContractCalendar contract, BigDecimal noticeEstimate) {
+        return contract.contractValue() != null ? contract.contractValue() : noticeEstimate;
+    }
+
+    /**
+     * The accepted tendered amount: the estimate moved by the contractor's quote.
+     *
+     * <p>Stored as {@code quoted_cost}, derived on the project form and editable there, so
+     * the saved figure is read first. Where nobody saved one it is worked out here from the two
+     * figures the project does hold — the same multiplication the form does, so a contract
+     * imported before the form derived anything still proposes a security deposit.</p>
+     */
+    static BigDecimal bidAmount(ContractCalendar contract) {
+        if (contract.quotedCost() != null) {
+            return contract.quotedCost();
         }
         if (contract.contractValue() == null || contract.quotedPercent() == null) {
             return null;
         }
-        BigDecimal factor = BigDecimal.ONE
-                .add(contract.quotedPercent().movePointLeft(2));
-        if (factor.signum() <= 0) {
-            return null;
-        }
         return contract.contractValue()
-                .divide(factor, 2, java.math.RoundingMode.HALF_UP);
+                .multiply(BigDecimal.ONE.add(contract.quotedPercent().movePointLeft(2)))
+                .setScale(2, java.math.RoundingMode.HALF_UP);
     }
 
     // ------------------------------------------------------------------ writes
@@ -335,12 +345,11 @@ public class ProjectSecurityService {
     static SecurityProposer.ContractFacts factsOf(ContractCalendar contract,
                                                   SecurityProposer.NoticeTerms notice) {
         return new SecurityProposer.ContractFacts(
-                estimatedCost(contract, null),
-                contract.contractValue(),
+                tenderEstimate(contract, null),
+                bidAmount(contract),
                 contract.workNature() == null ? null
                         : SecurityProposer.WorkNature.valueOf(contract.workNature()),
-                contract.bidOpeningDate(),
-                contract.allotmentLetterDate(),
+                contract.workStartDate(),
                 contract.completionOn(),
                 contract.defectLiabilityMonths(),
                 notice);

@@ -30,13 +30,12 @@ class SecurityProposerTest {
     }
 
     private static ContractFacts atPar() {
-        return new ContractFacts(CRORE, CRORE, WorkNature.CONSTRUCTION,
-                LocalDate.of(2026, 1, 5), LocalDate.of(2026, 1, 12),
+        return new ContractFacts(CRORE, CRORE, WorkNature.CONSTRUCTION, LocalDate.of(2026, 1, 12),
                 LocalDate.of(2027, 6, 30), 12, NoticeTerms.NONE);
     }
 
     @Test
-    @DisplayName("earnest money is 2.5% of the estimate, and comes back on the allotment letter")
+    @DisplayName("earnest money is 2.5% of the estimate, and comes back when the work starts")
     void earnestMoney() {
         List<Proposal> proposals = SecurityProposer.propose(atPar());
         Proposal emd = of(proposals, Type.EMD).orElseThrow();
@@ -46,14 +45,19 @@ class SecurityProposerTest {
         assertThat(emd.expectedReleaseOn()).isEqualTo(LocalDate.of(2026, 1, 12));
     }
 
+    /**
+     * V41 dated this off the work's start rather than the allotment letter, which nobody
+     * entered. A contract with no start date recorded proposes no release date at all —
+     * the blank is deliberate, since a wrong one stops the office chasing the FDR.
+     */
     @Test
-    @DisplayName("with no allotment letter yet, the earnest money is due back ten days after opening")
-    void earnestMoneyBeforeAllotment() {
+    @DisplayName("with no start date yet, the earnest money is proposed without a release date")
+    void earnestMoneyBeforeWorkStarts() {
         ContractFacts facts = new ContractFacts(CRORE, CRORE, WorkNature.CONSTRUCTION,
-                LocalDate.of(2026, 1, 5), null, null, 12, NoticeTerms.NONE);
+                null, null, 12, NoticeTerms.NONE);
 
         assertThat(of(SecurityProposer.propose(facts), Type.EMD).orElseThrow()
-                .expectedReleaseOn()).isEqualTo(LocalDate.of(2026, 1, 15));
+                .expectedReleaseOn()).isNull();
     }
 
     @Test
@@ -61,7 +65,7 @@ class SecurityProposerTest {
     void noticeEmdWins() {
         NoticeTerms notice = new NoticeTerms(new BigDecimal("241500"), null, null, null, null, null);
         ContractFacts facts = new ContractFacts(CRORE, CRORE, WorkNature.CONSTRUCTION,
-                LocalDate.of(2026, 1, 5), null, null, 12, notice);
+                LocalDate.of(2026, 1, 5), null, 12, notice);
 
         Proposal emd = of(SecurityProposer.propose(facts), Type.EMD).orElseThrow();
         assertThat(emd.amount()).isEqualByComparingTo("241500.00");
@@ -73,7 +77,7 @@ class SecurityProposerTest {
     void guaranteeIgnoresALowBid() {
         // Bid 30% below: the contract is 70 lakh, and the guarantee is still 5% of the crore.
         ContractFacts facts = new ContractFacts(CRORE, new BigDecimal("7000000.00"),
-                WorkNature.CONSTRUCTION, LocalDate.of(2026, 1, 5), LocalDate.of(2026, 1, 12),
+                WorkNature.CONSTRUCTION, LocalDate.of(2026, 1, 12),
                 LocalDate.of(2027, 6, 30), 12, NoticeTerms.NONE);
 
         Proposal pg = of(SecurityProposer.propose(facts), Type.PERFORMANCE_GUARANTEE).orElseThrow();
@@ -85,7 +89,7 @@ class SecurityProposerTest {
     @DisplayName("a bid above the estimate moves the guarantee up with the contract")
     void guaranteeFollowsAHigherContract() {
         ContractFacts facts = new ContractFacts(CRORE, new BigDecimal("12000000.00"),
-                WorkNature.CONSTRUCTION, LocalDate.of(2026, 1, 5), LocalDate.of(2026, 1, 12),
+                WorkNature.CONSTRUCTION, LocalDate.of(2026, 1, 12),
                 LocalDate.of(2027, 6, 30), 12, NoticeTerms.NONE);
 
         assertThat(of(SecurityProposer.propose(facts), Type.PERFORMANCE_GUARANTEE).orElseThrow()
@@ -96,7 +100,7 @@ class SecurityProposerTest {
     @DisplayName("a bid 30% below adds ten lakh of additional guarantee — V33's worked example")
     void additionalGuaranteeOnADeepBid() {
         ContractFacts facts = new ContractFacts(CRORE, new BigDecimal("7000000.00"),
-                WorkNature.CONSTRUCTION, LocalDate.of(2026, 1, 5), LocalDate.of(2026, 1, 12),
+                WorkNature.CONSTRUCTION, LocalDate.of(2026, 1, 12),
                 LocalDate.of(2027, 6, 30), 12, NoticeTerms.NONE);
 
         Proposal apg = of(SecurityProposer.propose(facts), Type.ADDITIONAL_PG).orElseThrow();
@@ -109,7 +113,7 @@ class SecurityProposerTest {
     @DisplayName("a bid inside the threshold triggers no additional guarantee at all, not a zero one")
     void noAdditionalGuaranteeOnAShallowBid() {
         ContractFacts facts = new ContractFacts(CRORE, new BigDecimal("8500000.00"),
-                WorkNature.CONSTRUCTION, LocalDate.of(2026, 1, 5), LocalDate.of(2026, 1, 12),
+                WorkNature.CONSTRUCTION, LocalDate.of(2026, 1, 12),
                 LocalDate.of(2027, 6, 30), 12, NoticeTerms.NONE);
 
         assertThat(of(SecurityProposer.propose(facts), Type.ADDITIONAL_PG)).isEmpty();
@@ -121,7 +125,7 @@ class SecurityProposerTest {
         NoticeTerms notice = new NoticeTerms(null, null, null, new BigDecimal("80"),
                 "PERCENT_OF_BID", new BigDecimal("3"));
         ContractFacts facts = new ContractFacts(CRORE, new BigDecimal("7000000.00"),
-                WorkNature.CONSTRUCTION, LocalDate.of(2026, 1, 5), LocalDate.of(2026, 1, 12),
+                WorkNature.CONSTRUCTION, LocalDate.of(2026, 1, 12),
                 LocalDate.of(2027, 6, 30), 12, notice);
 
         assertThat(of(SecurityProposer.propose(facts), Type.ADDITIONAL_PG).orElseThrow()
@@ -133,8 +137,7 @@ class SecurityProposerTest {
     void guaranteeReleaseFollowsTheWorkNature() {
         LocalDate completion = LocalDate.of(2027, 6, 30);
         ContractFacts construction = atPar();
-        ContractFacts maintenance = new ContractFacts(CRORE, CRORE, WorkNature.MAINTENANCE,
-                LocalDate.of(2026, 1, 5), LocalDate.of(2026, 1, 12), completion, 12,
+        ContractFacts maintenance = new ContractFacts(CRORE, CRORE, WorkNature.MAINTENANCE, LocalDate.of(2026, 1, 12), completion, 12,
                 NoticeTerms.NONE);
 
         assertThat(of(SecurityProposer.propose(construction), Type.PERFORMANCE_GUARANTEE)
@@ -146,8 +149,7 @@ class SecurityProposerTest {
     @Test
     @DisplayName("no work nature recorded proposes no release date, rather than guessing at one")
     void noWorkNatureNoDate() {
-        ContractFacts facts = new ContractFacts(CRORE, CRORE, null,
-                LocalDate.of(2026, 1, 5), LocalDate.of(2026, 1, 12),
+        ContractFacts facts = new ContractFacts(CRORE, CRORE, null, LocalDate.of(2026, 1, 12),
                 LocalDate.of(2027, 6, 30), 12, NoticeTerms.NONE);
 
         assertThat(of(SecurityProposer.propose(facts), Type.PERFORMANCE_GUARANTEE).orElseThrow()
@@ -158,7 +160,7 @@ class SecurityProposerTest {
     @DisplayName("the security deposit is 2.5% of the tendered amount, withheld and never lodged")
     void securityDeposit() {
         ContractFacts facts = new ContractFacts(CRORE, new BigDecimal("7000000.00"),
-                WorkNature.CONSTRUCTION, LocalDate.of(2026, 1, 5), LocalDate.of(2026, 1, 12),
+                WorkNature.CONSTRUCTION, LocalDate.of(2026, 1, 12),
                 LocalDate.of(2027, 6, 30), 12, NoticeTerms.NONE);
 
         Proposal sd = of(SecurityProposer.propose(facts), Type.SECURITY_DEPOSIT).orElseThrow();
@@ -172,8 +174,7 @@ class SecurityProposerTest {
     @Test
     @DisplayName("no defect liability period recorded, no release date for the retention")
     void depositWithoutADefectLiabilityPeriod() {
-        ContractFacts facts = new ContractFacts(CRORE, CRORE, WorkNature.CONSTRUCTION,
-                LocalDate.of(2026, 1, 5), LocalDate.of(2026, 1, 12),
+        ContractFacts facts = new ContractFacts(CRORE, CRORE, WorkNature.CONSTRUCTION, LocalDate.of(2026, 1, 12),
                 LocalDate.of(2027, 6, 30), null, NoticeTerms.NONE);
 
         assertThat(of(SecurityProposer.propose(facts), Type.SECURITY_DEPOSIT).orElseThrow()
@@ -183,7 +184,7 @@ class SecurityProposerTest {
     @Test
     @DisplayName("a contract with no figures at all proposes zeroes and says why, rather than failing")
     void nothingRecorded() {
-        ContractFacts facts = new ContractFacts(null, null, null, null, null, null, null,
+        ContractFacts facts = new ContractFacts(null, null, null, null, null, null,
                 NoticeTerms.NONE);
 
         List<Proposal> proposals = SecurityProposer.propose(facts);
@@ -198,8 +199,7 @@ class SecurityProposerTest {
     void noticePercentagesWin() {
         NoticeTerms notice = new NoticeTerms(null, new BigDecimal("3"), new BigDecimal("5"),
                 null, null, null);
-        ContractFacts facts = new ContractFacts(CRORE, CRORE, WorkNature.CONSTRUCTION,
-                LocalDate.of(2026, 1, 5), LocalDate.of(2026, 1, 12),
+        ContractFacts facts = new ContractFacts(CRORE, CRORE, WorkNature.CONSTRUCTION, LocalDate.of(2026, 1, 12),
                 LocalDate.of(2027, 6, 30), 12, notice);
 
         List<Proposal> proposals = SecurityProposer.propose(facts);

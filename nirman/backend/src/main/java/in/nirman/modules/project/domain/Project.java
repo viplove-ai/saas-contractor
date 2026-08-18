@@ -68,8 +68,8 @@ public class Project extends BaseEntity {
      * cent of this <em>or</em> of the contract, whichever is higher, so bidding thirty per cent
      * below leaves the guarantee standing on the full estimate.
      */
-    @Column(name = "estimated_cost", precision = 18, scale = 2)
-    private BigDecimal estimatedCost;
+    @Column(name = "quoted_cost", precision = 18, scale = 2)
+    private BigDecimal quotedCost;
 
     @Column(name = "budget_amount", precision = 18, scale = 2)
     private BigDecimal budgetAmount;
@@ -77,22 +77,6 @@ public class Project extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "work_nature", length = 20)
     private WorkNature workNature;
-
-    /** The allotment letter is due within ten days of this, and the earnest money with it. */
-    @Column(name = "bid_opening_date")
-    private LocalDate bidOpeningDate;
-
-    /** The letter that turns a bid into a contract: it frees the EMD and starts the PG clock. */
-    @Column(name = "allotment_letter_date")
-    private LocalDate allotmentLetterDate;
-
-    /**
-     * The department's completion letter, which is not the day the work stopped. Kept apart
-     * from {@link #actualCompletionDate} on purpose — the contractor knows when he finished,
-     * and only the department's letter starts the clock a guarantee is released against.
-     */
-    @Column(name = "completion_certificate_date")
-    private LocalDate completionCertificateDate;
 
     /** How long the retention is held after completion. Varies with the item and the work. */
     @Column(name = "defect_liability_months")
@@ -199,12 +183,12 @@ public class Project extends BaseEntity {
         this.quotedPercent = quotedPercent;
     }
 
-    public BigDecimal getEstimatedCost() {
-        return estimatedCost;
+    public BigDecimal getQuotedCost() {
+        return quotedCost;
     }
 
-    public void setEstimatedCost(BigDecimal estimatedCost) {
-        this.estimatedCost = estimatedCost;
+    public void setQuotedCost(BigDecimal quotedCost) {
+        this.quotedCost = quotedCost;
     }
 
     public WorkNature getWorkNature() {
@@ -213,30 +197,6 @@ public class Project extends BaseEntity {
 
     public void setWorkNature(WorkNature workNature) {
         this.workNature = workNature;
-    }
-
-    public LocalDate getBidOpeningDate() {
-        return bidOpeningDate;
-    }
-
-    public void setBidOpeningDate(LocalDate bidOpeningDate) {
-        this.bidOpeningDate = bidOpeningDate;
-    }
-
-    public LocalDate getAllotmentLetterDate() {
-        return allotmentLetterDate;
-    }
-
-    public void setAllotmentLetterDate(LocalDate allotmentLetterDate) {
-        this.allotmentLetterDate = allotmentLetterDate;
-    }
-
-    public LocalDate getCompletionCertificateDate() {
-        return completionCertificateDate;
-    }
-
-    public void setCompletionCertificateDate(LocalDate completionCertificateDate) {
-        this.completionCertificateDate = completionCertificateDate;
     }
 
     public Integer getDefectLiabilityMonths() {
@@ -248,11 +208,17 @@ public class Project extends BaseEntity {
     }
 
     /**
-     * The day a guarantee's release clock starts: the department's completion letter where one
-     * has arrived, and otherwise the day work actually finished. Null while the work runs.
+     * The day a guarantee's release clock starts: the day work actually finished where that is
+     * recorded, and the expected completion until then.
+     *
+     * <p>V41 dropped the department's completion certificate, which used to take precedence
+     * over both — it was the correct date and nobody entered it, so the register proposed no
+     * release date at all. Falling back to the expectation makes this a projection rather than
+     * a fact while the work runs, which is the point: the office chasing an FDR is better
+     * served by a due date that will move than by a blank that never does.</p>
      */
     public LocalDate guaranteeClockStart() {
-        return completionCertificateDate != null ? completionCertificateDate : actualCompletionDate;
+        return actualCompletionDate != null ? actualCompletionDate : expectedCompletionDate;
     }
 
     public BigDecimal getBudgetAmount() {

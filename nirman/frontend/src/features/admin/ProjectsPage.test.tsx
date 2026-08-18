@@ -181,6 +181,71 @@ describe('ProjectsPage', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
+  /**
+   * The quoted cost and the budget follow from the contract value and the quote, and both are
+   * worked out where the person entering them can see them. The arithmetic itself is
+   * projectFigures' to test; what is asserted here is that the form fills the boxes and sends
+   * what is in them.
+   */
+  it('works the quoted cost and the budget out as the quote is typed', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('KSN01');
+
+    await user.click(screen.getByRole('button', { name: 'Add a project' }));
+    await user.click(screen.getByRole('button', { name: 'Enter manually' }));
+    await user.type(screen.getByLabelText('Project code'), 'ALM03');
+    await user.type(screen.getByLabelText('Project name'), 'Almora Block C');
+    await user.type(screen.getByLabelText('Contract value (optional)'), '10000000');
+    await user.type(screen.getByLabelText('Quoted % (optional)'), '-12.5');
+
+    // A crore bid 12.5% below, and three quarters of that.
+    expect(screen.getByLabelText('Quoted cost (optional)')).toHaveValue('8750000');
+    expect(screen.getByLabelText('Budget (optional)')).toHaveValue('6562500');
+
+    await user.click(screen.getByRole('button', { name: 'Add project' }));
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    const [, body] = post.mock.calls[0] as [
+      string,
+      { contractValue?: number; quotedPercent?: number; quotedCost?: number; budgetAmount?: number },
+    ];
+    expect(body.contractValue).toBe(10000000);
+    expect(body.quotedPercent).toBe(-12.5);
+    expect(body.quotedCost).toBe(8750000);
+    expect(body.budgetAmount).toBe(6562500);
+  });
+
+  /**
+   * An override is a decision about one pair of figures. Once the quote moves, what is in the
+   * box was derived from a percentage that no longer applies — so it is worked out again and
+   * put back in front of the person who overrode it, rather than left standing as a number
+   * nobody chose.
+   */
+  it('works them out again when the quote moves under an overridden figure', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('KSN01');
+
+    await user.click(screen.getByRole('button', { name: 'Add a project' }));
+    await user.click(screen.getByRole('button', { name: 'Enter manually' }));
+    await user.type(screen.getByLabelText('Project code'), 'ALM03');
+    await user.type(screen.getByLabelText('Project name'), 'Almora Block C');
+    await user.type(screen.getByLabelText('Contract value (optional)'), '10000000');
+    await user.type(screen.getByLabelText('Quoted % (optional)'), '-10');
+
+    const budget = screen.getByLabelText('Budget (optional)');
+    await user.clear(budget);
+    await user.type(budget, '7000000');
+    expect(budget).toHaveValue('7000000');
+
+    // The quote is corrected: both derived boxes answer to the new one.
+    await user.clear(screen.getByLabelText('Quoted % (optional)'));
+    await user.type(screen.getByLabelText('Quoted % (optional)'), '-20');
+
+    expect(screen.getByLabelText('Quoted cost (optional)')).toHaveValue('8000000');
+    expect(budget).toHaveValue('6000000');
+  });
+
   it('sends the version and the code-free body when editing', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();

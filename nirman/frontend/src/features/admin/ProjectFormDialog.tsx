@@ -13,7 +13,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { NitImportPanel } from './NitImportPanel';
@@ -25,7 +25,7 @@ import {
   useUpdateProject,
   useUsers,
 } from './api';
-import { quotedBudget } from './quotedBudget';
+import { budgetFor, quotedCost } from './projectFigures';
 import { projectSchema, type ProjectForm } from './schema';
 import type { AdminProject, NitPreview, ProjectStatus } from './types';
 
@@ -56,15 +56,12 @@ const EMPTY: ProjectForm = {
   tenderReference: '',
   contractValue: '',
   quotedPercent: '',
-  estimatedCost: '',
+  quotedCost: '',
   budgetAmount: '',
   startDate: '',
   expectedCompletionDate: '',
   actualCompletionDate: '',
   workNature: '',
-  bidOpeningDate: '',
-  allotmentLetterDate: '',
-  completionCertificateDate: '',
   defectLiabilityMonths: '',
   projectManagerId: '',
   status: 'ACTIVE',
@@ -157,12 +154,6 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
   // Only to seed the site fields when the box is ticked; the project code is the natural stem.
   const watchedCode = watch('code');
   const watchedName = watch('name');
-  /**
-   * The last budget this dialog filled in itself, so it can tell its own figure from one
-   * somebody typed. A budget that still holds what we put there is ours to keep updating; a
-   * budget holding anything else has been overridden and is never written over again.
-   */
-  const filledBudget = useRef<string | null>(null);
   /** Ticking the box makes these two required — the server would refuse them empty anyway. */
   const siteIncomplete = alsoSite && (!siteCode.trim() || !siteName.trim());
 
@@ -177,11 +168,6 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
     setSiteCode('');
     setSiteName('');
     setCreatedProjectId(null);
-    // A saved budget that is exactly what the bid works out to was ours the first time and
-    // stays ours; anything else the project holds counts as already overridden.
-    filledBudget.current = project
-      ? quotedBudget(project.contractValue?.toString(), project.quotedPercent?.toString())
-      : null;
     reset(
       project
         ? {
@@ -193,15 +179,12 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
             tenderReference: project.tenderReference ?? '',
             contractValue: project.contractValue?.toString() ?? '',
             quotedPercent: project.quotedPercent?.toString() ?? '',
-            estimatedCost: project.estimatedCost?.toString() ?? '',
+            quotedCost: project.quotedCost?.toString() ?? '',
             budgetAmount: project.budgetAmount?.toString() ?? '',
             startDate: project.startDate ?? '',
             expectedCompletionDate: project.expectedCompletionDate ?? '',
             actualCompletionDate: project.actualCompletionDate ?? '',
             workNature: project.workNature ?? '',
-            bidOpeningDate: project.bidOpeningDate ?? '',
-            allotmentLetterDate: project.allotmentLetterDate ?? '',
-            completionCertificateDate: project.completionCertificateDate ?? '',
             defectLiabilityMonths: project.defectLiabilityMonths?.toString() ?? '',
             projectManagerId: project.projectManagerId ?? '',
             status: project.status,
@@ -212,35 +195,41 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
   }, [open, project, editing, reset]);
 
   /**
-   * Puts the bid-adjusted contract value in the budget box, until somebody says otherwise.
+   * Works the quoted cost and the budget out as the two figures they follow from are typed.
    *
-   * <p>The notice states the estimate put to tender and the contractor states his quote against
-   * it; what the work will actually pay is the one moved by the other, and it was being worked
-   * out on a calculator and typed into the third box. Filling it removes the arithmetic, not
-   * the decision — the box stays a plain editable field, and a figure typed into it is his for
-   * good, because a budget can be set by things this sum knows nothing about.</p>
+   * <p>The notice states what was put to tender and the contractor states his quote against
+   * it; what the work pays is the one moved by the other, and what the office allows itself is
+   * a quarter below that. Both were being done on a calculator and typed into the boxes below.
+   * Filling them removes the arithmetic, not the decision — each stays a plain editable field,
+   * and the figures are shown rather than hidden precisely so somebody can disagree with
+   * one.</p>
    *
-   * <p>Clearing the quote clears a budget we filled, rather than leaving the stale product of
-   * a figure that is no longer there — that would quietly turn a suggestion into an assertion.
-   * Emptying the box by hand hands it back: an empty budget is nobody's claim.</p>
+   * <p>A typed-over figure holds until the quote or the contract value moves again, and then
+   * both boxes are worked out afresh. That is the deliberate part: an override is a decision
+   * about a particular pair of numbers, and once one of them changes what is in the box is not
+   * an override any more, it is a stale figure nobody chose. Recomputing puts the new answer
+   * in front of the person who overrode the old one, where they can override it again.</p>
+   *
+   * <p>Only when the two boxes actually yield a number. A half-typed quote or an emptied
+   * contract value leaves whatever is in the derived boxes alone, rather than wiping a figure
+   * somebody typed because a keystroke passed through a state that says nothing.</p>
    *
    * <p>Driven from the two fields' own change events rather than from a watch, because the
    * effect would also fire on the pass where {@code reset} has been called but has not yet
-   * re-rendered, and would decide ownership against the values of the previous project.</p>
+   * re-rendered, and would compute against the values of the previous project.</p>
    */
-  function syncBudget(typed: Partial<Pick<ProjectForm, 'contractValue' | 'quotedPercent'>>) {
-    const current = getValues('budgetAmount') ?? '';
-    if (current !== '' && current !== filledBudget.current) {
-      return;
-    }
+  function syncDerivedFigures(typed: Partial<Pick<ProjectForm, 'contractValue' | 'quotedPercent'>>) {
     // The box just typed in is read from the event: react-hook-form has not necessarily
     // settled it into the form state by the time its onChange hands back to us.
-    const derived = quotedBudget(
+    const cost = quotedCost(
       typed.contractValue ?? getValues('contractValue'),
       typed.quotedPercent ?? getValues('quotedPercent'),
     );
-    filledBudget.current = derived;
-    setValue('budgetAmount', derived ?? '', { shouldValidate: current !== '' });
+    if (cost === null) {
+      return;
+    }
+    setValue('quotedCost', cost, { shouldValidate: true });
+    setValue('budgetAmount', budgetFor(cost) ?? '', { shouldValidate: true });
   }
 
   /** Registered here rather than inline so each field's own onChange can be called first. */
@@ -251,7 +240,6 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
   function applyPreview(parsed: NitPreview) {
     setPreview(parsed);
     setServerError(null);
-    filledBudget.current = null;
     reset({
       ...EMPTY,
       code: parsed.suggestedCode ?? '',
@@ -283,14 +271,11 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
       tenderReference: values.tenderReference || undefined,
       contractValue: toAmount(values.contractValue),
       quotedPercent: toAmount(values.quotedPercent),
-      estimatedCost: toAmount(values.estimatedCost),
+      quotedCost: toAmount(values.quotedCost),
       budgetAmount: toAmount(values.budgetAmount),
       startDate: values.startDate || undefined,
       expectedCompletionDate: values.expectedCompletionDate || undefined,
       workNature: values.workNature || undefined,
-      bidOpeningDate: values.bidOpeningDate || undefined,
-      allotmentLetterDate: values.allotmentLetterDate || undefined,
-      completionCertificateDate: values.completionCertificateDate || undefined,
       defectLiabilityMonths: values.defectLiabilityMonths
         ? Number(values.defectLiabilityMonths)
         : undefined,
@@ -494,11 +479,14 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
               label="Contract value (optional)"
               InputLabelProps={FLOATING_LABEL}
               error={!!errors.contractValue}
-              helperText={errors.contractValue?.message ?? 'The estimate put to tender, in rupees.'}
+              helperText={
+                errors.contractValue?.message ??
+                'The estimate put to tender, in rupees. Off the notice.'
+              }
               {...contractValueField}
               onChange={(event) => {
                 void contractValueField.onChange(event);
-                syncBudget({ contractValue: event.target.value });
+                syncDerivedFigures({ contractValue: event.target.value });
               }}
             />
             <TextField
@@ -512,18 +500,18 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
               {...quotedPercentField}
               onChange={(event) => {
                 void quotedPercentField.onChange(event);
-                syncBudget({ quotedPercent: event.target.value });
+                syncDerivedFigures({ quotedPercent: event.target.value });
               }}
             />
             <TextField
-              label="Estimated cost put to tender (optional)"
+              label="Quoted cost (optional)"
               InputLabelProps={FLOATING_LABEL}
-              error={!!errors.estimatedCost}
+              error={!!errors.quotedCost}
               helperText={
-                errors.estimatedCost?.message ??
-                'The guarantee stands on this or the contract, whichever is higher.'
+                errors.quotedCost?.message ??
+                'The contract value at the quoted rate. Type over it to set your own.'
               }
-              {...register('estimatedCost')}
+              {...register('quotedCost')}
             />
             <TextField
               label="Budget (optional)"
@@ -531,7 +519,7 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
               error={!!errors.budgetAmount}
               helperText={
                 errors.budgetAmount?.message ??
-                'The contract value at the quoted rate. Type over it to set your own.'
+                'A quarter below the quoted cost. Type over it to set your own.'
               }
               {...register('budgetAmount')}
             />
@@ -557,10 +545,12 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
           </Stack>
 
           {/*
-            The contract's own calendar. It sits on the project rather than on the treasury
-            screen because these are facts about the agreement — each one a letter somebody
-            holds — and every deposit's release date is worked out from them. Offered when
-            adding as well as when editing: a bid opening date is known before the contract is.
+            What the contract's calendar still asks for. It sits on the project rather than on
+            the treasury screen because both are facts about the agreement, and every deposit's
+            release date is worked out from them together with the two dates above — the start,
+            which is when the earnest money is due back, and the completion, which is when the
+            guarantee and the retention begin their run. The bid opening, allotment letter and
+            completion certificate were asked for here until V41 and were never filled in.
           */}
           <Typography variant="overline" color="text.secondary">
             Contract calendar
@@ -580,7 +570,7 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
                   <MenuItem value="">Not stated</MenuItem>
                   <MenuItem value="CONSTRUCTION">Construction — a year after completion</MenuItem>
                   <MenuItem value="MAINTENANCE">
-                    Maintenance — six months after the letter
+                    Maintenance — six months after completion
                   </MenuItem>
                 </TextField>
               )}
@@ -594,37 +584,6 @@ export function ProjectFormDialog({ open, project, onClose }: Props) {
                 'When the security deposit withheld from bills comes back.'
               }
               {...register('defectLiabilityMonths')}
-            />
-          </Stack>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField
-              label="Bid opening (optional)"
-              type="date"
-              InputLabelProps={FLOATING_LABEL}
-              error={!!errors.bidOpeningDate}
-              helperText={errors.bidOpeningDate?.message ?? 'The allotment is due ten days on.'}
-              {...register('bidOpeningDate')}
-            />
-            <TextField
-              label="Allotment letter (optional)"
-              type="date"
-              InputLabelProps={FLOATING_LABEL}
-              error={!!errors.allotmentLetterDate}
-              helperText={
-                errors.allotmentLetterDate?.message ?? 'Frees the earnest money; starts the PG.'
-              }
-              {...register('allotmentLetterDate')}
-            />
-            <TextField
-              label="Completion certificate (optional)"
-              type="date"
-              InputLabelProps={FLOATING_LABEL}
-              error={!!errors.completionCertificateDate}
-              helperText={
-                errors.completionCertificateDate?.message ??
-                "The department's letter, not the day work stopped."
-              }
-              {...register('completionCertificateDate')}
             />
           </Stack>
 
