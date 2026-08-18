@@ -278,7 +278,7 @@ export function Wordmark({ compact = false }: { compact?: boolean }) {
       */}
       <Box
         component="img"
-        src="/brand/icon-512.png"
+        src="/brand/icon-512-v2.png"
         /* Decorative beside the name; the only label in the compact rail, so named there. */
         alt={compact ? 'Nirman' : ''}
         sx={{

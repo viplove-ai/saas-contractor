@@ -4,11 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#C2410C" />
-    <link rel="icon" href="/brand/favicon.svg" type="image/svg+xml" />
-    <link rel="icon" href="/brand/favicon-32.png" sizes="32x32" type="image/png" />
-    <link rel="icon" href="/brand/favicon-16.png" sizes="16x16" type="image/png" />
-    <!-- iOS ignores the manifest icons when adding to the home screen. -->
-    <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
+    <!--
+      The -v<n> in every icon filename is load-bearing, not decoration. Redrawing the art
+      behind a stable URL changes nothing a browser can see: Chrome compares the manifest
+      it fetched at install time against the one it fetches now, icon URLs and not icon
+      bytes, so an unchanged manifest means an unchanged home-screen icon for the life of
+      the install. Bump the token on every icon change and rename the files with it.
+    -->
+    <link rel="icon" href="/brand/favicon-v2.svg" type="image/svg+xml" />
+    <link rel="icon" href="/brand/favicon-32-v2.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/brand/favicon-16-v2.png" sizes="16x16" type="image/png" />
+    <!--
+      iOS ignores the manifest icons when adding to the home screen — and captures this one
+      at that moment and never again. A phone that already carries the shortcut keeps the
+      icon it was added with until somebody removes it and adds it back.
+    -->
+    <link rel="apple-touch-icon" href="/brand/apple-touch-icon-v2.png" />
     <!--
       public/brand/manifest.webmanifest is the source of truth for the install metadata, so
       vite-plugin-pwa is configured with `manifest: false` and must not inject a second one.

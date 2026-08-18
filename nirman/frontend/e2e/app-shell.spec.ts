@@ -83,10 +83,10 @@ test('the PWA manifest is served with every icon it declares', async ({ page, re
 
   // Referenced by index.html, so a 404 here shows up as a broken tab icon everywhere.
   for (const href of [
-    '/brand/favicon.svg',
-    '/brand/favicon-32.png',
-    '/brand/favicon-16.png',
-    '/brand/apple-touch-icon.png',
+    '/brand/favicon-v2.svg',
+    '/brand/favicon-32-v2.png',
+    '/brand/favicon-16-v2.png',
+    '/brand/apple-touch-icon-v2.png',
   ]) {
     const asset = await page.request.get(href);
     expect(asset.ok(), `head asset missing: ${href}`).toBeTruthy();
