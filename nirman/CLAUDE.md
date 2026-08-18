@@ -253,6 +253,33 @@ if the tests pass:
   alone. The screen calls this **external labour** and asks which supplier sent the men, off
   the one supplier register (V23); naming him stays optional, because a count with no name on
   it is still a true count.
+- **A labour payment settles a wage only where a wage was costed.** `is_labour_payment` keeps
+  money handed over for wages out of cost incurred, because verified attendance already
+  counted it. On a site flagged `uses_outsourced_labour` there is no muster and nothing was
+  costed, so the same head means the opposite: the supplier's bill is the only record of what
+  the labour cost, and excluding it reports a site whose men were free. So the flag is read
+  against the site — `SiteLookup.outsourcedLabourSites` in `ExpenseLookupService` and
+  `ExpenseReportService`, and the register row is named `wageSettlement` for what it decides
+  rather than for the flag it starts from. The bill lands in `costIncurred` instead of
+  `labourDisbursements`; the four figures still add to total booked, which is what keeps the
+  omission checkable. Its sibling, `is_material_purchase`, is untouched — a bag of cement
+  becomes inventory whoever laid it.
+- **The plant on the report is priced by whoever it went to, never by the site.** `dpr_machinery`
+  carried hours and no money until V39, and the supervisor still writes only the hours: he
+  watched the mixer run, but the hire agreement is not his and a rate box on his screen is a
+  number guessed at seven in the evening — the same line V15 and V24 draw, that the field may
+  name a thing and never value it. `PUT /dprs/{id}/plant-rates` is its own call because the
+  plant rows are the supervisor's half and the rate on them is not, and it carries **no new
+  permission**: `dpr:verify` and `dpr:approve` already name the two people a handed-over report
+  goes to. Refused on a draft (nobody has been given it, and the list is still moving) and on an
+  APPROVED report (a figure that can still move is not a signed one). The amount is derived per
+  call from the rate and the row's own hours, so a corrected seventh hour carries into it; an
+  hourly rate charges the hours **run** and not the hours stood, because standby is agreed
+  separately and charging it at the running rate would invent the figure docs/09 refused to
+  invent. And the rate survives the supervisor's later correction of the plant list —
+  `replaceMachinery` rebuilds the table and carries rates across by the machine's name, because
+  otherwise the second mixer arriving at four deletes the office's figure. A machine renamed
+  loses its rate, which is right: what was priced was "JCB 3DX".
 - **Plant is held, not consumed.** A mixer is at the site in March and in June, so
   `site_equipment` is its own register and no equipment row ever reaches
   `stock_transactions` — a posting would report the mixer as used up by the slab it poured
@@ -414,6 +441,13 @@ ordinary ADJUSTMENT through `StockAdjustmentService`. **One new permission, not 
 approving a correction *is* posting the adjustment, so it is held by `inventory:adjust`, which
 is already exactly that question. A second one would let an organisation grant the decision to
 somebody who cannot make the posting it commits them to.
+
+`V39` gives `dpr_machinery` a rate and the unit it is per — `HOUR` or `DAY`, and no `MONTH`,
+because this is one day's report and a monthly rate needs a divisor that two screens would
+assume differently. Checks keep the number and its unit together (one without the other is a
+figure nobody can multiply) and keep a rate signed by somebody at a time. It stores **no
+total**: the amount is derived on read, since the hours can still be corrected before the
+signature. **No new permission** — see the plant-pricing rule above.
 
 `V37` gives the report the step above the engineer. It widens `ck_dpr_workflow` to admit
 `APPROVED`, adds `approved_at`/`approved_by` with a check that an approval is by somebody at a

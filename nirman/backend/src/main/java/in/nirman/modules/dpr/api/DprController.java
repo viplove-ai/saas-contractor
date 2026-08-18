@@ -2,6 +2,7 @@ package in.nirman.modules.dpr.api;
 
 import in.nirman.common.PageResponse;
 import in.nirman.modules.dpr.api.dto.DprDtos.AttachPhotoRequest;
+import in.nirman.modules.dpr.api.dto.DprDtos.SetPlantRatesRequest;
 import in.nirman.modules.dpr.api.dto.DprDtos.CreateDprRequest;
 import in.nirman.modules.dpr.api.dto.DprDtos.DeleteDprRequest;
 import in.nirman.modules.dpr.api.dto.DprDtos.DprPrefill;
@@ -121,6 +122,16 @@ public class DprController {
                     + "figures already count, and it needs dpr:approve rather than dpr:verify.")
     public DprResponse approve(@PathVariable UUID id) {
         return dprs.approve(id);
+    }
+
+    @PutMapping("/{id}/plant-rates")
+    @Operation(summary = "What the plant on a handed-over report is charged at",
+            description = "The supervisor records what stood on the site; whoever the report "
+                    + "goes to records what it costs. Held by dpr:verify or dpr:approve, and "
+                    + "refused on a draft and on an approved report.")
+    public DprResponse priceThePlant(@PathVariable UUID id,
+                                     @Valid @RequestBody SetPlantRatesRequest request) {
+        return dprs.priceThePlant(id, request);
     }
 
     @PostMapping("/{id}/photos")

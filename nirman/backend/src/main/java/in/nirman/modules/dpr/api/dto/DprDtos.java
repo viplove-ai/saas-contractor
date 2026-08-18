@@ -3,6 +3,7 @@ package in.nirman.modules.dpr.api.dto;
 import in.nirman.modules.dpr.domain.DailyProgressReport.NonOperationalCause;
 import in.nirman.modules.dpr.domain.DailyProgressReport.Weather;
 import in.nirman.modules.dpr.domain.DailyProgressReport.Workflow;
+import in.nirman.modules.dpr.domain.DprMachinery.RateBasis;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -286,13 +287,51 @@ public final class DprDtos {
             boolean measured) {
     }
 
+    /**
+     * @param hireRate   what the machine is charged at, or null while nobody has said. Filled
+     *                   after the handover by whoever the report goes to — never by the
+     *                   supervisor, who records what stood on the site and not what it costs
+     * @param rateBasis  HOUR or DAY, and never one without the other
+     * @param hireAmount the rate against this row's own hours or count. Derived per call, so
+     *                   an hour corrected before the signature carries into it; null while
+     *                   unpriced, and null on an hourly rate whose hours were never recorded
+     * @param rateSetAt  when it was priced, which is not when the report was signed
+     */
     public record MachineryResponse(
             UUID id,
             String machineryName,
             int count,
             BigDecimal hoursUsed,
             BigDecimal idleHours,
-            String remarks) {
+            String remarks,
+            BigDecimal hireRate,
+            RateBasis rateBasis,
+            BigDecimal hireAmount,
+            Instant rateSetAt) {
+    }
+
+    /**
+     * Pricing the plant on a report that has been handed over.
+     *
+     * <p>Its own request, and not a field on {@link UpdateDprRequest}, because the plant rows
+     * are the supervisor's half and the rate on them is not. Folding the rate into the
+     * update would put a rate box in the hands of the one person the whole arrangement keeps
+     * it away from, and the server would then be refusing a field its own screen offered.</p>
+     *
+     * <p>Rows are named by id: the plant table is rebuilt on every save of the day's account,
+     * so a caller pricing by position would price whatever moved into that position.</p>
+     *
+     * @param rate null clears the rate, which is the answer when a machine was priced by
+     *             mistake — and the same act as changing it, needing no second endpoint
+     */
+    public record PlantRateInput(
+            @NotNull UUID machineryId,
+            @DecimalMin("0") BigDecimal rate,
+            RateBasis basis) {
+    }
+
+    public record SetPlantRatesRequest(
+            @NotNull @Valid List<PlantRateInput> rates) {
     }
 
     public record PhotoResponse(

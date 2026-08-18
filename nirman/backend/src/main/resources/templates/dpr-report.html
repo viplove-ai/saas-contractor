@@ -182,16 +182,28 @@
 <table th:if="${!dpr.machinery().isEmpty()}">
     <tr>
         <th>Machine</th>
-        <th class="num" style="width: 16mm;">Number</th>
-        <th class="num" style="width: 24mm;">Hours run</th>
-        <th class="num" style="width: 24mm;">Hours idle</th>
-        <th style="width: 40mm;">Remarks</th>
+        <th class="num" style="width: 14mm;">Number</th>
+        <th class="num" style="width: 20mm;">Hours run</th>
+        <th class="num" style="width: 20mm;">Hours idle</th>
+        <!--
+          The rate and what it comes to. Printed only where somebody put a rate on: an
+          unpriced machine shows a dash rather than a zero, because nobody said it was free.
+          Idle hours stay in their own column and are not charged at the running rate —
+          standby is agreed separately, and charging it here would invent the figure this
+          report spent a version refusing to invent.
+        -->
+        <th class="num" style="width: 24mm;">Rate</th>
+        <th class="num" style="width: 24mm;">Amount</th>
+        <th style="width: 32mm;">Remarks</th>
     </tr>
     <tr th:each="plant : ${dpr.machinery()}">
         <td th:text="${plant.machineryName()}">Machine</td>
         <td class="num" th:text="${plant.count()}">1</td>
         <td class="num" th:text="${plant.hoursUsed()} ?: '—'">—</td>
         <td class="num" th:text="${plant.idleHours()} ?: '—'">—</td>
+        <td class="num" th:text="${plant.hireRate() == null} ? '—' :
+                ${plant.hireRate()} + ' / ' + ${plant.rateBasis()}">—</td>
+        <td class="num" th:text="${plant.hireAmount()} ?: '—'">—</td>
         <td th:text="${plant.remarks()} ?: '—'">—</td>
     </tr>
 </table>

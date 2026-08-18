@@ -8,6 +8,8 @@ import in.nirman.modules.dpr.api.dto.DprDtos.AttachPhotoRequest;
 import in.nirman.modules.dpr.api.dto.DprDtos.CreateDprRequest;
 import in.nirman.modules.dpr.api.dto.DprDtos.DprResponse;
 import in.nirman.modules.dpr.api.dto.DprDtos.MachineryInput;
+import in.nirman.modules.dpr.api.dto.DprDtos.PlantRateInput;
+import in.nirman.modules.dpr.api.dto.DprDtos.SetPlantRatesRequest;
 import in.nirman.modules.dpr.api.dto.DprDtos.UpdateDprRequest;
 import in.nirman.modules.dpr.api.dto.DprDtos.VerifyDprRequest;
 import in.nirman.modules.dpr.api.dto.DprDtos.WorkItemInput;
@@ -45,6 +47,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Daily progress reports: draft, submit, verify, approve.
@@ -548,6 +551,68 @@ public class DprService {
         return responses.toResponse(report);
     }
 
+    /**
+     * What the plant on the report is charged at, filled by whoever the report went to.
+     *
+     * <p><b>Not the supervisor's, and not a field on the update.</b> He records what stood on
+     * the site and for how long, because he is the man who watched it; the hire agreement is
+     * not his and a rate box on his screen is a number guessed at seven in the evening. This
+     * is the same line V15 and V24 draw elsewhere — the field may name a thing and never
+     * value it — and it needs a separate call to hold it, because the plant rows themselves
+     * are the supervisor's half and travel in {@link #update}.</p>
+     *
+     * <p><b>No new permission.</b> {@code dpr:verify} and {@code dpr:approve} already name
+     * the two people a handed-over report goes to, and pricing the plant on it is part of
+     * reading the day and signing for it rather than a third act. Minting one would let an
+     * organisation grant the pricing to somebody who cannot open the report it sits on.</p>
+     *
+     * <p><b>After the handover and before the document closes.</b> A draft has not been given
+     * to anybody yet and its plant list is still changing under the man typing it; an
+     * approved report is finished, and a figure that can move afterwards is not a signed
+     * document. Between those two the rate may be put on, corrected, or taken off again —
+     * including by the office on a report the engineer has already signed, because the
+     * engineer signs what was built and the rate is the office's own fact.</p>
+     */
+    @PreAuthorize("hasAnyAuthority('dpr:verify', 'dpr:approve')")
+    public DprResponse priceThePlant(UUID id, SetPlantRatesRequest request) {
+        DailyProgressReport report = require(id);
+        siteAccessGuard.assertCanAccess(report.getSiteId());
+        Workflow status = report.getWorkflowStatus();
+        if (status != Workflow.SUBMITTED && status != Workflow.VERIFIED) {
+            throw new BusinessException("dpr.not-priceable",
+                    "Report " + report.getDprNumber() + " is " + status.name().toLowerCase()
+                            + (status == Workflow.APPROVED
+                            ? ", so it is finished and its figures stand as they were accepted."
+                            : ", so it has not been handed over yet. What the plant costs is "
+                                    + "settled on a report somebody has sent in."));
+        }
+
+        Map<UUID, DprMachinery> rows = machinery.findByDprId(id).stream()
+                .collect(Collectors.toMap(DprMachinery::getId, row -> row));
+        Instant now = Instant.now();
+        UUID by = currentUser.currentUserIdOrNull();
+        for (PlantRateInput input : request.rates()) {
+            DprMachinery row = rows.get(input.machineryId());
+            if (row == null) {
+                // Named rather than ignored: a rate quietly dropped is a machine somebody
+                // believes is priced, and the id belongs to another report or to a row a
+                // correction has already replaced.
+                throw BusinessException.notFound("Plant row", input.machineryId());
+            }
+            if (input.rate() != null && input.basis() == null) {
+                throw new BusinessException("dpr.rate-needs-a-basis",
+                        "A rate for " + row.getMachineryName() + " with no unit is a figure "
+                                + "nobody can multiply. Say whether it is by the hour or by "
+                                + "the day.");
+            }
+            row.priceAt(input.rate(), input.basis(), now, by);
+        }
+
+        audit.record(ENTITY_TYPE, id, "PRICE_PLANT", null,
+                Map.of("dprNumber", report.getDprNumber(), "rows", request.rates().size()), null);
+        return responses.toResponse(report);
+    }
+
     // ------------------------------------------------------------------ internals
 
     /** The measured rows only. A row that describes work without measuring it claims nothing. */
@@ -641,15 +706,48 @@ public class DprService {
         }
     }
 
+    /**
+     * The plant table, rebuilt from what the supervisor now says stood on the site.
+     *
+     * <p>Rebuilt rather than merged, like the labour table and for the same reason: a machine
+     * that went away has to leave the report with it. But the rate on a row is not the
+     * supervisor's and must not be deleted by his correction — the day's account stays open
+     * to him until the signature, so the second mixer that arrived at four is entered on a
+     * report the office may already have priced. So the rates are carried across, matched on
+     * the machine's name, which is the only identity a rebuilt row has.</p>
+     *
+     * <p>A machine renamed loses its rate, and that is the right answer: what was priced was
+     * "JCB 3DX", and carrying its figure onto whatever the name became would price a machine
+     * nobody quoted for. Whoever holds the report sees an unpriced row and says what it
+     * costs.</p>
+     */
     private void replaceMachinery(UUID dprId, List<MachineryInput> plant) {
         if (plant == null) {
             return;
         }
+        Map<String, DprMachinery> priced = machinery.findByDprId(dprId).stream()
+                .filter(row -> row.getHireRate() != null)
+                .collect(Collectors.toMap(row -> nameKey(row.getMachineryName()), row -> row,
+                        // Two rows under one name is a report that already could not say
+                        // which mixer is which; keep the first and price the rest afresh.
+                        (first, second) -> first));
         machinery.deleteByDprId(dprId);
         machinery.flush();
-        plant.forEach(entry -> machinery.save(new DprMachinery(dprId, entry.machineryName(),
-                entry.count() <= 0 ? 1 : entry.count(), entry.hoursUsed(), entry.idleHours(),
-                entry.remarks())));
+        plant.forEach(entry -> {
+            DprMachinery row = new DprMachinery(dprId, entry.machineryName(),
+                    entry.count() <= 0 ? 1 : entry.count(), entry.hoursUsed(), entry.idleHours(),
+                    entry.remarks());
+            DprMachinery wasPriced = priced.get(nameKey(entry.machineryName()));
+            if (wasPriced != null) {
+                row.carryRateFrom(wasPriced);
+            }
+            machinery.save(row);
+        });
+    }
+
+    /** "JCB 3dx " and "jcb 3DX" are the same machine to everybody except a string compare. */
+    private static String nameKey(String name) {
+        return name == null ? "" : name.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
     /**

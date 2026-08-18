@@ -10,6 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -435,6 +436,127 @@ class DprWorkflowIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk());
 
         assertThat(report(engineer, id).get("machinery")).hasSize(2);
+    }
+
+    /**
+     * The hours are the supervisor's and the rate is not.
+     *
+     * <p>The same division the rest of the system draws: the field may name a thing and never
+     * value it. He watched the mixer run six hours; the hire agreement is not his, and a rate
+     * box on his screen is a number guessed at seven in the evening. So the rate is written
+     * after the handover by whoever the report went to, and the amount is the server's
+     * arithmetic rather than anybody's typing.</p>
+     */
+    @Test
+    @DisplayName("what the plant costs is priced after the handover, and never by the site")
+    void plantIsPricedByWhoeverTheReportWentTo() throws Exception {
+        String supervisor = loginToken("vivek");
+        String engineer = loginToken("uttam");
+
+        String id = openDay(supervisor, freeDay(), """
+                "weather":"CLEAR","machinery":[{"machineryName":"Concrete mixer",
+                  "count":1,"hoursUsed":6,"idleHours":2}]""");
+        String row = report(supervisor, id).get("machinery").get(0).get("id").asText();
+
+        // Not yet. A draft has not been given to anybody, and its plant list is still moving
+        // under the man typing it.
+        priceThePlant(engineer, id, row, "450", "HOUR").andExpect(status().isUnprocessableEntity());
+
+        submit(supervisor, id);
+
+        // And not by the site, whatever the state of the report.
+        priceThePlant(supervisor, id, row, "450", "HOUR").andExpect(status().isForbidden());
+
+        priceThePlant(engineer, id, row, "450", "HOUR").andExpect(status().isOk());
+
+        JsonNode plant = report(engineer, id).get("machinery").get(0);
+        assertThat(decimal(plant, "hireRate")).isEqualByComparingTo("450.0000");
+        assertThat(plant.get("rateBasis").asText()).isEqualTo("HOUR");
+        // Six hours run at 450, and the two idle hours are not charged at the running rate:
+        // standby is agreed separately, and charging it here would invent the figure.
+        assertThat(decimal(plant, "hireAmount")).isEqualByComparingTo("2700.00");
+        assertThat(plant.get("rateSetAt").isNull()).isFalse();
+    }
+
+    /**
+     * The office's figure must not be deleted by the site's correction.
+     *
+     * <p>The day's account stays open to the supervisor until the signature, and the update
+     * rebuilds the whole plant table — so the second mixer that arrives at four is entered on
+     * a report somebody has already priced. The rate travels with the machine's name across
+     * that rebuild, and a machine nobody has priced yet stays unpriced.</p>
+     */
+    @Test
+    @DisplayName("a priced machine keeps its rate when the site corrects the day's plant")
+    void aRateSurvivesTheSupervisorsCorrection() throws Exception {
+        String supervisor = loginToken("vivek");
+        String engineer = loginToken("uttam");
+
+        String id = openDay(supervisor, freeDay(), """
+                "weather":"CLEAR","machinery":[{"machineryName":"Concrete mixer",
+                  "count":1,"hoursUsed":6,"idleHours":2}]""");
+        submit(supervisor, id);
+        priceThePlant(engineer, id, report(engineer, id).get("machinery").get(0).get("id").asText(),
+                "450", "HOUR").andExpect(status().isOk());
+
+        // The excavator that turned up at four, entered by the man who saw it.
+        mockMvc.perform(put("/api/v1/dprs/" + id)
+                        .header("Authorization", "Bearer " + supervisor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"machinery":[{"machineryName":"Concrete mixer","count":1,
+                                  "hoursUsed":7,"idleHours":1},
+                                 {"machineryName":"Excavator","count":1,
+                                  "hoursUsed":8,"idleHours":0}],"version":%d}"""
+                                .formatted(report(supervisor, id).get("version").asLong())))
+                .andExpect(status().isOk());
+
+        JsonNode plant = report(engineer, id).get("machinery");
+        JsonNode mixer = plant.get(0).get("machineryName").asText().equals("Concrete mixer")
+                ? plant.get(0) : plant.get(1);
+        JsonNode excavator = mixer == plant.get(0) ? plant.get(1) : plant.get(0);
+
+        assertThat(decimal(mixer, "hireRate")).isEqualByComparingTo("450.0000");
+        // The corrected hours, at the rate that was already agreed: the amount is derived per
+        // call, so it follows the seventh hour rather than staying at what it was on Tuesday.
+        assertThat(decimal(mixer, "hireAmount")).isEqualByComparingTo("3150.00");
+        // Absent rather than zero: nobody has priced the excavator, and unpriced is not free.
+        assertThat(excavator.hasNonNull("hireRate")).isFalse();
+        assertThat(excavator.hasNonNull("hireAmount")).isFalse();
+    }
+
+    /** An approved report is finished, and a figure that can still move is not a signed one. */
+    @Test
+    @DisplayName("plant cannot be repriced once the office has approved the report")
+    void anApprovedReportIsNoLongerPriceable() throws Exception {
+        String supervisor = loginToken("vivek");
+        String engineer = loginToken("uttam");
+        String office = loginToken("viplove");
+
+        String id = draft(supervisor, engineer, freeDay(), "12");
+        mockMvc.perform(put("/api/v1/dprs/" + id)
+                        .header("Authorization", "Bearer " + supervisor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"machinery":[{"machineryName":"Concrete mixer","count":1,
+                                  "hoursUsed":6,"idleHours":2}],"version":%d}"""
+                                .formatted(report(supervisor, id).get("version").asLong())))
+                .andExpect(status().isOk());
+        submit(supervisor, id);
+        String row = report(engineer, id).get("machinery").get(0).get("id").asText();
+
+        // The office may price a signed report — the engineer signs what was built, and what
+        // the hire costs is the office's own fact.
+        verify(engineer, id);
+        priceThePlant(office, id, row, "500", "DAY").andExpect(status().isOk());
+        assertThat(decimal(report(office, id).get("machinery").get(0), "hireAmount"))
+                .as("one machine, one day").isEqualByComparingTo("500.00");
+
+        mockMvc.perform(post("/api/v1/dprs/" + id + "/approval")
+                        .header("Authorization", "Bearer " + office))
+                .andExpect(status().isOk());
+
+        priceThePlant(office, id, row, "900", "DAY").andExpect(status().isUnprocessableEntity());
     }
 
     /**
@@ -896,6 +1018,16 @@ class DprWorkflowIntegrationTest extends AbstractIntegrationTest {
                 {"boqItemId":"%s","activity":"Shuttering struck","workLocation":"Ground floor"}"""
                 .formatted(BOQ_BRICKWORK), "Shuttering struck and stacked");
         return id;
+    }
+
+    private ResultActions priceThePlant(String token, String id, String rowId, String rate,
+                                        String basis) throws Exception {
+        return mockMvc.perform(put("/api/v1/dprs/" + id + "/plant-rates")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"rates":[{"machineryId":"%s","rate":%s,"basis":"%s"}]}"""
+                        .formatted(rowId, rate, basis)));
     }
 
     private void submit(String token, String id) throws Exception {

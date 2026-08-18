@@ -41,6 +41,7 @@ import {
   useDeleteDpr,
   useDpr,
   usePrefill,
+  useSetPlantRates,
   useSites,
   useSubmitDpr,
   useUpdateDpr,
@@ -61,6 +62,7 @@ import type {
   MachineryInput,
   MaterialLine,
   NonOperationalCause,
+  RateBasis,
   Weather,
   WorkItemInput,
 } from './types';
@@ -160,6 +162,16 @@ interface WorkLine extends WorkItemInput {
 
 interface MachineryLine extends MachineryInput {
   key: string;
+  /**
+   * The server's row id, absent on a machine typed here and not yet saved.
+   *
+   * <p>The rate is written by a different call against this id, so a row that has never been
+   * saved cannot carry one — there is nothing yet to price.</p>
+   */
+  id?: string;
+  hireRate?: number | undefined;
+  rateBasis?: RateBasis | undefined;
+  hireAmount?: number | undefined;
 }
 
 function today(): string {
@@ -264,6 +276,7 @@ export function DprWizardPage() {
   const canDelete = hasPermission('dpr:delete');
   /** The engineer — the half of the report that claims work is his, and so is the signature. */
   const canVerify = hasPermission('dpr:verify');
+  const canApprove = hasPermission('dpr:approve');
   const sites = useSites();
   const [siteId, setSiteId] = useSelectedSite(sites.data);
   const prefill = usePrefill(siteId || undefined, reportDate);
@@ -273,6 +286,7 @@ export function DprWizardPage() {
   const update = useUpdateDpr();
   const submit = useSubmitDpr();
   const decide = useDecideDpr();
+  const setPlantRates = useSetPlantRates();
 
   /**
    * Whether a report already covers the day on screen.
@@ -329,11 +343,15 @@ export function DprWizardPage() {
     setMachinery(
       report.machinery.map((line) => ({
         key: crypto.randomUUID(),
+        id: line.id,
         machineryName: line.machineryName,
         count: line.count,
         hoursUsed: line.hoursUsed,
         idleHours: line.idleHours,
         remarks: line.remarks,
+        hireRate: line.hireRate,
+        rateBasis: line.rateBasis,
+        hireAmount: line.hireAmount,
       })),
     );
     setPhotos([]);
@@ -440,6 +458,16 @@ export function DprWizardPage() {
     screen shows it and does not offer to change it.
   */
   const conditionsWritable = !blocked && !(handedOver && canVerify);
+  /*
+    Who may put a price on the plant, and when. Whoever the report went to after the
+    handover — the engineer signing it or the office accepting it — and never the supervisor,
+    who records what stood on the site and not what it costs. A draft has not been given to
+    anybody yet; an approved report is finished. The server enforces all of this; this is
+    only the screen not offering what would be refused.
+  */
+  const canPricePlant =
+    (canVerify || canApprove)
+    && (report?.workflowStatus === 'SUBMITTED' || report?.workflowStatus === 'VERIFIED');
 
   const steps = stepsFor(canVerify, siteOperational);
   // Flipping the day to "no work" while standing on the observations step would otherwise
@@ -532,10 +560,20 @@ export function DprWizardPage() {
       }));
   }
 
+  /**
+   * Only rows somebody typed a machine into — and only the fields that are the site's.
+   *
+   * <p>The rate, its basis and its amount are stripped rather than passed through. They are
+   * the office's answer, written by their own call against the row id; sending them back
+   * inside the supervisor's half would be this screen offering a field the server refuses
+   * from that direction.</p>
+   */
   function filledMachinery(): MachineryInput[] {
     return machinery
       .filter((line) => line.machineryName.trim().length > 0)
-      .map(({ key: _key, ...rest }) => rest);
+      .map(({
+        key: _key, id: _id, hireRate: _rate, rateBasis: _basis, hireAmount: _amount, ...rest
+      }) => rest);
   }
 
   /**
@@ -575,6 +613,47 @@ export function DprWizardPage() {
   async function saveDraftWithPhotos() {
     const draft = await saveDraft();
     await uploadPhotos(draft.id);
+    await savePlantRates(draft.id);
+  }
+
+  /**
+   * Sends what the plant is charged at, for whoever may say so.
+   *
+   * <p>A second call rather than part of the save, because the server holds the two halves
+   * apart: the plant rows are the supervisor's and the rate on them is the office's. Rows
+   * typed on this screen and not yet saved have no id to price and are left for the next
+   * save, which is what the boxes say while they wait.</p>
+   *
+   * <p>Like the photographs, a failure here does not fail the save. The report is the
+   * record.</p>
+   */
+  async function savePlantRates(dprId: string) {
+    if (!canPricePlant) {
+      return;
+    }
+    const rates = machinery
+      .filter((line) => line.id !== undefined)
+      .map((line) => ({
+        machineryId: line.id as string,
+        rate: line.hireRate,
+        basis: line.hireRate === undefined ? undefined : (line.rateBasis ?? 'HOUR'),
+      }));
+    if (rates.length === 0) {
+      return;
+    }
+    const priced = await setPlantRates.mutateAsync({ id: dprId, rates });
+    // Read the amounts back rather than working them out here: the arithmetic is the
+    // server's, and a second version of it on this screen is a second answer.
+    setSaved(priced);
+    setMachinery((lines) =>
+      lines.map((line) => {
+        const row = priced.machinery.find((candidate) => candidate.id === line.id);
+        return row === undefined
+          ? line
+          : { ...line, hireRate: row.hireRate, rateBasis: row.rateBasis,
+              hireAmount: row.hireAmount };
+      }),
+    );
   }
 
   /**
@@ -616,6 +695,9 @@ export function DprWizardPage() {
   async function saveAndSign() {
     const draft = await saveDraft();
     await uploadPhotos(draft.id);
+    // Before the signature rather than after, so the document he signs carries the figure
+    // instead of acquiring it a moment later.
+    await savePlantRates(draft.id);
     const signed = await decide.mutateAsync({ id: draft.id, action: 'VERIFY' });
     setSaved(signed);
   }
@@ -908,6 +990,7 @@ export function DprWizardPage() {
             <MachineryEditor
               lines={machinery}
               readOnly={!conditionsWritable}
+              rateWritable={canPricePlant}
               onChange={setMachinery}
             />
           )}
@@ -1540,13 +1623,23 @@ function WorkStep({
  * the man who signs for it; a machine's running hours are a fact about the day, billed to
  * nobody, and the man who was standing next to it is the one who knows them.</p>
  */
+/**
+ * Plant on site, and — for whoever the report went to — what it is charged at.
+ *
+ * <p>Two people write this one table, and the two halves are disabled independently. The
+ * machine and its hours are the supervisor's: he watched them happen. The rate is not his,
+ * and a rate box on his screen is a number guessed at seven in the evening, so it is
+ * read-only to him and to anybody looking at a report that has not been handed over.</p>
+ */
 function MachineryEditor({
   lines,
   readOnly,
+  rateWritable,
   onChange,
 }: {
   lines: MachineryLine[];
   readOnly: boolean;
+  rateWritable: boolean;
   onChange: (lines: MachineryLine[]) => void;
 }) {
   function patch(key: string, changes: Partial<MachineryLine>) {
@@ -1559,7 +1652,9 @@ function MachineryEditor({
         Plant on site
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
-        Machines that were here today, and what they did. Nothing is claimed off these.
+        {rateWritable
+          ? 'Machines the site recorded today. The hours are theirs; what each is charged at is yours.'
+          : 'Machines that were here today, and what they did. Nothing is claimed off these.'}
       </Typography>
 
       {lines.map((line) => (
@@ -1601,6 +1696,57 @@ function MachineryEditor({
               <DeleteOutlineIcon />
             </IconButton>
           </Stack>
+
+          {/*
+            The office's row underneath the site's. Shown to whoever may price it, and to
+            anybody else only once there is a price to read — an empty rate box on a
+            supervisor's screen is an invitation to guess.
+
+            A machine typed on this screen and not yet saved has no row id to price, so the
+            boxes wait for the save. The amount beside them is the server's own arithmetic
+            read back, never this screen's: an hourly rate charges the hours run and not the
+            hours stood, and two places computing that is two answers to one question.
+          */}
+          {(rateWritable || line.hireRate !== undefined) && (
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={2}
+              sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}
+              alignItems={{ sm: 'center' }}
+            >
+              <TextField
+                label="Rate"
+                type="number"
+                value={line.hireRate ?? ''}
+                onChange={(e) =>
+                  patch(line.key, {
+                    hireRate: e.target.value === '' ? undefined : Number(e.target.value),
+                    // A rate needs a unit, and the hour is the one a day's report is read in.
+                    // The server refuses a figure without one rather than assuming.
+                    rateBasis: line.rateBasis ?? 'HOUR',
+                  })
+                }
+                disabled={!rateWritable || !line.id}
+                helperText={line.id ? undefined : 'Save the report first'}
+                sx={{ maxWidth: 160 }}
+              />
+              <TextField
+                select
+                label="Per"
+                value={line.rateBasis ?? 'HOUR'}
+                onChange={(e) => patch(line.key, { rateBasis: e.target.value as RateBasis })}
+                disabled={!rateWritable || !line.id}
+                sx={{ minWidth: 120 }}
+              >
+                <MenuItem value="HOUR">Hour run</MenuItem>
+                <MenuItem value="DAY">Day</MenuItem>
+              </TextField>
+              <Figure
+                label="Amount"
+                value={line.hireAmount === undefined ? '—' : formatAmount(line.hireAmount)}
+              />
+            </Stack>
+          )}
         </Paper>
       ))}
 

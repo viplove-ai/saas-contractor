@@ -162,7 +162,9 @@ public class DprResponses {
 
     private static MachineryResponse toMachinery(DprMachinery plant) {
         return new MachineryResponse(plant.getId(), plant.getMachineryName(), plant.getCount(),
-                plant.getHoursUsed(), plant.getIdleHours(), plant.getRemarks());
+                plant.getHoursUsed(), plant.getIdleHours(), plant.getRemarks(),
+                plant.getHireRate(), plant.getRateBasis(), plant.hireAmount(),
+                plant.getRateSetAt());
     }
 
     /** The frozen labour table, with the trade and contractor names put back on it. */

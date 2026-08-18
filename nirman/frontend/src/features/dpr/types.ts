@@ -317,6 +317,10 @@ export interface WorkItemResponse {
   measured: boolean;
 }
 
+/** What the rate is per. No MONTH: this is one day's report, and a divisor assumed is two
+ * screens disagreeing about the same machine. */
+export type RateBasis = 'HOUR' | 'DAY';
+
 export interface MachineryResponse {
   id: string;
   machineryName: string;
@@ -324,6 +328,23 @@ export interface MachineryResponse {
   hoursUsed: number;
   idleHours: number;
   remarks?: string;
+  /**
+   * What the machine is charged at, or absent while nobody has said. Filled after the
+   * handover by whoever the report goes to — never by the supervisor, who records what stood
+   * on the site and not what it costs.
+   */
+  hireRate?: number;
+  rateBasis?: RateBasis;
+  /** The rate against this row's own hours or count, derived by the server on every read. */
+  hireAmount?: number;
+  rateSetAt?: string;
+}
+
+/** One machine's price. `rate` absent takes the price off, which is the same act as changing it. */
+export interface PlantRateInput {
+  machineryId: string;
+  rate?: number | undefined;
+  basis?: RateBasis | undefined;
 }
 
 export interface PhotoResponse {

@@ -11,6 +11,7 @@ import type {
   DprWorkflow,
   LabourCountLine,
   PageResponse,
+  PlantRateInput,
   Site,
   SupplierDayLine,
   UpdateDprInput,
@@ -174,6 +175,24 @@ export function useApproveDpr() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: dprKeys.all });
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+
+/**
+ * What the plant on a handed-over report is charged at.
+ *
+ * <p>Its own call rather than part of the save, because the plant rows are the supervisor's
+ * half of the report and the rate on them is not his. Nothing is claimed off it, so the BOQ
+ * caches stay where they are; the report itself has changed and is re-read.</p>
+ */
+export function useSetPlantRates() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; rates: PlantRateInput[] }) =>
+      (await apiClient.put<Dpr>(`/dprs/${input.id}/plant-rates`, { rates: input.rates })).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: dprKeys.all });
     },
   });
 }
