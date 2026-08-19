@@ -4,6 +4,7 @@ import {
   clearCachedSession,
   isCacheExpired,
   isNetworkFailure,
+  lastUserStorage,
   readCachedSession,
   refreshSession,
   tokenStorage,
@@ -14,17 +15,31 @@ import {
 import { forgetSelectedSite } from '../../shared/siteSelection';
 
 export async function login(username: string, password: string): Promise<SessionUser> {
-  const previous = readCachedSession();
+  /*
+    Who was last here. The cached profile if the session is still standing — signing in over
+    a live session is what a password change does — and otherwise the marker that outlives a
+    sign-out, because by the time somebody is at the login screen the profile is long gone and
+    the comparison below had nothing to compare against. It read "no idea" and cleared nothing,
+    so the next shift inherited the last one's sites from the read caches.
+  */
+  const previous = readCachedSession()?.user.id ?? lastUserStorage.get();
   const { data } = await apiClient.post<TokenResponse>('/auth/login', { username, password });
   setAccessToken(data.accessToken);
   tokenStorage.setRefreshToken(data.refreshToken);
   writeCachedSession(data.user);
-  // Only when the handset changes hands. Clearing on every sign-in would throw away the
-  // reference data of somebody who simply signed out and back in, and they may be about to
-  // walk out of coverage with it.
-  if (previous && previous.user.id !== data.user.id) {
+  /*
+    Only when the handset changes hands. Clearing on every sign-in would throw away the
+    reference data of somebody who simply signed out and back in, and they may be about to
+    walk out of coverage with it.
+
+    Awaited, unlike the fire-and-forget clear in forgetSession: the screens this sign-in is
+    about to open start fetching the moment it returns, and a delete landing after them would
+    take the new user's answers out of the cache along with the old user's.
+  */
+  if (previous && previous !== data.user.id) {
     await clearApiCaches();
   }
+  lastUserStorage.set(data.user.id);
   return data.user;
 }
 

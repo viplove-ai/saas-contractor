@@ -15,6 +15,30 @@ export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? '/api/v
 
 const REFRESH_TOKEN_KEY = 'nirman.refreshToken';
 const SESSION_KEY = 'nirman.session';
+const LAST_USER_KEY = 'nirman.lastUser';
+
+/**
+ * Who was last signed in on this handset, kept across the sign-out that follows.
+ *
+ * <p>Deliberately outside {@code forgetSession}. Everything else about a session is dropped
+ * when it ends, which is right, and it left the next sign-in with no way to answer the one
+ * question it has to answer: is this the same person coming back, or the next shift? The
+ * cached profile cannot answer it — signing out is what erases it — so the answer was always
+ * "no idea", and the caches that a change of hands must empty were emptied on the strength of
+ * a sign-out having completed. A sign-out in a valley, or an app killed part-way through one,
+ * left the next user reading the last one's sites.</p>
+ *
+ * <p>It holds an id and nothing else: no name, no permissions, nothing that would be a
+ * disclosure on a phone that changes hands. What it buys is a comparison.</p>
+ */
+export const lastUserStorage = {
+  get(): string | null {
+    return localStorage.getItem(LAST_USER_KEY);
+  },
+  set(userId: string): void {
+    localStorage.setItem(LAST_USER_KEY, userId);
+  },
+};
 
 export const tokenStorage = {
   getRefreshToken(): string | null {

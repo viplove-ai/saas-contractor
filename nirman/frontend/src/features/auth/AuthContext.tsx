@@ -1,4 +1,5 @@
 import { CircularProgress, Stack } from '@mui/material';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   createContext,
   useCallback,
@@ -45,6 +46,18 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const RECHECK_MS = 60_000;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  /*
+    The read cache is the session's, not the tab's.
+
+    Every answer the server has given sits in it keyed by what was asked and not by who asked
+    — the sites this account is posted to, the projects behind them, every figure on every
+    dashboard. It is held in memory by a client created once for the life of the tab, and
+    signing out did not touch it: the next person to sign in on the same tab was handed the
+    last one's sites, still fresh for a minute apiece, with no request made that could have
+    corrected them. On a desk machine where one person signs out and another signs in that is
+    the whole of the complaint, and it is worse than a stale figure — it is somebody else's.
+  */
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<SessionUser | null>(null);
   const [initialising, setInitialising] = useState(true);
   const [unverified, setUnverified] = useState(false);
@@ -116,14 +129,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [check, unverified]);
 
-  const signIn = useCallback(async (username: string, password: string) => {
-    const signedIn = await apiLogin(username, password);
-    setUser(signedIn);
-    setUnverified(false);
-    setVerifiedAt(new Date().toISOString());
-    setSignedOutReason('NONE');
-    return signedIn;
-  }, []);
+  const signIn = useCallback(
+    async (username: string, password: string) => {
+      const signedIn = await apiLogin(username, password);
+      /*
+        Emptied on the way in as well as on the way out, and not only when the user differs.
+        A session that ended in a way that never reached this code — the tab reloaded, the
+        browser killed — leaves the cache behind it, and somebody who has just proved they
+        have signal is the cheapest possible person to make refetch. The read caches on disk
+        are handled a layer down, in login(), where the previous user is known.
+      */
+      queryClient.clear();
+      setUser(signedIn);
+      setUnverified(false);
+      setVerifiedAt(new Date().toISOString());
+      setSignedOutReason('NONE');
+      return signedIn;
+    },
+    [queryClient],
+  );
 
   const signOut = useCallback(async () => {
     await apiLogout();
@@ -131,7 +155,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUnverified(false);
     setVerifiedAt(null);
     setSignedOutReason('NONE');
-  }, []);
+    /*
+      After the screens have been told to go, not before: clearing under a mounted table is a
+      refetch nobody is waiting for, sent with a token that has just been thrown away.
+    */
+    queryClient.clear();
+  }, [queryClient]);
 
   const changePassword = useCallback(
     async (currentPassword: string, newPassword: string) => {

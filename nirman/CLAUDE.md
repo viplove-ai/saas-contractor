@@ -349,6 +349,17 @@ local — widening a register for a minute is not a statement about where somebo
 The id is a convenience and never an authorisation: every request carrying it is scoped by
 `SiteAccessGuard` on the way through.
 
+`shared/appUpdate.tsx` — **one owner of the service worker registration, and the app looks for
+a new version itself.** `registerType: 'prompt'` parks a new version rather than swapping it in
+under somebody mid-entry, which is right and is only half the story: a browser checks for a new
+worker on a navigation, and an installed PWA on a site phone does not navigate. It is opened in
+the morning and reopened onto the same document the next morning, so a version published on
+Tuesday could sit unnoticed for a fortnight. So `AppUpdateProvider` asks by itself on the same
+three triggers `SyncProvider` and `AuthProvider` use, and the profile screen carries the same
+offer on a screen that does not go anywhere — the snackbar is dismissed once, and "Later" is not
+"no". A second `useRegisterSW` anywhere is two Workbox instances racing to register one script,
+and the offer would then be answered by whichever of them heard about it.
+
 `offline/` — Dexie queue, `saveOrQueue.ts` is the entry point for any mutation that must
 survive no signal. A record that has gone out is marked as gone out and is not resent. A
 server refusal, duplicate or locked month is surfaced to the supervisor as a question with two
@@ -385,6 +396,18 @@ nothing else. Stock, dashboards, expenses and DPRs are never cached — a stale 
 than a missing one. The caches are cleared in `forgetSession`, since the worker keys responses
 by URL and a site handset changes hands. React Query queries run in `offlineFirst` so an
 offline read actually reaches that cache instead of being paused before it fires.
+
+**A read cache belongs to the session, not to the tab, and there are two of them.** The one on
+disk is the worker's, cleared at both ends of a session. The other is React Query's, held in
+memory by a client created once for the life of the tab and keyed by what was asked rather than
+by who asked — so signing out and signing in as somebody else handed the second person the
+first one's sites, projects and figures, each fresh for a minute apiece and none of them
+refetched. `AuthProvider` empties it on `signIn` and on `signOut`; on sign-out **after** the
+state is dropped, because clearing under a mounted table is a refetch nobody is waiting for
+sent with a token that has just been thrown away. Whether the handset has changed hands is
+decided in `login()` against `nirman.lastUser`, which is deliberately the one thing
+`forgetSession` does not clear: signing out erases the cached profile, so the sign-in that
+followed had nothing to compare against and cleared nothing.
 
 ## Database changes
 
