@@ -817,7 +817,9 @@ export function DprWizardPage() {
         <Alert severity="info">
           <AlertTitle>{report?.dprNumber} has gone to the engineer</AlertTitle>
           What was built is his to write now. You can still correct what the day was until he
-          signs it; the figures froze when it was sent.
+          signs it, and still enter a head count, a receipt or a bill — those go to the muster,
+          the store and the bill book. Only the figures printed on the report froze when it was
+          sent.
         </Alert>
       )}
 
@@ -961,16 +963,27 @@ export function DprWizardPage() {
             Below the figures rather than above them, and in the order the day happens. What
             the records already know comes first — most evenings that is the whole answer and
             he scrolls past these — and what is still missing can be typed here rather than
-            on four other screens. Not offered once the report has gone: its figures are
-            frozen, so a receipt entered here would move the ledger and not the document.
+            on four other screens.
+
+            Open for as long as the day's account is his, the handover included. They were shut
+            at the handover on the strength of the report's figures being frozen, which is an
+            argument about the wrong document: these boxes write to the muster, the store and
+            the bill book and never to the report. The lorry that arrived at half past six is a
+            goods receipt whether or not the report has gone, and closing them sent the one man
+            who saw it to four other screens to say so. What they no longer do is move the sent
+            report — said in the line below rather than enforced by an empty screen, because a
+            document that differs from today's records is information and not a fault.
           */}
-          {siteOperational && !handedOver && (
+          {siteOperational && conditionsWritable && (
             <>
               <Typography variant="h2" sx={{ fontSize: '1.15rem', mt: 1 }}>
                 Anything not entered yet
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
                 Each box saves on its own, into the same records the other screens write to.
+                {handedOver
+                  && ' The report has gone, so its figures stay as they were sent \u2014 what you enter'
+                    + ' now shows in the records above and in the month, not on that document.'}
               </Typography>
               <OutsourcedLabourCard siteId={siteId} date={reportDate} onSaved={refreshDay} />
               <MaterialCard siteId={siteId} date={reportDate} mode="RECEIVED" onSaved={refreshDay} />

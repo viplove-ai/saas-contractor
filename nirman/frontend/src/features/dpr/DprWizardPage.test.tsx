@@ -375,6 +375,10 @@ describe('DprWizardPage', () => {
     expect(screen.queryByRole('button', { name: 'Start fresh' })).not.toBeInTheDocument();
     // What the day was is frozen: it is the supervisor's statement about a day he stood on.
     expect(screen.getByRole('button', { name: 'No work today' })).toBeDisabled();
+    // And the day's records go with it. Entering a receipt or a bill on his behalf is the
+    // same act as typing his weather, one register further along.
+    expect(screen.queryByText('Material that came in')).not.toBeInTheDocument();
+    expect(screen.queryByText('Money spent today')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(await screen.findByRole('button', { name: 'Next' }));
@@ -421,6 +425,25 @@ describe('DprWizardPage', () => {
     expect(screen.queryByText(/is no longer yours to edit/)).not.toBeInTheDocument();
     // Named for what it is. "Save draft" on a report that has gone reads as a second draft.
     expect(screen.getByRole('button', { name: 'Save the correction' })).toBeEnabled();
+  });
+
+  /**
+   * The same rule one register along. The entry cards write to the muster, the store and the
+   * bill book — never to the report — so the report's frozen figures are no reason to shut
+   * them. The lorry that arrived at half past six is a goods receipt whether the document has
+   * gone or not, and the screen says plainly that it will not appear on the sent report.
+   */
+  it('keeps the muster, the store and the bill book open to him after the handover', async () => {
+    mockGets(
+      prefill({ reportExists: true, existingDprId: 'dpr-existing' }),
+      existingDraft('SUBMITTED'),
+    );
+    renderPage();
+
+    expect(await screen.findByText(/its figures stay as they were sent/)).toBeInTheDocument();
+    expect(screen.getByText('Material that came in')).toBeInTheDocument();
+    expect(screen.getByText('Material used today')).toBeInTheDocument();
+    expect(screen.getByText('Money spent today')).toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------- the day it did not work
