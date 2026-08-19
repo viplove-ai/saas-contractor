@@ -244,6 +244,34 @@ describe('FdrRegisterPage', () => {
     expect(thumbs[0]).toHaveAttribute('src', 'blob:photo');
   });
 
+  /**
+   * The register answers what the company holds today. A certificate the bank has paid out is
+   * history and stays off the screen until somebody asks for it by name.
+   */
+  it('keeps closed certificates off the register until they are asked for', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage(
+      register({
+        deposits: [
+          deposit({ id: 'fd-1', depositNumber: 'FDR/9912' }),
+          deposit({
+            id: 'fd-9',
+            depositNumber: 'FDR/0001',
+            status: 'CLOSED',
+            closedOn: '2026-03-01',
+          }),
+        ],
+        summary: { ...register().summary, closedCount: 1 },
+      }),
+    );
+
+    await screen.findAllByText('FDR/9912');
+    expect(table().queryByText('FDR/0001')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Closed (1)' }));
+    expect(table().getByText('FDR/0001')).toBeInTheDocument();
+  });
+
   it('offers nothing to change when the reader may only look', async () => {
     permissions.splice(permissions.indexOf('security:write'), 1);
     try {

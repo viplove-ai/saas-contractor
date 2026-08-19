@@ -9,8 +9,10 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   Paper,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -62,6 +64,7 @@ export function FdrRegisterPage() {
 
   const [form, setForm] = useState<BankDeposit | 'new' | null>(null);
   const [closeTarget, setCloseTarget] = useState<BankDeposit | null>(null);
+  const [showClosed, setShowClosed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!mayRead) {
@@ -76,8 +79,16 @@ export function FdrRegisterPage() {
     );
   }
 
-  const rows = register.data?.deposits ?? [];
+  /**
+   * A closed certificate is history, and the register is a statement of what the company holds
+   * today — so the money the bank has already paid out is off the screen unless somebody asks
+   * for it. The switch carries the count, because a filter that hides rows silently reads as an
+   * empty register.
+   */
+  const all = register.data?.deposits ?? [];
+  const rows = showClosed ? all : all.filter((row) => row.status !== 'CLOSED');
   const summary = register.data?.summary;
+  const closedCount = summary?.closedCount ?? all.filter((row) => row.status === 'CLOSED').length;
 
   async function pickPhoto(deposit: BankDeposit, file: File) {
     setError(null);
@@ -262,6 +273,20 @@ export function FdrRegisterPage() {
         </Stack>
       )}
 
+      {closedCount > 0 && (
+        <Stack direction="row" justifyContent="flex-end">
+          <FormControlLabel
+            control={
+              <Switch
+                checked={showClosed}
+                onChange={(event) => setShowClosed(event.target.checked)}
+              />
+            }
+            label={`Closed (${closedCount})`}
+          />
+        </Stack>
+      )}
+
       {register.isLoading ? (
         <Stack alignItems="center" sx={{ py: 6 }}>
           <CircularProgress />
@@ -274,8 +299,9 @@ export function FdrRegisterPage() {
           ariaLabel="Fixed deposits"
           empty={
             <Typography variant="body2" color="text.secondary">
-              No fixed deposits entered yet. Enter each certificate as it is bought, and the
-              register will tell you what is free to bid with.
+              {all.length > 0
+                ? 'Nothing is held today. Turn on Closed to read the certificates the bank has paid out.'
+                : 'No fixed deposits entered yet. Enter each certificate as it is bought, and the register will tell you what is free to bid with.'}
             </Typography>
           }
         />
