@@ -3,6 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from 'react-router-dom';
 import { AuthProvider } from '../features/auth/AuthContext';
 import { SyncProvider } from '../offline/SyncProvider';
+import { AppUpdateProvider } from '../shared/appUpdate';
 import { InstallPrompt } from '../shared/InstallPrompt';
 import { UpdatePrompt } from '../shared/UpdatePrompt';
 import { createQueryClient } from './queryClient';
@@ -17,24 +18,32 @@ export function App() {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         {/*
-          Inside AuthProvider: the queue sends with the signed-in user's token, and a drain
-          fired before the session is restored would spend its first pass collecting 401s.
+          Around both the app and the offer below, because it is the one owner of the service
+          worker registration: the snackbar offers a waiting version and the profile screen
+          asks for one, and two registrations would have the offer and the asking talking to
+          different workers.
         */}
-        <AuthProvider>
-          <SyncProvider>
-            <RouterProvider router={router} />
-          </SyncProvider>
-        </AuthProvider>
-        {/*
-          Outside the router on purpose: the offer is worth most on the login screen, which
-          is where a first-time visitor lands, and it has no business changing per route.
-        */}
-        <InstallPrompt />
-        {/*
-          Outside the router for the same reason, and outside AuthProvider too: a waiting
-          version is worth offering whether or not anybody is signed in.
-        */}
-        <UpdatePrompt />
+        <AppUpdateProvider>
+          {/*
+            Inside AuthProvider: the queue sends with the signed-in user's token, and a drain
+            fired before the session is restored would spend its first pass collecting 401s.
+          */}
+          <AuthProvider>
+            <SyncProvider>
+              <RouterProvider router={router} />
+            </SyncProvider>
+          </AuthProvider>
+          {/*
+            Outside the router on purpose: the offer is worth most on the login screen, which
+            is where a first-time visitor lands, and it has no business changing per route.
+          */}
+          <InstallPrompt />
+          {/*
+            Outside the router for the same reason, and outside AuthProvider too: a waiting
+            version is worth offering whether or not anybody is signed in.
+          */}
+          <UpdatePrompt />
+        </AppUpdateProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

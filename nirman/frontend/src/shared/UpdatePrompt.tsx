@@ -1,5 +1,5 @@
 import { Alert, Button, Snackbar, Stack, Typography } from '@mui/material';
-import { useRegisterSW } from 'virtual:pwa-register/react';
+import { useAppUpdate } from './appUpdate';
 
 /**
  * Offers a waiting version to somebody already using the app.
@@ -15,14 +15,15 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
  * must not have the screen swapped underneath them; the entry is theirs to finish. Nothing
  * is at risk either way — drafts live in IndexedDB and survive the reload — but losing the
  * half-typed row on screen is real, and only they know whether now is a good moment.</p>
+ *
+ * <p>The registration itself lives in {@link ./appUpdate AppUpdateProvider}, which is also
+ * what looks for a new version in the first place and what the profile screen asks through.
+ * This component is the offer and nothing else.</p>
  */
 export function UpdatePrompt() {
-  const {
-    needRefresh: [needRefresh, setNeedRefresh],
-    updateServiceWorker,
-  } = useRegisterSW();
+  const { ready, install, postpone } = useAppUpdate();
 
-  if (!needRefresh) {
+  if (!ready) {
     return null;
   }
 
@@ -44,7 +45,7 @@ export function UpdatePrompt() {
               color="inherit"
               size="small"
               /* Reloads the page once the new worker has taken control. */
-              onClick={() => void updateServiceWorker(true)}
+              onClick={() => void install()}
               sx={{ minHeight: 48, whiteSpace: 'nowrap', fontWeight: 700 }}
             >
               Update
@@ -52,12 +53,13 @@ export function UpdatePrompt() {
             {/*
               "Later" dismisses the offer, not the update: the worker stays waiting and the
               prompt returns next launch. Somebody mid-entry can say no without being asked
-              again on the next keystroke.
+              again on the next keystroke — and the profile screen carries the same offer for
+              whenever they are ready.
             */}
             <Button
               color="inherit"
               size="small"
-              onClick={() => setNeedRefresh(false)}
+              onClick={postpone}
               sx={{ minHeight: 48, whiteSpace: 'nowrap' }}
             >
               Later

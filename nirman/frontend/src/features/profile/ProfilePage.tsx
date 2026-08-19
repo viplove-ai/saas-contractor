@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
+import { useAppUpdate, type UpdateCheck } from '../../shared/appUpdate';
 import { useAuth } from '../auth/AuthContext';
 import { SignOutButton } from '../auth/SignOutButton';
 import { roleLabels } from '../../shared/roles';
@@ -29,6 +30,7 @@ function describeAge(iso: string): string {
  */
 export function ProfilePage() {
   const { user, changePassword, unverified, verifiedAt } = useAuth();
+  const { ready: updateReady, install, check, lastCheck } = useAppUpdate();
   const navigate = useNavigate();
   const [serverError, setServerError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -157,6 +159,47 @@ export function ProfilePage() {
       </Paper>
 
       {/*
+        Beside the sign-out because that is where somebody goes when the app is not behaving
+        and they are about to try the blunt instrument. A new version installs by itself and
+        then waits to be let in, and the waiting is where updates go missing: an installed app
+        on a site phone is never closed, so the offer that appears in the snackbar can be
+        dismissed once and not seen again for a week. This is the same offer, on a screen, that
+        does not go anywhere — and a way to ask when nothing has been offered at all.
+      */}
+      <Paper elevation={0} sx={{ p: 3, border: 1, borderColor: 'divider' }}>
+        <Stack spacing={1.5}>
+          <Typography variant="h3">App version</Typography>
+          <Typography variant="body2" color="text.secondary">
+            The app updates itself when it can. If it is behaving oddly, or somebody has told
+            you a fix went out, ask for it here.
+          </Typography>
+
+          {updateReady ? (
+            <Alert severity="info">
+              A new version is ready. Anything you have not sent yet is kept.
+            </Alert>
+          ) : (
+            <UpdateCheckNote state={lastCheck} />
+          )}
+
+          <Button
+            variant={updateReady ? 'contained' : 'outlined'}
+            color="secondary"
+            disabled={lastCheck === 'CHECKING'}
+            onClick={() => void (updateReady ? install() : check())}
+            /* 48px: the app's floor for anything meant to be hit with a glove on. */
+            sx={{ alignSelf: 'flex-start', minHeight: 48 }}
+          >
+            {updateReady
+              ? 'Update now'
+              : lastCheck === 'CHECKING'
+                ? 'Checking…'
+                : 'Check for updates'}
+          </Button>
+        </Stack>
+      </Paper>
+
+      {/*
         The only sign-out a phone has. RootLayout's is in a footer that is `md` and up, so
         without this one a supervisor on site cannot hand the phone to the next shift. Last
         on the page for the same reason it is last in the rail: leaving is not what anybody
@@ -178,6 +221,35 @@ export function ProfilePage() {
       </Paper>
     </Stack>
   );
+}
+
+/**
+ * What the last check said, and nothing when nothing has been asked.
+ *
+ * <p>"Could not check" is deliberately not an error: on a site phone, no answer is the
+ * ordinary state of the afternoon and says nothing about the app.</p>
+ */
+function UpdateCheckNote({ state }: { state: UpdateCheck }) {
+  if (state === 'CURRENT') {
+    return <Alert severity="success">You have the latest version.</Alert>;
+  }
+  if (state === 'UNREACHABLE') {
+    return (
+      <Alert severity="info">
+        Could not check — there is no connection to the server. Try again when you have
+        signal.
+      </Alert>
+    );
+  }
+  if (state === 'UNSUPPORTED') {
+    return (
+      <Alert severity="info">
+        This browser cannot check for updates. Close the app and open it again to pick up a new
+        version.
+      </Alert>
+    );
+  }
+  return null;
 }
 
 function Row({ label, value }: { label: string; value: string }) {
