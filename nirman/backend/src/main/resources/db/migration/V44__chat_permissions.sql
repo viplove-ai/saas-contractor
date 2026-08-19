@@ -10,12 +10,17 @@
 -- migration that adds one grants it again (see V25__site_equipment.sql), and so does this.
 -- Without it, nobody can block a user or post an announcement and nothing says why.
 
-INSERT INTO permissions (id, code, description)
-SELECT gen_random_uuid(), v.code, v.description
+-- `module` is NOT NULL and every other seeding migration passes it — V2 groups permissions by
+-- the module that owns them ('expense', 'inventory', 'identity'), and V25 adds equipment under
+-- 'inventory'. Omitting it here is what took the API down on 19 August: Flyway runs before the
+-- port opens, so a migration that cannot apply is not a failed migration, it is a service that
+-- does not start.
+INSERT INTO permissions (id, code, module, description)
+SELECT gen_random_uuid(), v.code, v.module, v.description
   FROM (VALUES
-      ('chat:restrict', 'Mute or block a user in the Sandesh messenger'),
-      ('chat:announce', 'Post to the organisation-wide announcements channel')
-  ) AS v(code, description)
+      ('chat:restrict', 'chat', 'Mute or block a user in the Sandesh messenger'),
+      ('chat:announce', 'chat', 'Post to the organisation-wide announcements channel')
+  ) AS v(code, module, description)
  WHERE NOT EXISTS (SELECT 1 FROM permissions p WHERE p.code = v.code);
 
 INSERT INTO role_permissions (role_id, permission_id)
