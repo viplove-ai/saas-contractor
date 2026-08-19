@@ -8,6 +8,7 @@ import in.nirman.modules.project.api.dto.BoqDtos.UpdateBoqItemRequest;
 import in.nirman.modules.project.domain.BoqItem;
 import in.nirman.modules.project.repository.BoqItemRepository;
 import in.nirman.modules.project.repository.ProjectRepository;
+import in.nirman.modules.project.repository.SiteRepository;
 import in.nirman.security.CurrentUserProvider;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,21 +38,52 @@ public class BoqItemService implements BoqLookup {
 
     private final BoqItemRepository items;
     private final ProjectRepository projects;
+    private final SiteRepository sites;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
 
     public BoqItemService(BoqItemRepository items, ProjectRepository projects,
-                          CurrentUserProvider currentUser, AuditService audit) {
+                          SiteRepository sites, CurrentUserProvider currentUser,
+                          AuditService audit) {
         this.items = items;
         this.projects = projects;
+        this.sites = sites;
         this.currentUser = currentUser;
         this.audit = audit;
     }
 
+    /**
+     * The work items a caller may charge to, narrowed by whatever he named.
+     *
+     * <p><b>A site names a project.</b> Most lines of a bill of quantities carry no site —
+     * the contract is written against the work, not against which block it is built on — so
+     * asking by site has to return the project's untagged lines as well, or the picker on
+     * every site screen is empty. What it must not return is another contract's untagged
+     * lines, which is what it did: the engineer signing a report was offered every item in
+     * the organisation and the server refused the one he chose with "belongs to a different
+     * project", after he had typed the quantity. So a site is resolved to its project here
+     * and the search is narrowed by both.</p>
+     *
+     * <p>Naming a project as well is allowed and must agree with the site. Two parameters
+     * that contradict each other have no true answer — the honest empty list and the
+     * project's untagged lines are both defensible, and picking either quietly is how a
+     * screen ends up showing the wrong contract again.</p>
+     */
     @Transactional(readOnly = true)
     @PreAuthorize("hasAuthority('boq:read')")
     public List<BoqItemResponse> list(UUID projectId, UUID siteId, String category) {
-        return items.search(orgId(), projectId, siteId, emptyToNull(category)).stream()
+        UUID scope = projectId;
+        if (siteId != null) {
+            UUID siteProject = sites.findByIdAndOrgIdAndDeletedAtIsNull(siteId, orgId())
+                    .orElseThrow(() -> BusinessException.notFound("Site", siteId))
+                    .getProjectId();
+            if (scope != null && !scope.equals(siteProject)) {
+                throw new BusinessException("boq.site-project-mismatch",
+                        "That site is not on the project asked for.");
+            }
+            scope = siteProject;
+        }
+        return items.search(orgId(), scope, siteId, emptyToNull(category)).stream()
                 .map(BoqItemService::toResponse)
                 .toList();
     }
