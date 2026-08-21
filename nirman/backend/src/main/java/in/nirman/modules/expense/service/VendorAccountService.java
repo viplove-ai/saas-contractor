@@ -108,7 +108,9 @@ public class VendorAccountService {
                 vendorId, vendor.getName(), payment.getPaymentDate(), payment.getAmount(),
                 payment.getPaymentMode(), payment.getReferenceNumber(),
                 payment.getBankAccount(), payment.getRemarks(), payment.getReconciledAt(),
-                payment.getVersion());
+                // An advance carries no proof yet: this endpoint takes no file, and adding
+                // one is a separate change to a separate act. Empty rather than absent.
+                payment.getVersion(), List.of());
     }
 
     /**

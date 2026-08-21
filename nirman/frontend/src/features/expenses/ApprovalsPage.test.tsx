@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApprovalsPage } from './ApprovalsPage';
-import type { Expense, ExpenseWorkflow, PageResponse, Site } from './types';
+import type { Expense, ExpenseWorkflow, PageResponse, Payment, Site } from './types';
 
 const get = vi.fn();
 const post = vi.fn();
@@ -39,6 +39,19 @@ function page(content: Expense[]): PageResponse<Expense> {
     content,
     page: 0,
     size: 100,
+    totalElements: content.length,
+    totalPages: 1,
+    first: true,
+    last: true,
+  };
+}
+
+/** The same page envelope, for the payment rows behind a part-paid bill. */
+function page2(content: Payment[]): PageResponse<Payment> {
+  return {
+    content,
+    page: 0,
+    size: 50,
     totalElements: content.length,
     totalPages: 1,
     first: true,
@@ -103,6 +116,28 @@ const L1 = expense({
   pendingWithRole: 'ADMIN',
 });
 
+/** The ₹20,000 already gone out against EXP-2025-0003, with the screenshot that proved it. */
+const PAYMENTS: Payment[] = [
+  {
+    id: 'pay-1',
+    paymentNumber: 'PAY-2025-0007',
+    expenseId: 'e3',
+    paymentDate: '2025-06-10',
+    amount: 20000,
+    paymentMode: 'BANK',
+    referenceNumber: 'UTR4471',
+    attachments: [
+      {
+        id: 'pa-1',
+        attachmentId: 'att-pay',
+        docType: 'SCREENSHOT',
+        fileName: 'upi-4471.jpg',
+        contentType: 'image/jpeg',
+      },
+    ],
+  },
+];
+
 const OWED = expense({
   id: 'e3',
   expenseNumber: 'EXP-2025-0003',
@@ -135,6 +170,13 @@ function mockGets() {
         data: { url: 'https://minio.local/signed/att-1', fileName: 'bill-ss-856.jpg' },
       });
     }
+    if (url === '/attachments/att-pay/url') {
+      return Promise.resolve({
+        data: { url: 'https://minio.local/signed/att-pay', fileName: 'upi-4471.jpg' },
+      });
+    }
+    // What has already gone out against a part-paid bill, and what proved it.
+    if (url === '/payments') return Promise.resolve({ data: page2(PAYMENTS) });
     if (url === '/expenses') {
       const status = config?.params?.status;
       if (status === 'SUBMITTED') return Promise.resolve({ data: page([SUBMITTED]) });
@@ -276,15 +318,148 @@ describe('ApprovalsPage', () => {
     expect(post.mock.calls[0]![0]).toBe('/payments');
     expect(post.mock.calls[0]![1]).toMatchObject({ expenseId: 'e3', amount: 30000 });
   });
+
   /**
-   * The approver is agreeing to a figure he did not watch being incurred, and who typed it is
+   * A reference number is not a receipt.
+   *
+   * <p>Until V45 the register could hold twelve digits and nothing else, so a supplier
+   * disputing a payment nine months later was answered with a string and the hope that
+   * somebody's phone still had the screenshot on it. The file is uploaded first and the
+   * payment claims it, in that order: a payment pointing at a file that does not exist is a
+   * receipt nobody can produce.</p>
+   */
+  it('uploads the proof first, then records the payment against it', async () => {
+    permissions = ['expense:read', 'payment:record'];
+    const user = userEvent.setup({ delay: null });
+    post.mockImplementation((url: string) =>
+      url === '/attachments'
+        ? Promise.resolve({ data: { id: 'att-new' } })
+        : Promise.resolve({ data: { id: 'pay-2' } }),
+    );
+    renderPage();
+    await screen.findByText('EXP-2025-0003');
+
+    await user.type(screen.getByRole('spinbutton', { name: 'Pay now' }), '30000');
+    await user.upload(
+      screen.getByLabelText('Attach proof of payment'),
+      new File([new Uint8Array(64)], 'upi-9912.jpg', { type: 'image/jpeg' }),
+    );
+    // The question only appears once there is something to describe by it.
+    await user.click(await screen.findByRole('combobox', { name: 'What is it' }));
+    await user.click(screen.getByRole('option', { name: 'Payment screenshot' }));
+
+    await user.click(screen.getByRole('button', { name: 'Record payment' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    expect(post.mock.calls[0]![0]).toBe('/attachments');
+    expect(post.mock.calls[1]![0]).toBe('/payments');
+    expect(post.mock.calls[1]![1]).toMatchObject({
+      expenseId: 'e3',
+      amount: 30000,
+      attachmentId: 'att-new',
+      proofType: 'SCREENSHOT',
+    });
+  });
+
+  /**
+   * Cash handed across a table has nothing to photograph, and refusing the payment for want
+   * of a picture is how a real payment ends up in a second book.
+   */
+  it('records a payment with no proof at all', async () => {
+    permissions = ['expense:read', 'payment:record'];
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findByText('EXP-2025-0003');
+
+    await user.type(screen.getByRole('spinbutton', { name: 'Pay now' }), '5000');
+    await user.click(screen.getByRole('button', { name: 'Record payment' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    expect(post.mock.calls[0]![0]).toBe('/payments');
+    expect(post.mock.calls[0]![1]).toMatchObject({ amount: 5000, attachmentId: undefined });
+  });
+
+  /**
+   * Evidence that can be attached and never looked at is a filing cabinet nobody has the key
+   * to — and the moment it is wanted is the moment somebody is disputing the payment.
+   */
+  it('shows what proved the money that has already gone out', async () => {
+    permissions = ['expense:read', 'payment:record'];
+    renderPage();
+    await screen.findByText('EXP-2025-0003');
+
+    expect(await screen.findByText(/UTR4471/)).toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: 'upi-4471.jpg' })).toBeInTheDocument();
+  });
+  /**
+   * The approver is agreeing to a figure he did not watch being incurred, and who sent it is
    * half of what he is weighing.
    */
-  it('names who typed each waiting expense', async () => {
+  it('names who submitted each waiting expense', async () => {
     renderPage();
     await screen.findByText('EXP-2025-0001');
 
-    expect(screen.getByText('Typed by Uttam Singh')).toBeInTheDocument();
+    expect(screen.getByText('Submitted by Uttam Singh')).toBeInTheDocument();
+  });
+
+  /**
+   * A challan with no serial number on it is still a challan, and the man at the gate
+   * photographed it.
+   *
+   * <p>The row used to say "No bill" whenever there was no bill <b>number</b>, which was
+   * flatly untrue with the picture on the screen directly underneath the sentence denying it.
+   * {@code ExpenseEvidencePolicy} has counted a photograph as evidence since V40 moved the
+   * rule out of a check constraint precisely so it could see the attachments; this screen was
+   * the last place still pretending otherwise.</p>
+   */
+  it('does not call a photographed bill "No bill" for want of a number on it', async () => {
+    const photographed = expense({
+      id: 'e4',
+      expenseNumber: 'EXP-2025-0004',
+      workflowStatus: 'SUBMITTED',
+      pendingLevel: 1,
+      pendingWithRole: 'ENGINEER',
+      attachments: [
+        {
+          id: 'ea-4',
+          attachmentId: 'att-1',
+          docType: 'BILL',
+          fileName: 'challan.jpg',
+          contentType: 'image/jpeg',
+          sizeBytes: 190_000,
+        },
+      ],
+    });
+    get.mockImplementation((url: string, config?: { params?: { status?: ExpenseWorkflow } }) => {
+      if (url === '/sites') return Promise.resolve({ data: SITES });
+      if (url === '/approvals/pending') return Promise.resolve({ data: [] });
+      if (url === '/attachments/att-1/url') {
+        return Promise.resolve({
+          data: { url: 'https://minio.local/signed/att-1', fileName: 'challan.jpg' },
+        });
+      }
+      if (url === '/expenses') {
+        return Promise.resolve({
+          data: page(config?.params?.status === 'SUBMITTED' ? [photographed] : []),
+        });
+      }
+      return Promise.reject(new Error(`unexpected GET ${url}`));
+    });
+
+    renderPage();
+    await screen.findByText('EXP-2025-0004');
+
+    expect(screen.getByText('Bill photographed, no bill number on it')).toBeInTheDocument();
+    expect(screen.queryByText('No bill')).not.toBeInTheDocument();
+  });
+
+  /** With nothing attached and no reason given, "No bill" is finally true. */
+  it('still says No bill when there is neither a number nor a photograph', async () => {
+    permissions = ['expense:read', 'expense:approve:l1'];
+    renderPage();
+    await screen.findByText('EXP-2025-0002');
+
+    expect(screen.getByText('No bill')).toBeInTheDocument();
   });
 
   /** A user since removed from the rolls is admitted, never left as a blank line. */
@@ -292,7 +467,9 @@ describe('ApprovalsPage', () => {
     renderPage();
     await screen.findByText('EXP-2025-0002');
 
-    expect(screen.getByText('Typed by somebody no longer on the rolls')).toBeInTheDocument();
+    expect(
+      screen.getByText('Submitted by somebody no longer on the rolls'),
+    ).toBeInTheDocument();
   });
 
   /**

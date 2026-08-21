@@ -494,13 +494,47 @@ export interface PaymentInput {
   paymentMode: string;
   referenceNumber?: string | undefined;
   remarks?: string | undefined;
+  /** A file already uploaded, claimed by the payment this call creates. */
+  attachmentId?: string | undefined;
+  /** RECEIPT | SCREENSHOT | BANK_SLIP | OTHER. */
+  proofType?: string | undefined;
 }
 
+/**
+ * Records a payment, with the proof it went out attached to it.
+ *
+ * <p>Two calls, file first, exactly as {@link useAttachBill} does it and for the same reason:
+ * a stored file with no owner is a draft its uploader may still delete, while a payment
+ * pointing at a file that does not exist is a receipt nobody can produce. The order also means
+ * an upload that fails leaves no payment behind — which is the right way round, since a
+ * payment recorded without the screenshot the accountant thought he had attached is worse than
+ * one he has to record again.</p>
+ *
+ * <p>Not queued offline, unlike booking an expense. Recording a payment is the accountant's,
+ * done at a desk against a record the server already holds and may already have moved — the
+ * same argument {@link useUpdateExpense} makes about a correction. It waits for a connection.</p>
+ */
 export function useRecordPayment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: PaymentInput) =>
-      (await apiClient.post<Payment>('/payments', input)).data,
+    mutationFn: async ({
+      proof,
+      siteId,
+      ...input
+    }: PaymentInput & { proof?: File | undefined; siteId?: string | undefined }) => {
+      let attachmentId: string | undefined;
+      if (proof) {
+        const form = new FormData();
+        form.append('file', proof, proof.name);
+        attachmentId = (
+          await apiClient.post<{ id: string }>('/attachments', form, {
+            params: { ownerEntityType: 'PAYMENT', kind: 'DOCUMENT', siteId },
+            headers: { 'Content-Type': 'multipart/form-data' },
+          })
+        ).data.id;
+      }
+      return (await apiClient.post<Payment>('/payments', { ...input, attachmentId })).data;
+    },
     onSuccess: () => {
       // A payment moves the expense's paid and payable figures, so both caches go.
       void queryClient.invalidateQueries({ queryKey: expenseKeys.all });

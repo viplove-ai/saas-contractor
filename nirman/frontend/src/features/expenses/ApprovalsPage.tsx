@@ -17,9 +17,11 @@ import { formatAmount } from '../../shared/formatters';
 import { useSelectedSite } from '../../shared/siteSelection';
 import { StatusChip } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
+import { EvidencePhotoField } from '../../shared/EvidencePhotoField';
 import {
   useDecideExpense,
   useExpenses,
+  usePayments,
   usePendingApprovals,
   useRecordPayment,
   useSites,
@@ -67,6 +69,16 @@ export function ApprovalsPage() {
   const { hasPermission } = useAuth();
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [payAmount, setPayAmount] = useState<Record<string, string>>({});
+  /**
+   * The picture of the cash going out, per bill: the UPI screenshot, the signed receipt, the
+   * bank slip.
+   *
+   * <p>Held here rather than inside the row so that clearing it on a successful save is the
+   * same act as clearing the amount. A file left behind after the payment it belonged to has
+   * been recorded is the next payment quietly attaching the wrong receipt.</p>
+   */
+  const [proof, setProof] = useState<Record<string, File | null>>({});
+  const [proofType, setProofType] = useState<Record<string, string>>({});
   /**
    * Whose cost each waiting bill is, where the approver has changed his mind about it.
    *
@@ -173,22 +185,20 @@ export function ApprovalsPage() {
               </Typography>
               <Typography variant="body2">{expense.description}</Typography>
               {/*
-                Who typed it, on the row rather than a click away. The approver is agreeing to
+                Who sent it, on the row rather than a click away. The approver is agreeing to
                 a figure he did not watch being incurred, and the author is half of what he is
                 weighing — the same bill from the storekeeper and from a supervisor two days
                 off the site are not the same bill. Named when it is known and admitted when it
-                is not, because a blank line reads as nobody having typed it.
+                is not, because a blank line reads as nobody having sent it.
               */}
               <Stack direction="row" spacing={0.5} alignItems="center">
                 <PersonOutlineIcon fontSize="small" color="disabled" />
                 <Typography variant="body2" color="text.secondary">
-                  Typed by {expense.createdByName ?? 'somebody no longer on the rolls'}
+                  Submitted by {expense.createdByName ?? 'somebody no longer on the rolls'}
                 </Typography>
               </Stack>
               <Typography variant="body2" color="text.secondary">
-                {expense.billNumber
-                  ? `Bill ${expense.billNumber}`
-                  : (expense.noBillReason ?? 'No bill')}
+                {billLine(expense)}
               </Typography>
               <BillPreview attachments={expense.attachments} />
 
@@ -317,6 +327,8 @@ export function ApprovalsPage() {
                     {formatAmount(expense.totalAmount)} · paid {formatAmount(expense.paidAmount)} ·{' '}
                     <strong>owed {formatAmount(expense.payableAmount)}</strong>
                   </Typography>
+                  {/* What has already gone out against this bill, and what proved it. */}
+                  <PaidSoFar expenseId={expense.id} paidAmount={expense.paidAmount} />
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                     <TextField
                       label="Pay now"
@@ -330,33 +342,88 @@ export function ApprovalsPage() {
                       helperText={`Up to ${formatAmount(expense.payableAmount)}`}
                       sx={{ minWidth: 160 }}
                     />
-                    <Button
-                      variant="contained"
-                      color="secondary"
-                      disabled={
-                        pay.isPending ||
-                        !(Number(payAmount[expense.id]) > 0) ||
-                        Number(payAmount[expense.id]) > expense.payableAmount
-                      }
-                      onClick={() =>
-                        pay.mutate(
-                          {
-                            expenseId: expense.id,
-                            paymentDate: today(),
-                            amount: Number(payAmount[expense.id]),
-                            paymentMode: 'BANK',
-                          },
-                          {
-                            onSuccess: () =>
-                              setPayAmount((current) => ({ ...current, [expense.id]: '' })),
-                          },
-                        )
-                      }
-                      sx={{ minHeight: 48, alignSelf: 'flex-start' }}
-                    >
-                      Record payment
-                    </Button>
+                    {/*
+                      Asked only once there is something to describe. A receipt with a
+                      supplier's signature on it and a screenshot out of a UPI app are not the
+                      same kind of proof — the first binds him and the second only says the
+                      money moved — and whoever reads it later is entitled to be told which he
+                      is looking at. Asking before a file is picked would be a picker on every
+                      row for a question most of them never reach.
+                    */}
+                    {proof[expense.id] && (
+                      <TextField
+                        select
+                        label="What is it"
+                        size="small"
+                        value={proofType[expense.id] ?? 'RECEIPT'}
+                        onChange={(e) =>
+                          setProofType((current) => ({
+                            ...current,
+                            [expense.id]: e.target.value,
+                          }))
+                        }
+                        sx={{ minWidth: 170 }}
+                      >
+                        <MenuItem value="RECEIPT">Receipt</MenuItem>
+                        <MenuItem value="SCREENSHOT">Payment screenshot</MenuItem>
+                        <MenuItem value="BANK_SLIP">Bank slip</MenuItem>
+                        <MenuItem value="OTHER">Something else</MenuItem>
+                      </TextField>
+                    )}
                   </Stack>
+                  {/*
+                    The proof, collected where the payment is recorded and not on a screen
+                    somebody visits afterwards. A reference number was all this record could
+                    carry, so a supplier disputing a payment nine months later was answered
+                    with twelve digits and the hope that somebody's phone still had the
+                    screenshot on it.
+
+                    Optional, and it stays optional: cash handed across a table has nothing to
+                    photograph, and refusing the payment for want of a picture is how a real
+                    payment ends up in a second book.
+                  */}
+                  <EvidencePhotoField
+                    file={proof[expense.id] ?? null}
+                    onPick={(file) =>
+                      setProof((current) => ({ ...current, [expense.id]: file }))
+                    }
+                    label="Attach proof of payment"
+                    changeLabel="Change the proof"
+                  />
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    disabled={
+                      pay.isPending ||
+                      !(Number(payAmount[expense.id]) > 0) ||
+                      Number(payAmount[expense.id]) > expense.payableAmount
+                    }
+                    onClick={() =>
+                      pay.mutate(
+                        {
+                          expenseId: expense.id,
+                          siteId: expense.siteId,
+                          paymentDate: today(),
+                          amount: Number(payAmount[expense.id]),
+                          paymentMode: 'BANK',
+                          proof: proof[expense.id] ?? undefined,
+                          proofType: proofType[expense.id] ?? 'RECEIPT',
+                        },
+                        {
+                          onSuccess: () => {
+                            setPayAmount((current) => ({ ...current, [expense.id]: '' }));
+                            // The file goes with the amount. Left behind, it is the next
+                            // payment quietly attaching the previous one's receipt.
+                            setProof((current) => ({ ...current, [expense.id]: null }));
+                            setProofType((current) => ({ ...current, [expense.id]: 'RECEIPT' }));
+                          },
+                        },
+                      )
+                    }
+                    sx={{ minHeight: 48, alignSelf: 'flex-start' }}
+                  >
+                    Record payment
+                  </Button>
                 </Stack>
               </Paper>
             ))}
@@ -365,4 +432,66 @@ export function ApprovalsPage() {
       )}
     </Stack>
   );
+}
+
+/**
+ * What has already gone out against this bill, and what proved it.
+ *
+ * <p>Only on a part-paid row, which is why the query is not fired at all until there is
+ * something to fetch: a queue of forty untouched bills would otherwise be forty round trips
+ * for forty empty lists. A bill nobody has paid says nothing here, because "no payments yet"
+ * is exactly what the owed figure above already says.</p>
+ *
+ * <p>The receipt is shown rather than only recorded. Evidence that can be attached and never
+ * looked at is a filing cabinet nobody has the key to — and the moment it is wanted is
+ * precisely the moment somebody is disputing the payment, which is months after whoever
+ * uploaded it has forgotten which bill it belonged to.</p>
+ */
+function PaidSoFar({ expenseId, paidAmount }: { expenseId: string; paidAmount: number }) {
+  const payments = usePayments(paidAmount > 0 ? expenseId : undefined);
+  const rows = payments.data?.content ?? [];
+  if (rows.length === 0) {
+    return null;
+  }
+  return (
+    <Stack spacing={1}>
+      {rows.map((payment) => (
+        <Stack key={payment.id} spacing={0.5}>
+          <Typography variant="body2" color="text.secondary">
+            {payment.paymentDate} · {formatAmount(payment.amount)} · {payment.paymentMode}
+            {payment.referenceNumber && <> · {payment.referenceNumber}</>}
+          </Typography>
+          <BillPreview
+            attachments={payment.attachments}
+            emptyLabel="Nothing was attached to prove this payment"
+          />
+        </Stack>
+      ))}
+    </Stack>
+  );
+}
+
+/**
+ * What the row says about the bill — read together with the photograph beside it, not apart
+ * from it.
+ *
+ * <p>It used to say "No bill" whenever there was no bill <b>number</b>, which on a challan
+ * with no serial on it was flatly untrue: the bill was on the screen directly underneath the
+ * sentence denying it. {@code ExpenseEvidencePolicy} has always counted a photograph as
+ * evidence — V40 moved the rule out of a check constraint precisely so it could see the
+ * attachments — and the screen was the last place still pretending otherwise.</p>
+ *
+ * <p>So the three cases are said as three different things. A number is a number. A
+ * photograph with no number is a bill that carries none, which the approver can look at and
+ * judge. Neither of those, and the reason the author gave for there being no bill at all is
+ * the whole of what he has to go on — and if he gave none, "No bill" is finally true.</p>
+ */
+function billLine(expense: Expense): string {
+  if (expense.billNumber) {
+    return `Bill ${expense.billNumber}`;
+  }
+  if (expense.attachments.length > 0) {
+    return 'Bill photographed, no bill number on it';
+  }
+  return expense.noBillReason ?? 'No bill';
 }

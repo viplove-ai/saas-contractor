@@ -178,6 +178,24 @@ export interface Payment {
   paymentMode: string;
   referenceNumber?: string;
   remarks?: string;
+  /**
+   * What proves the cash went out — the UPI screenshot, the signed receipt, the bank slip.
+   *
+   * <p>Empty on a payment recorded with nothing, which is a real case: a cash payment across
+   * a table has nothing to photograph. A reference number was all this record could carry
+   * until V45, so a supplier disputing a payment nine months later was arguing with a string
+   * of twelve digits.</p>
+   */
+  attachments: PaymentAttachment[];
+}
+
+export interface PaymentAttachment {
+  id: string;
+  attachmentId: string;
+  /** RECEIPT | SCREENSHOT | BANK_SLIP | OTHER. What the picture is of, not what it is. */
+  docType: string;
+  fileName?: string;
+  contentType?: string;
 }
 
 export interface VendorBalance {

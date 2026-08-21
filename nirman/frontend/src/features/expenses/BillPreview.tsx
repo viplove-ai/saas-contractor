@@ -2,7 +2,20 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { Button, Skeleton, Stack, Typography } from '@mui/material';
 import { PhotoThumb } from '../../shared/PhotoThumb';
 import { useAttachmentUrl } from './api';
-import type { ExpenseAttachment } from './types';
+
+/**
+ * The least this component needs to draw a file: what to ask the server for, and what it is.
+ *
+ * <p>Structural rather than {@code ExpenseAttachment}, so the same preview serves the receipt
+ * that proves a payment. Neither record's extra fields matter here — a size in bytes is not
+ * something anybody deciding about money is reading.</p>
+ */
+interface PreviewableAttachment {
+  id: string;
+  attachmentId: string;
+  fileName?: string;
+  contentType?: string;
+}
 
 /**
  * The photographed bill, in front of whoever is deciding about the money.
@@ -19,11 +32,18 @@ import type { ExpenseAttachment } from './types';
  * bill he can check and one he is taking on trust — and an absent row reads as a screen that
  * has not finished loading.</p>
  */
-export function BillPreview({ attachments }: { attachments: ExpenseAttachment[] }) {
+export function BillPreview({
+  attachments,
+  emptyLabel = 'No photograph of the bill',
+}: {
+  attachments: PreviewableAttachment[];
+  /** What the absence is called. A payment's is a receipt, not a bill. */
+  emptyLabel?: string;
+}) {
   if (attachments.length === 0) {
     return (
       <Typography variant="body2" color="text.secondary">
-        No photograph of the bill
+        {emptyLabel}
       </Typography>
     );
   }
@@ -37,7 +57,7 @@ export function BillPreview({ attachments }: { attachments: ExpenseAttachment[] 
 }
 
 /** One attachment: a picture to tap open, or — for a PDF, which no img will draw — a link. */
-function BillThumb({ attachment }: { attachment: ExpenseAttachment }) {
+function BillThumb({ attachment }: { attachment: PreviewableAttachment }) {
   const link = useAttachmentUrl(attachment.attachmentId);
   const name = attachment.fileName ?? 'Bill';
 
@@ -77,7 +97,7 @@ function BillThumb({ attachment }: { attachment: ExpenseAttachment }) {
 
 /** By what the server stored, and by the name when it stored nothing — an upload from an
  *  old client carries no content type and is still a PDF. */
-function isPdf(attachment: ExpenseAttachment): boolean {
+function isPdf(attachment: PreviewableAttachment): boolean {
   return (
     attachment.contentType === 'application/pdf' ||
     (attachment.fileName ?? '').toLowerCase().endsWith('.pdf')

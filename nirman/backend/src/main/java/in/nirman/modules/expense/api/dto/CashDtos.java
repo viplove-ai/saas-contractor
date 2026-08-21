@@ -33,7 +33,20 @@ public final class CashDtos {
             @NotBlank @Size(max = 20) String paymentMode,
             @Size(max = 80) String referenceNumber,
             @Size(max = 60) String bankAccount,
-            String remarks) {
+            String remarks,
+            /**
+             * A file already uploaded, to be claimed by the payment this call creates — the
+             * UPI screenshot, the signed receipt, the bank slip.
+             *
+             * <p>Optional, and deliberately so. A cash payment across a table has nothing to
+             * photograph, and refusing the payment for want of a picture would send it into
+             * the second book that {@code RecordVendorAdvanceRequest} exists to close. It is
+             * carried on the request rather than attached afterwards because a payment has no
+             * draft state to attach to: it is recorded once and it is done.</p>
+             */
+            UUID attachmentId,
+            /** RECEIPT | SCREENSHOT | BANK_SLIP | OTHER. Defaults to RECEIPT. */
+            @Size(max = 30) String proofType) {
     }
 
     public record PaymentResponse(
@@ -50,7 +63,18 @@ public final class CashDtos {
             String bankAccount,
             String remarks,
             Instant reconciledAt,
-            Long version) {
+            Long version,
+            /** What proves the cash went out. Empty on a payment recorded with nothing. */
+            List<PaymentAttachmentResponse> attachments) {
+    }
+
+    /** One file proving one payment. Shaped like the expense's, because it is the same act. */
+    public record PaymentAttachmentResponse(
+            UUID id,
+            UUID attachmentId,
+            String docType,
+            String fileName,
+            String contentType) {
     }
 
     /**

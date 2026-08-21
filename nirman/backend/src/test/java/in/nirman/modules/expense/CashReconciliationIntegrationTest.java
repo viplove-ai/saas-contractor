@@ -3,11 +3,14 @@ package in.nirman.modules.expense;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.nirman.AbstractIntegrationTest;
+import in.nirman.InMemoryStorageConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -18,7 +21,9 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -34,6 +39,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>Also covers the float: a site advance is cleared by bills and cash back, and the holder
  * cannot clear his own balance by asserting it.</p>
  */
+// The suite runs no MinIO on purpose — the application starts without it so every
+// non-attachment feature works on a laptop with no container. A payment's proof is an upload,
+// so the bucket stands in as a map here.
+@Import(InMemoryStorageConfig.class)
 class CashReconciliationIntegrationTest extends AbstractIntegrationTest {
 
     private static final String PASSWORD = "Nirman@123";
@@ -136,6 +145,69 @@ class CashReconciliationIntegrationTest extends AbstractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(paymentBody(id, "5000")))
                 .andExpect(status().isForbidden());
+    }
+
+    /**
+     * A reference number is not a receipt.
+     *
+     * <p>Until V45 the register could hold twelve digits and nothing else, so a supplier
+     * disputing a payment nine months later was answered with a string and the hope that
+     * somebody's phone still had the screenshot on it. The picture is claimed by the payment
+     * in the same transaction that creates it, which is what stops
+     * {@code AttachmentService.delete} discarding it afterwards as a stray upload.</p>
+     */
+    @Test
+    @DisplayName("a payment carries the proof it went out, and the file becomes the payment's")
+    void aPaymentCarriesItsProof() throws Exception {
+        String uttam = loginToken("uttam");
+        String id = approvedExpense(uttam, "18000", "steel with a screenshot");
+        String proof = uploadProof(uttam, "upi-4471.jpg");
+
+        MvcResult result = mockMvc.perform(post("/api/v1/payments")
+                        .header("Authorization", "Bearer " + uttam)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"expenseId":"%s","paymentDate":"%s","amount":18000,
+                                 "paymentMode":"BANK","referenceNumber":"UTR-9912",
+                                 "attachmentId":"%s","proofType":"SCREENSHOT"}"""
+                                .formatted(id, LocalDate.now(), proof)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.attachments.length()").value(1))
+                .andExpect(jsonPath("$.attachments[0].attachmentId").value(proof))
+                .andExpect(jsonPath("$.attachments[0].docType").value("SCREENSHOT"))
+                .andExpect(jsonPath("$.attachments[0].fileName").value("upi-4471.jpg"))
+                .andReturn();
+
+        // Claimed, so nothing can discard it out from under the payment that points at it.
+        mockMvc.perform(delete("/api/v1/attachments/" + proof)
+                        .header("Authorization", "Bearer " + uttam))
+                .andExpect(status().isUnprocessableEntity());
+
+        // And it is still there when the payment is read back, not only on the way out.
+        String paymentId = objectMapper.readTree(result.getResponse().getContentAsString())
+                .get("id").asText();
+        mockMvc.perform(get("/api/v1/payments")
+                        .param("expenseId", id)
+                        .header("Authorization", "Bearer " + uttam))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(paymentId))
+                .andExpect(jsonPath("$.content[0].attachments[0].attachmentId").value(proof));
+    }
+
+    /**
+     * Cash handed across a table has nothing to photograph. Refusing the payment for want of
+     * a picture is how a real payment ends up in the second book that this module exists to
+     * close, so the proof is optional and the figures reconcile without it.
+     */
+    @Test
+    @DisplayName("a payment with no proof is still a payment")
+    void proofIsOptional() throws Exception {
+        String uttam = loginToken("uttam");
+        String id = approvedExpense(uttam, "3000", "cash cartage");
+
+        pay(uttam, id, "3000").andExpect(status().isCreated())
+                .andExpect(jsonPath("$.attachments.length()").value(0));
+        assertAmounts(uttam, id, "3000.00", "3000.00", "0.00");
     }
 
     /** Vendor balances are built from the bills, never from a figure somebody typed. */
@@ -349,6 +421,20 @@ class CashReconciliationIntegrationTest extends AbstractIntegrationTest {
     private ResultActions submit(String token, String id) throws Exception {
         return mockMvc.perform(post("/api/v1/expenses/" + id + "/submit")
                 .header("Authorization", "Bearer " + token));
+    }
+
+    /** A picture in the bucket, waiting for the payment that will claim it. */
+    private String uploadProof(String token, String fileName) throws Exception {
+        MvcResult result = mockMvc.perform(multipart("/api/v1/attachments")
+                        .file(new MockMultipartFile("file", fileName, "image/jpeg",
+                                new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0}))
+                        .param("ownerEntityType", "PAYMENT")
+                        .param("kind", "DOCUMENT")
+                        .param("siteId", SITE_A)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asText();
     }
 
     private ResultActions pay(String token, String expenseId, String amount) throws Exception {

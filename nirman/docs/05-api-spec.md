@@ -146,7 +146,7 @@ beside it and a `scopeComplete` flag saying whether the figure is the whole stor
 | POST | `/expenses/{id}/revise` | the author re-opens an approved expense: keeps its number, cancels its approval, re-enters the chain. Needs `reason` and `version`; refused once anything has been paid against it |
 | POST | `/expenses/{id}/void` | never a hard delete; cancels any level still waiting |
 | POST | `/expenses/{id}/attachments` | links an uploaded bill photograph |
-| GET|POST | `/payments` | partial payments are the normal case; refuses more than is still payable, and anything against an unapproved expense. `?vendorId&expenseId&from&to` |
+| GET|POST | `/payments` | partial payments are the normal case; refuses more than is still payable, and anything against an unapproved expense. POST takes an optional `attachmentId` and `proofType` (RECEIPT/SCREENSHOT/BANK_SLIP/OTHER) — the receipt or UPI screenshot, claimed by the payment in the same transaction; the response carries `attachments`. `?vendorId&expenseId&from&to` |
 | GET | `/vendors/balances` | approved cost, cash paid and payable per vendor — derived from the bills, never stored |
 | GET|POST | `/advances` | site float issued to a member of staff (`advance:issue`) |
 | GET | `/advances/{id}` | |

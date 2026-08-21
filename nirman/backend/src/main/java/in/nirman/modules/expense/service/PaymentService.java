@@ -3,13 +3,17 @@ package in.nirman.modules.expense.service;
 import in.nirman.common.BusinessException;
 import in.nirman.common.DocumentNumberService;
 import in.nirman.common.PageResponse;
+import in.nirman.modules.attachment.service.AttachmentLookup;
 import in.nirman.modules.audit.AuditService;
+import in.nirman.modules.expense.api.dto.CashDtos.PaymentAttachmentResponse;
 import in.nirman.modules.expense.api.dto.CashDtos.PaymentResponse;
 import in.nirman.modules.expense.api.dto.CashDtos.RecordPaymentRequest;
 import in.nirman.modules.expense.api.dto.CashDtos.VendorBalanceRow;
 import in.nirman.modules.expense.domain.Expense;
 import in.nirman.modules.expense.domain.Payment;
+import in.nirman.modules.expense.domain.PaymentAttachment;
 import in.nirman.modules.expense.repository.ExpenseRepository;
+import in.nirman.modules.expense.repository.PaymentAttachmentRepository;
 import in.nirman.modules.expense.repository.PaymentRepository;
 import in.nirman.modules.masterdata.domain.Vendor;
 import in.nirman.modules.masterdata.repository.VendorRepository;
@@ -47,19 +51,24 @@ import java.util.UUID;
 public class PaymentService {
 
     private final PaymentRepository payments;
+    private final PaymentAttachmentRepository proofs;
     private final ExpenseRepository expenses;
     private final VendorRepository vendors;
     private final DocumentNumberService documentNumbers;
+    private final AttachmentLookup attachments;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
 
-    public PaymentService(PaymentRepository payments, ExpenseRepository expenses,
-                          VendorRepository vendors, DocumentNumberService documentNumbers,
+    public PaymentService(PaymentRepository payments, PaymentAttachmentRepository proofs,
+                          ExpenseRepository expenses, VendorRepository vendors,
+                          DocumentNumberService documentNumbers, AttachmentLookup attachments,
                           CurrentUserProvider currentUser, AuditService audit) {
         this.payments = payments;
+        this.proofs = proofs;
         this.expenses = expenses;
         this.vendors = vendors;
         this.documentNumbers = documentNumbers;
+        this.attachments = attachments;
         this.currentUser = currentUser;
         this.audit = audit;
     }
@@ -112,10 +121,24 @@ public class PaymentService {
 
         expense.addPayment(request.amount());
 
+        /*
+          The proof, claimed in the same transaction that creates the payment it proves. If the
+          claim fails — the file belongs to another record, or does not exist — the payment
+          rolls back with it, which is right: a payment recorded without the screenshot the
+          accountant thought he had attached is worse than one he has to record again, because
+          only the second of those is visible to him.
+        */
+        if (request.attachmentId() != null) {
+            attachments.claimFor(request.attachmentId(), payment.getId());
+            proofs.save(new PaymentAttachment(payment.getId(), request.attachmentId(),
+                    request.proofType()));
+        }
+
         audit.record("PAYMENT", payment.getId(), "CREATE", null,
                 Map.of("paymentNumber", number, "expenseNumber", expense.getExpenseNumber(),
                         "amount", request.amount(), "paidToDate", expense.getPaidAmount(),
-                        "stillPayable", expense.payableAmount()), request.remarks());
+                        "stillPayable", expense.payableAmount(),
+                        "proofAttached", request.attachmentId() != null), request.remarks());
         return toResponse(payment);
     }
 
@@ -175,7 +198,36 @@ public class PaymentService {
                 payment.getExpenseId(), expenseNumber, payment.getVendorId(), vendorName,
                 payment.getPaymentDate(), payment.getAmount(), payment.getPaymentMode(),
                 payment.getReferenceNumber(), payment.getBankAccount(), payment.getRemarks(),
-                payment.getReconciledAt(), payment.getVersion());
+                payment.getReconciledAt(), payment.getVersion(), proofsFor(payment.getId()));
+    }
+
+    /**
+     * What proves this payment, named so the register can draw it.
+     *
+     * <p>A link whose file has gone comes back with its name blank rather than being dropped:
+     * "there was a receipt and it cannot be found" is a different fact from "there was never
+     * one", and the second is the one an accountant would wrongly conclude from a silent
+     * omission. The same choice {@code ExpenseResponses} makes about a bill.</p>
+     */
+    private List<PaymentAttachmentResponse> proofsFor(UUID paymentId) {
+        List<PaymentAttachment> links = proofs.findByPaymentId(paymentId);
+        if (links.isEmpty()) {
+            return List.of();
+        }
+        return links.stream().map(link -> {
+            AttachmentLookup.FileInfo file = fileOrNull(link.getAttachmentId());
+            return new PaymentAttachmentResponse(link.getId(), link.getAttachmentId(),
+                    link.getDocType(), file == null ? null : file.fileName(),
+                    file == null ? null : file.contentType());
+        }).toList();
+    }
+
+    private AttachmentLookup.FileInfo fileOrNull(UUID attachmentId) {
+        try {
+            return attachments.require(attachmentId);
+        } catch (BusinessException missing) {
+            return null;
+        }
     }
 
     private UUID orgId() {
