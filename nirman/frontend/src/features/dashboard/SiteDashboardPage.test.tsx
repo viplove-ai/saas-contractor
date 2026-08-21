@@ -34,6 +34,16 @@ function dashboard(overrides: Partial<SiteDashboard> = {}): SiteDashboard {
       daysWithAttendance: 2,
       daysWithoutAttendance: 20,
     },
+    outsourcedLabour: {
+      enabled: false,
+      headDays: 0,
+      peakHeadCount: 0,
+      manHours: 0,
+      daysCounted: 0,
+      daysWithoutCount: 0,
+      daysWithoutHours: 0,
+      trades: [],
+    },
     material: {
       openingValue: 0,
       received: 41000,
@@ -167,6 +177,70 @@ describe('SiteDashboardPage', () => {
     renderPage();
 
     expect(await screen.findByText(/No report on 2025-06-11, 2025-06-12/)).toBeInTheDocument();
+  });
+
+  /**
+   * A site staffed by labour suppliers keeps no muster roll, so its whole labour story was
+   * a card reading zero. The men are counted at the gate instead, and they belong on the
+   * report — on their own card, never folded into the wage figures above them.
+   */
+  it('reports external labour on its own card where the site is staffed that way', async () => {
+    const base = dashboard();
+    mockGets({
+      ...base,
+      outsourcedLabour: {
+        enabled: true,
+        headDays: 154,
+        peakHeadCount: 11,
+        manHours: 1120,
+        daysCounted: 14,
+        daysWithoutCount: 2,
+        daysWithoutHours: 3,
+        trades: [
+          {
+            skillCategoryId: 'sk-mason',
+            skillCategoryName: 'Mason',
+            labourSupplierId: 'v-1',
+            labourSupplierName: 'Karam Singh',
+            headDays: 98,
+            manHours: 784,
+            daysCounted: 14,
+          },
+          {
+            skillCategoryId: 'sk-helper',
+            skillCategoryName: 'Helper',
+            headDays: 56,
+            daysCounted: 14,
+          },
+        ],
+      },
+    });
+    renderPage();
+
+    expect(await screen.findByText('External labour')).toBeInTheDocument();
+    // Head-days and the busiest day beside it, so the sum is never read as people. The label
+    // appears twice — the tile's figure and the trade table's column — so the first is the one.
+    expect(screen.getAllByText('Head-days')[0]!.nextSibling).toHaveTextContent('154');
+    expect(screen.getByText('Busiest day').nextSibling).toHaveTextContent('11 men');
+    // No wage cost, said out loud rather than left to be inferred from a missing column.
+    expect(screen.getByText(/No wage cost: the supplier bills for the work/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/3 counted day\(s\) have no hours written against them/),
+    ).toBeInTheDocument();
+    // RecordTable draws the rows twice — a table for a desk and cards for a phone — so these
+    // are asked for in the plural rather than narrowed to whichever one is on screen.
+    expect(screen.getAllByText('Karam Singh')).not.toHaveLength(0);
+    // Naming the supplier stays optional where the count is made, so it stays optional here.
+    expect(screen.getAllByText('Supplier not named')).not.toHaveLength(0);
+    expect(screen.getAllByText('Not recorded')).not.toHaveLength(0);
+  });
+
+  /** A site that keeps a muster roll gets no card at all, rather than a card of zeros. */
+  it('leaves the external labour card off a site with a muster roll', async () => {
+    renderPage();
+    await screen.findByText('In store now');
+
+    expect(screen.queryByText('External labour')).not.toBeInTheDocument();
   });
 
   /** Claiming past the contract quantity is a warning, not a silently capped bar. */

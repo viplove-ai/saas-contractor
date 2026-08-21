@@ -7,6 +7,8 @@ import in.nirman.modules.dashboard.api.dto.DashboardDtos.DailyCost;
 import in.nirman.modules.dashboard.api.dto.DashboardDtos.DprTile;
 import in.nirman.modules.dashboard.api.dto.DashboardDtos.LabourTile;
 import in.nirman.modules.dashboard.api.dto.DashboardDtos.MaterialPosition;
+import in.nirman.modules.dashboard.api.dto.DashboardDtos.OutsourcedLabourTile;
+import in.nirman.modules.dashboard.api.dto.DashboardDtos.OutsourcedTradeRow;
 import in.nirman.modules.dashboard.api.dto.DashboardDtos.ProgressTile;
 import in.nirman.modules.dashboard.api.dto.DashboardDtos.ProjectRow;
 import in.nirman.modules.dashboard.api.dto.DashboardDtos.SiteDashboard;
@@ -174,6 +176,7 @@ public class DashboardService {
                         labourPeriod.cost().subtract(labourPeriod.verifiedCost()),
                         labourPeriod.pendingVerification(), labourPeriod.daysWithAttendance(),
                         labour.daysWithoutAttendance(siteId, from, to).size()),
+                outsourcedTile(labour.outsourcedPeriod(siteId, from, to)),
                 materialPosition(stock, spend.materialPurchases()),
                 new CashTile(spend.totalBooked(), spend.costIncurred(), spend.materialPurchases(),
                         spend.labourDisbursements(), spend.paid(), spend.payable(),
@@ -207,6 +210,26 @@ public class DashboardService {
                         + "the balances hold. The difference is shown as the residual: either a "
                         + "transfer crossed the edge of this scope, or the ledger and its "
                         + "balance cache have drifted and want looking at.");
+    }
+
+    /**
+     * The suppliers' men, carried straight across with no arithmetic performed on them.
+     *
+     * <p>Deliberately a copy rather than a computation. Every figure this tile holds already
+     * means exactly one thing in the labour module, and the one temptation worth refusing here
+     * is to divide the man-hours by anything or multiply the head-days by a rate — there is no
+     * rate, which is the whole point of the register these come from.</p>
+     */
+    private static OutsourcedLabourTile outsourcedTile(LabourLookup.OutsourcedPeriod period) {
+        return new OutsourcedLabourTile(period.enabled(), period.headDays(),
+                period.peakHeadCount(), period.manHours(), period.daysCounted(),
+                period.daysWithoutCount(), period.daysWithoutHours(),
+                period.trades().stream()
+                        .map(trade -> new OutsourcedTradeRow(trade.skillCategoryId(),
+                                trade.skillCategoryName(), trade.labourSupplierId(),
+                                trade.labourSupplierName(), trade.headDays(), trade.manHours(),
+                                trade.daysCounted()))
+                        .toList());
     }
 
     private ProjectRow projectRow(Project project, LocalDate from, LocalDate to) {

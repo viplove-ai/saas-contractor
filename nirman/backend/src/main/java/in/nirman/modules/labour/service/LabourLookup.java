@@ -131,6 +131,61 @@ public interface LabourLookup {
     /** No permission check: the caller has already passed the one that got it here. */
     OutsourcedDay outsourced(UUID siteId, LocalDate date);
 
+    /**
+     * The same counts over a period, for a site report.
+     *
+     * <p>Carries <b>no cost</b>, for the reason {@link OutsourcedDay} carries none: these men
+     * have no wage rate behind them and the supplier bills for the work. What a month of them
+     * adds up to is head-days and man-hours, and neither of those multiplies by anything
+     * here.</p>
+     *
+     * <p>{@code headDays} rather than a head count, because a head count is a fact about one
+     * day and there is no honest way to add thirty of them into one. Eleven masons every day
+     * for a fortnight is 154 head-days and eleven men, and the report says both — the peak
+     * beside the sum, so that the sum is never mistaken for how many people were there.</p>
+     *
+     * @param manHours       man-hours over the days that recorded hours. Days that recorded
+     *                       none contribute nothing rather than dragging it down as zeros,
+     *                       which is why {@code daysWithoutHours} is beside it.
+     * @param daysCounted    days in the range carrying counts at all
+     * @param daysWithoutCount days in the range with nothing written down — the same gap
+     *                       {@link #daysWithoutAttendance} reports for a muster-roll site
+     */
+    record OutsourcedPeriod(
+            LocalDate from,
+            LocalDate to,
+            boolean enabled,
+            int headDays,
+            int peakHeadCount,
+            BigDecimal manHours,
+            int daysCounted,
+            int daysWithoutCount,
+            int daysWithoutHours,
+            List<OutsourcedTrade> trades) {
+    }
+
+    /**
+     * One trade under one supplier, summed over the period.
+     *
+     * <p>Its own record rather than {@link OutsourcedGroup} because the hours mean a different
+     * thing: a group's {@code hours} is what each man worked that day, and a fortnight of those
+     * added together is not a number anybody can read. Only the man-hours survive the sum.</p>
+     */
+    record OutsourcedTrade(
+            UUID skillCategoryId,
+            String skillCategoryName,
+            UUID labourSupplierId,
+            String labourSupplierName,
+            int headDays,
+            /** Null when no day of this trade's had hours written against it. Not zero. */
+            BigDecimal manHours,
+            int daysCounted) {
+    }
+
+    /** No permission check: the caller has already passed the one that got it here. */
+    OutsourcedPeriod outsourcedPeriod(UUID siteId, LocalDate from, LocalDate to);
+
+
     /** No permission check: the caller has already passed the one that got it here. */
     LabourDay day(UUID siteId, LocalDate date);
 

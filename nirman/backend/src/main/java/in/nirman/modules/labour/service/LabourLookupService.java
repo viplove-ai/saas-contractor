@@ -21,8 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -118,6 +120,81 @@ public class LabourLookupService implements LabourLookup {
 
         return new OutsourcedDay(date, enabled,
                 groups.stream().mapToInt(OutsourcedGroup::headCount).sum(), manHours, groups);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>One pass over the period's rows rather than one call per day, for the reason
+     * {@link #dailyCost} takes one: a site report reads a month, and a month of round trips is
+     * a month of round trips.</p>
+     *
+     * <p>{@code enabled} is answered from the site, exactly as {@link #outsourced} answers it,
+     * so a report can tell "this site does not work that way" from "it does, and nobody wrote
+     * anything down". The second is a gap worth naming; the first is a card that should not
+     * appear.</p>
+     */
+    @Override
+    public OutsourcedPeriod outsourcedPeriod(UUID siteId, LocalDate from, LocalDate to) {
+        boolean enabled = sites.require(siteId).usesOutsourcedLabour();
+        List<SiteLabourCount> rows = labourCounts.findBySiteIdAndCountDateBetween(siteId, from, to);
+
+        long rangeDays = Math.max(ChronoUnit.DAYS.between(from, to) + 1, 0);
+        if (rows.isEmpty()) {
+            return new OutsourcedPeriod(from, to, enabled, 0, 0, BigDecimal.ZERO, 0,
+                    (int) rangeDays, 0, List.of());
+        }
+
+        // Per day, so the peak is a real day's head count and the sum is head-days. Adding
+        // thirty days of head counts into one number and calling it a head count is the one
+        // thing this roll-up must not do.
+        Map<LocalDate, Integer> headByDay = new LinkedHashMap<>();
+        Map<GroupKey, TradeAccumulator> byTrade = new LinkedHashMap<>();
+        BigDecimal manHours = BigDecimal.ZERO;
+        Set<LocalDate> daysWithHours = new HashSet<>();
+
+        for (SiteLabourCount row : rows) {
+            headByDay.merge(row.getCountDate(), row.getHeadCount(), Integer::sum);
+            TradeAccumulator trade = byTrade.computeIfAbsent(
+                    new GroupKey(row.getSkillCategoryId(), row.getLabourSupplierId()),
+                    unused -> new TradeAccumulator());
+            trade.headDays += row.getHeadCount();
+            trade.days.add(row.getCountDate());
+            BigDecimal rowManHours = row.manHours();
+            if (rowManHours != null) {
+                trade.manHours = trade.manHours == null
+                        ? rowManHours : trade.manHours.add(rowManHours);
+                manHours = manHours.add(rowManHours);
+                daysWithHours.add(row.getCountDate());
+            }
+        }
+
+        UUID orgId = currentUser.currentOrgId();
+        Map<UUID, String> skillNames = skillCategories.findByOrgIdOrderByCode(orgId).stream()
+                .collect(Collectors.toMap(SkillCategory::getId, SkillCategory::getName));
+        Map<UUID, String> supplierNames = suppliers
+                .findByOrgIdAndDeletedAtIsNullOrderByCode(orgId).stream()
+                .collect(Collectors.toMap(Vendor::getId, Vendor::getName));
+
+        List<OutsourcedTrade> trades = byTrade.entrySet().stream()
+                .map(entry -> new OutsourcedTrade(entry.getKey().skillCategoryId(),
+                        skillNames.get(entry.getKey().skillCategoryId()),
+                        entry.getKey().labourSupplierId(),
+                        entry.getKey().labourSupplierId() == null
+                                ? null : supplierNames.get(entry.getKey().labourSupplierId()),
+                        entry.getValue().headDays, entry.getValue().manHours,
+                        entry.getValue().days.size()))
+                .sorted(Comparator.comparing((OutsourcedTrade trade) -> -trade.headDays())
+                        .thenComparing(trade -> trade.skillCategoryName() == null
+                                ? "\uffff" : trade.skillCategoryName()))
+                .toList();
+
+        int daysCounted = headByDay.size();
+        return new OutsourcedPeriod(from, to, enabled,
+                headByDay.values().stream().mapToInt(Integer::intValue).sum(),
+                headByDay.values().stream().mapToInt(Integer::intValue).max().orElse(0),
+                manHours, daysCounted, (int) Math.max(rangeDays - daysCounted, 0),
+                daysCounted - daysWithHours.size(), trades);
     }
 
     @Override
@@ -287,6 +364,14 @@ public class LabourLookupService implements LabourLookup {
                 .sorted(Comparator.comparing(group -> group.skillCategoryName() == null
                         ? "￿" : group.skillCategoryName()))
                 .toList();
+    }
+
+    /** A trade's running total over the period. Mutable and private, like {@code Accumulator}. */
+    private static final class TradeAccumulator {
+        private int headDays;
+        /** Null until some day of this trade's recorded hours. Null is not zero. */
+        private BigDecimal manHours;
+        private final Set<LocalDate> days = new HashSet<>();
     }
 
     private record GroupKey(UUID skillCategoryId, UUID labourSupplierId) {

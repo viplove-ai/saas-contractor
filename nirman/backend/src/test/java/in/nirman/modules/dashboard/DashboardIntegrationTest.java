@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -247,6 +248,63 @@ class DashboardIntegrationTest extends AbstractIntegrationTest {
     }
 
     /** V903 verifies the 9 June report and leaves the 10th a draft. The tile counts both. */
+    /**
+     * A site staffed by labour suppliers keeps no muster roll, so its whole labour story on
+     * this report was a tile of zeros. The men are counted at the gate instead, and the report
+     * has to carry them — on a tile of their own, because a man-hour on the muster has a rate
+     * behind it and a man-hour at the gate has none.
+     *
+     * <p>Head-days rather than a head count, with the busiest day beside it. Eleven masons
+     * every day for a fortnight is 154 head-days and eleven men, and only printing both keeps
+     * the sum from being read as people.</p>
+     */
+    @Test
+    @DisplayName("the external labour tile reports head-days and man-hours, and no money at all")
+    void theExternalLabourTileCarriesNoMoney() throws Exception {
+        countedLabourAt(SITE_A);
+        try {
+            JsonNode outsourced = siteDashboard(SITE_A, "uttam").get("outsourcedLabour");
+
+            assertThat(outsourced.get("enabled").asBoolean()).isTrue();
+            // 11 + 6 on the 3rd, 11 + 6 on the 4th, 9 alone on the 5th.
+            assertThat(outsourced.get("headDays").asInt()).isEqualTo(43);
+            assertThat(outsourced.get("peakHeadCount").asInt()).isEqualTo(17);
+            assertThat(outsourced.get("daysCounted").asInt()).isEqualTo(3);
+            // (11x8 + 6x8) on the 3rd, (11x8 + 6x8) on the 4th; the 5th recorded none.
+            assertThat(new BigDecimal(outsourced.get("manHours").asText()))
+                    .isEqualByComparingTo("272.00");
+            assertThat(outsourced.get("daysWithoutHours").asInt()).isEqualTo(1);
+
+            // No money anywhere on it, and none of it leaked into the wage bill either.
+            assertThat(outsourced.has("cost")).isFalse();
+            JsonNode labour = siteDashboard(SITE_A, "uttam").get("labour");
+            assertThat(labour.get("manDays").asText()).doesNotContain("43");
+
+            // Biggest trade first, with the supplier named where somebody named him.
+            JsonNode masons = outsourced.get("trades").get(0);
+            assertThat(masons.get("skillCategoryName").asText()).isEqualTo("Mason");
+            assertThat(masons.get("headDays").asInt()).isEqualTo(31);
+            // Null and not zero on the trade whose days recorded no hours at all.
+            assertThat(outsourced.get("trades").get(1).get("skillCategoryName").asText())
+                    .isEqualTo("Helper");
+        } finally {
+            jdbc.update("DELETE FROM site_labour_counts WHERE remarks = 'DASH-COUNT'");
+            jdbc.update("UPDATE sites SET uses_outsourced_labour = false WHERE id = ?::uuid",
+                    SITE_A);
+        }
+    }
+
+    /** A site that keeps a muster roll gets the tile switched off, not a tile of zeros to read. */
+    @Test
+    @DisplayName("the external labour tile is disabled at a site with a muster roll")
+    void theExternalLabourTileIsOffWhereThereIsAMuster() throws Exception {
+        JsonNode outsourced = siteDashboard(SITE_A, "uttam").get("outsourcedLabour");
+
+        assertThat(outsourced.get("enabled").asBoolean()).isFalse();
+        assertThat(outsourced.get("headDays").asInt()).isZero();
+        assertThat(outsourced.get("trades")).isEmpty();
+    }
+
     @Test
     @DisplayName("the DPR tile counts the verified report, the draft, and the days with neither")
     void theDprTileCountsTheDiary() throws Exception {
@@ -438,6 +496,35 @@ class DashboardIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    /**
+     * Three days of men at the gate: masons and helpers with hours on two of them, masons
+     * alone with no hours on the third.
+     *
+     * <p>The third day is the point of the fixture. Hours are recorded where the site knows
+     * them and left out where it does not, so the man-hours must cover less than the head-days
+     * do — and the tile has to say so rather than let a reader divide one by the other.</p>
+     */
+    private void countedLabourAt(String siteId) {
+        jdbc.update("UPDATE sites SET uses_outsourced_labour = true WHERE id = ?::uuid", siteId);
+        record Row(String skill, String date, int heads, String hours) {
+        }
+        for (Row row : List.of(
+                new Row("MASON", "2025-06-03", 11, "8.00"),
+                new Row("HELPER", "2025-06-03", 6, "8.00"),
+                new Row("MASON", "2025-06-04", 11, "8.00"),
+                new Row("HELPER", "2025-06-04", 6, "8.00"),
+                new Row("MASON", "2025-06-05", 9, null))) {
+            jdbc.update("""
+                    INSERT INTO site_labour_counts
+                        (id, org_id, site_id, count_date, skill_category_id, head_count, hours,
+                         remarks)
+                    VALUES (gen_random_uuid(), ?::uuid, ?::uuid, ?::date,
+                            (SELECT id FROM skill_categories WHERE org_id = ?::uuid AND code = ?),
+                            ?, ?::numeric, 'DASH-COUNT')""",
+                    ORG, siteId, row.date(), ORG, row.skill(), row.heads(), row.hours());
+        }
     }
 
     private JsonNode siteDashboard(String siteId, String username) throws Exception {

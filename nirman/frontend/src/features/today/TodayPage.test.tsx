@@ -84,6 +84,16 @@ function dashboardWith(overrides: {
       daysWithAttendance: 5,
       daysWithoutAttendance: 0,
     },
+    outsourcedLabour: {
+      enabled: false,
+      headDays: 0,
+      peakHeadCount: 0,
+      manHours: 0,
+      daysCounted: 0,
+      daysWithoutCount: 0,
+      daysWithoutHours: 0,
+      trades: [],
+    },
     material: {
       openingValue: 0,
       received: 0,

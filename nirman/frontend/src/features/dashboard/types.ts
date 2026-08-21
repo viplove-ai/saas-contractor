@@ -88,6 +88,41 @@ export interface LabourTile {
   daysWithoutAttendance: number;
 }
 
+/**
+ * External labour over the period: what the suppliers' men add up to, and no money.
+ *
+ * <p>Its own tile rather than more figures on the labour one, for the reason the daily report
+ * keeps them apart — a man-hour on the muster has a rate behind it and a man-hour at the gate
+ * has none. What the supplier charged reaches the site as a bill on the expense register, not
+ * as anything derived from these counts.</p>
+ */
+export interface OutsourcedLabourTile {
+  /** False at a site that keeps a muster roll. The card does not appear at all. */
+  enabled: boolean;
+  /** Each day's head count, summed. Not a head count: eleven men for a fortnight is 154. */
+  headDays: number;
+  /** The largest single day, so the sum above is never read as people. */
+  peakHeadCount: number;
+  /** Over the days that recorded hours. Unpriced, and it stays unpriced. */
+  manHours: number;
+  daysCounted: number;
+  daysWithoutCount: number;
+  /** Counted days with no hours written against them — why man-hours reads low. */
+  daysWithoutHours: number;
+  trades: OutsourcedTradeRow[];
+}
+
+export interface OutsourcedTradeRow {
+  skillCategoryId: string;
+  skillCategoryName?: string;
+  labourSupplierId?: string;
+  labourSupplierName?: string;
+  headDays: number;
+  /** Absent, never zero, on a trade no day of which recorded hours. */
+  manHours?: number;
+  daysCounted: number;
+}
+
 export interface CashTile {
   totalBooked: number;
   costIncurred: number;
@@ -138,6 +173,7 @@ export interface SiteDashboard {
   from: string;
   to: string;
   labour: LabourTile;
+  outsourcedLabour: OutsourcedLabourTile;
   material: MaterialPosition;
   cash: CashTile;
   progress: ProgressTile;

@@ -114,6 +114,11 @@ public final class DashboardDtos {
             LocalDate from,
             LocalDate to,
             LabourTile labour,
+            /**
+             * The suppliers' men, on a card of their own. Absent — {@code enabled} false and
+             * every figure zero — at a site that keeps a muster roll.
+             */
+            OutsourcedLabourTile outsourcedLabour,
             MaterialPosition material,
             CashTile cash,
             ProgressTile progress,
@@ -138,6 +143,45 @@ public final class DashboardDtos {
             int pendingVerification,
             int daysWithAttendance,
             int daysWithoutAttendance) {
+    }
+
+    /**
+     * External labour over the period: what the suppliers' men add up to, and no money.
+     *
+     * <p>Its own tile rather than more figures on {@link LabourTile}, for the reason the daily
+     * report keeps them apart: a man-hour on the muster has a rate behind it and a man-hour at
+     * the gate has none, so nothing here may be added to a wage bill or divided into a cost.
+     * What the supplier charged for these men is on his bill, and it reaches the site through
+     * the expense register like any other bill.</p>
+     *
+     * @param headDays      each day's head count, summed. Not a head count: eleven masons for
+     *                      a fortnight is 154 head-days and eleven men.
+     * @param peakHeadCount the largest single day, so the sum above is never read as people
+     * @param manHours      over the days that recorded hours; unpriced, and it stays unpriced
+     * @param daysWithoutHours days that were counted with no hours written against them —
+     *                      the reason {@code manHours} is smaller than the head-days suggest
+     */
+    public record OutsourcedLabourTile(
+            boolean enabled,
+            int headDays,
+            int peakHeadCount,
+            BigDecimal manHours,
+            int daysCounted,
+            int daysWithoutCount,
+            int daysWithoutHours,
+            List<OutsourcedTradeRow> trades) {
+    }
+
+    /** One trade under one supplier over the period. {@code manHours} is null, never zero,
+     *  on a trade no day of which recorded hours. */
+    public record OutsourcedTradeRow(
+            UUID skillCategoryId,
+            String skillCategoryName,
+            UUID labourSupplierId,
+            String labourSupplierName,
+            int headDays,
+            BigDecimal manHours,
+            int daysCounted) {
     }
 
     public record CashTile(

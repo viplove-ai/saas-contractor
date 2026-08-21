@@ -19,7 +19,7 @@ import { monthToDate, useSiteDashboard, useSites } from './api';
 import { CostTrendChart } from './CostTrendChart';
 import { MaterialPositionCard } from './MaterialPositionCard';
 import { PeriodPicker } from './PeriodPicker';
-import type { WorkItemRow } from './types';
+import type { OutsourcedTradeRow, WorkItemRow } from './types';
 
 /** The lines this site has moved furthest on. */
 const WORK_ITEM_COLUMNS: RecordColumn<WorkItemRow>[] = [
@@ -65,6 +65,53 @@ const WORK_ITEM_COLUMNS: RecordColumn<WorkItemRow>[] = [
         )}
       </>
     ),
+  },
+];
+
+/**
+ * The suppliers' trades, in head-days and man-hours and nothing else.
+ *
+ * <p>No money column, and there is no way to add one honestly: these men have no wage rate,
+ * which is the whole point of the register the figures come from. What the supplier charged
+ * is on his bill and reaches the site through the expense register.</p>
+ */
+const OUTSOURCED_TRADE_COLUMNS: RecordColumn<OutsourcedTradeRow>[] = [
+  {
+    key: 'trade',
+    header: 'Trade',
+    card: 'title',
+    cell: (trade) => (
+      <>
+        <Typography fontWeight={600}>{trade.skillCategoryName ?? 'Not named'}</Typography>
+        {/*
+          Naming the supplier stays optional where the count is made, so it stays optional
+          here. A count with nobody's name on it is still a true count, and "—" says that
+          more honestly than a blank does.
+        */}
+        <Typography variant="body2" color="text.secondary">
+          {trade.labourSupplierName ?? 'Supplier not named'}
+        </Typography>
+      </>
+    ),
+  },
+  {
+    key: 'headDays',
+    header: 'Head-days',
+    align: 'right',
+    cell: (trade) => String(trade.headDays),
+  },
+  {
+    key: 'manHours',
+    header: 'Man-hours',
+    align: 'right',
+    // Null is not zero: nobody wrote the hours down, which is not the same as nobody working.
+    cell: (trade) => (trade.manHours == null ? 'Not recorded' : formatHours(trade.manHours)),
+  },
+  {
+    key: 'days',
+    header: 'Days',
+    align: 'right',
+    cell: (trade) => String(trade.daysCounted),
   },
 ];
 
@@ -218,6 +265,81 @@ export function SiteDashboardPage() {
               )}
             </Paper>
           </Box>
+
+          {/*
+            External labour on a card of its own, and only where the site works that way. The
+            figures never join the ones above them: those men have a wage behind their hours
+            and these have none, so a "man-days" that included them would read as a wage bill
+            spread over people who are not on the payroll. What the supplier charged for them
+            is a bill on the expense register and is already inside Cash.
+
+            Head-days rather than a head count, with the peak beside it. Thirty days of head
+            counts added together is not how many men were there, and the only defence against
+            somebody reading it that way is printing the day that actually was.
+          */}
+          {dashboard.data.outsourcedLabour.enabled && (
+            <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
+              <Typography fontWeight={600} gutterBottom>
+                External labour
+              </Typography>
+              <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap>
+                <Figure
+                  label="Head-days"
+                  value={String(dashboard.data.outsourcedLabour.headDays)}
+                  strong
+                />
+                <Figure
+                  label="Busiest day"
+                  value={`${dashboard.data.outsourcedLabour.peakHeadCount} men`}
+                />
+                <Figure
+                  label="Man-hours"
+                  value={
+                    dashboard.data.outsourcedLabour.manHours > 0
+                      ? formatHours(dashboard.data.outsourcedLabour.manHours)
+                      : 'Not recorded'
+                  }
+                />
+                <Figure
+                  label="Days counted"
+                  value={String(dashboard.data.outsourcedLabour.daysCounted)}
+                />
+              </Stack>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                No wage cost: the supplier bills for the work, and his bill is in Cash above.
+              </Typography>
+              {/*
+                Said out loud rather than left to be inferred from a low figure. Hours are
+                recorded where the site knows them and left out where it does not, so
+                man-hours over a fortnight with four unrecorded days is a smaller number than
+                the head-days beside it imply — and a reader who cannot see why will divide
+                one by the other.
+              */}
+              {dashboard.data.outsourcedLabour.daysWithoutHours > 0 && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  {dashboard.data.outsourcedLabour.daysWithoutHours} counted day(s) have no
+                  hours written against them, so the man-hours cover less than the head-days do.
+                </Typography>
+              )}
+              {dashboard.data.outsourcedLabour.daysWithoutCount > 0 && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  {dashboard.data.outsourcedLabour.daysWithoutCount} day(s) in this period have
+                  no count at all.
+                </Typography>
+              )}
+              {dashboard.data.outsourcedLabour.trades.length > 0 && (
+                <RecordTable
+                  nested
+                  columns={OUTSOURCED_TRADE_COLUMNS}
+                  rows={dashboard.data.outsourcedLabour.trades}
+                  rowKey={(trade) =>
+                    `${trade.skillCategoryId}-${trade.labourSupplierId ?? 'unnamed'}`
+                  }
+                  ariaLabel="External labour by trade"
+                />
+              )}
+            </Paper>
+          )}
 
           <MaterialPositionCard material={dashboard.data.material} />
 
