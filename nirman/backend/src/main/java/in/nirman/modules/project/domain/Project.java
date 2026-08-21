@@ -20,6 +20,17 @@ public class Project extends BaseEntity {
     public enum Status { PLANNED, ACTIVE, ON_HOLD, COMPLETED, CLOSED }
 
     /**
+     * How much of the system this project is run through.
+     *
+     * <p>{@code BILLING_ONLY} was imported from a NIT to prepare running account bills and
+     * nothing else — no muster, no store, no daily report. It still gets one site, because
+     * authorisation is site-scoped and a project with no sites has nothing to scope on; the
+     * billing screens simply never show a picker for it. Promoting one to {@code FULL} later
+     * needs no migration, since the schedule and its measurements were never site-specific.</p>
+     */
+    public enum Mode { FULL, BILLING_ONLY }
+
+    /**
      * Which release rule the performance guarantee follows — a year after a construction
      * contract completes, six months after the department's letter on a maintenance one.
      * Null means nobody has said, and the treasury register then proposes no release date
@@ -29,6 +40,10 @@ public class Project extends BaseEntity {
 
     @Column(name = "org_id", nullable = false, updatable = false)
     private UUID orgId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "mode", nullable = false, length = 20)
+    private Mode mode = Mode.FULL;
 
     @Column(name = "code", nullable = false, length = 40, updatable = false)
     private String code;
@@ -309,5 +324,13 @@ public class Project extends BaseEntity {
 
     public boolean isDeleted() {
         return deletedAt != null;
+    }
+
+    public Mode getMode() {
+        return mode;
+    }
+
+    public void setMode(Mode mode) {
+        this.mode = mode;
     }
 }

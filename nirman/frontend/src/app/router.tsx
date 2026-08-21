@@ -101,6 +101,28 @@ export const router = createBrowserRouter([
           screen('dprs', async () => ({
             Component: (await import('../features/dpr/DprListPage')).DprListPage,
           })),
+          // Billing. Every screen behind billing:* permissions, which V46 grants to the
+          // administrator and the engineer only — an account without them never sees the tab.
+          screen('billing', async () => ({
+            Component: (await import('../features/billing/BillingProjectsPage'))
+              .BillingProjectsPage,
+          })),
+          screen('billing/:projectId/sheets', async () => ({
+            Component: (await import('../features/billing/SheetRegisterPage')).SheetRegisterPage,
+          })),
+          screen('billing/:projectId/bills', async () => ({
+            Component: (await import('../features/billing/BillsPage')).BillsPage,
+          })),
+          screen('billing/sheets/new', async () => ({
+            Component: (await import('../features/billing/MeasurementSheetPage'))
+              .MeasurementSheetPage,
+          })),
+          // The same screen opened on a sheet already recorded; signed and billed ones open
+          // read-only, because a correction is a new sheet and never an edit.
+          screen('billing/sheets/:id', async () => ({
+            Component: (await import('../features/billing/MeasurementSheetPage'))
+              .MeasurementSheetPage,
+          })),
           screen('dashboard', async () => ({
             Component: (await import('../features/dashboard/CompanyDashboardPage'))
               .CompanyDashboardPage,

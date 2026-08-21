@@ -42,6 +42,7 @@ const ITEMS: NavItem[] = [
     anyPermission: ['attendance:verify', 'dpr:verify', 'expense:approve:l1', 'payment:record'],
     badge: 'signoff',
   },
+  { label: 'Billing', to: '/billing', match: ['/billing'], permission: 'billing:read' },
   { label: 'Reports', to: '/dashboard/site', match: ['/dashboard'], permission: 'dashboard:site' },
   {
     label: 'More',

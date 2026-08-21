@@ -512,6 +512,24 @@ public class SiteService implements SiteLookup {
     /**
      * {@inheritDoc}
      *
+     * <p>No access check, deliberately — see the interface. This answers which sites exist on
+     * a project; whether the caller may touch the one it picks is decided by that caller
+     * against {@link in.nirman.security.SiteAccessGuard}, on the site itself.</p>
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<SiteInfo> forProject(UUID projectId) {
+        return sites.findByOrgIdAndProjectIdAndDeletedAtIsNullOrderByCode(
+                        currentUser.currentOrgId(), projectId).stream()
+                .map(site -> new SiteInfo(site.getId(), site.getProjectId(), site.getOrgId(),
+                        site.getCode(), site.getName(), site.getStandardShiftHours(),
+                        site.getMonthlyWageDays(), site.isUsesOutsourcedLabour()))
+                .toList();
+    }
+
+    /**
+     * {@inheritDoc}
+     *
      * <p>The site access check is on the store's site, not on the store. A store is a
      * lockup inside a site and has no separate permission of its own; guessing a store id
      * has to fail for exactly the same reason guessing a site id does.</p>

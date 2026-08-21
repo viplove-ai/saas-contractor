@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<!--
+  The blank master measurement sheet — the paper the engineer fills in with a pen at the site.
+
+  It is deliberately GENERIC. One design, printed in bulk, used on any tender: the engineer
+  writes the item number himself and chooses the project and item in the app when he enters
+  the page. A per-project register would need a print pipeline, would go stale the day a
+  deviation item was approved, and would have to travel to whichever site he was posted to.
+
+  Three things on this page exist for a reader that does not exist yet, and cost nothing now.
+
+  The four corner marks let a photograph be perspective-corrected to the printed geometry, so
+  a future reader would compute each box's position rather than having to find it. The boxes
+  are ruled in a light dropout colour so the printed lines can be removed by a colour channel
+  drop, leaving only the pen strokes. And the sheet number is pre-printed and sequential.
+
+  That last one earns its keep immediately, with no reader at all: one serial, one sheet, so a
+  page entered twice — by two people each assuming the other had not — is refused rather than
+  paid twice. That is the expensive error in a billing system.
+
+  The Qty column is the checksum. He writes what each row comes to and the total at the foot;
+  the app multiplies the dimensions itself and compares. Two independent arrivals at one
+  number, and the signature is blocked while they differ.
+
+  Rendered by MeasurementSheetPdfService through openhtmltopdf, which needs well-formed
+  XHTML — every tag closes.
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Measurement sheets</title>
+    <style>
+        @page { size: A4; margin: 10mm 9mm; }
+        body { font-family: Helvetica, Arial, sans-serif; font-size: 9pt; color: #111; }
+        .sheet { page-break-after: always; position: relative; height: 268mm; }
+        .sheet:last-child { page-break-after: auto; }
+
+        /* Registration marks. Solid black squares at a known offset from the page corners. */
+        .mark { position: absolute; width: 5mm; height: 5mm; background: #000; }
+        .mark.tl { top: 0; left: 0; }
+        .mark.tr { top: 0; right: 0; }
+        .mark.bl { bottom: 0; left: 0; }
+        .mark.br { bottom: 0; right: 0; }
+
+        .head { margin: 8mm 8mm 0 8mm; }
+        .title { font-size: 11pt; font-weight: bold; letter-spacing: 0.06em; }
+        .serial { font-size: 12pt; font-weight: bold; font-family: 'Courier New', monospace; }
+        .fields { width: 100%; border-collapse: collapse; margin-top: 3mm; }
+        .fields td { padding: 1.6mm 0; font-size: 9pt; }
+        .rule { border-bottom: 0.4pt solid #333; }
+
+        /* Everything the pen writes into is ruled in a dropout colour, never black. */
+        table.grid { width: 100%; border-collapse: collapse; margin-top: 3mm; }
+        table.grid th, table.grid td { border: 0.5pt solid #9dd4e8; height: 8.6mm; }
+        table.grid th { background: #eaf7fc; font-size: 8pt; font-weight: bold; height: 6mm;
+                        color: #16556b; }
+        .boxes { text-align: center; letter-spacing: 0.5mm; color: #9dd4e8;
+                 font-family: 'Courier New', monospace; font-size: 10pt; }
+        .sl { width: 7mm; text-align: center; font-size: 8pt; color: #16556b; }
+        .loc { width: 34mm; }
+        .foot { width: 100%; border-collapse: collapse; margin-top: 4mm; font-size: 8.5pt; }
+        .foot td { padding: 2mm 0; }
+        .hint { font-size: 7pt; color: #777; margin-top: 2mm; line-height: 1.5; }
+    </style>
+</head>
+<body>
+<div class="sheet" th:each="serial : ${serials}">
+    <div class="mark tl"></div>
+    <div class="mark tr"></div>
+    <div class="mark bl"></div>
+    <div class="mark br"></div>
+
+    <div class="head">
+        <table style="width:100%; border-collapse:collapse;">
+            <tr>
+                <td class="title">MEASUREMENT SHEET</td>
+                <td style="text-align:right;">
+                    <span style="font-size:8pt; color:#555;">Sheet No.&#160;</span>
+                    <span class="serial" th:text="${serial}">M-000001</span>
+                </td>
+            </tr>
+        </table>
+
+        <table class="fields">
+            <tr>
+                <td style="width:14mm;">Date</td>
+                <td class="rule" style="width:34mm;"></td>
+                <td style="width:14mm; padding-left:6mm;">Work</td>
+                <td class="rule"></td>
+            </tr>
+            <tr>
+                <td>Item No.</td>
+                <td class="rule"></td>
+                <td style="padding-left:6mm;">Unit</td>
+                <td class="rule"></td>
+            </tr>
+        </table>
+
+        <table class="grid">
+            <tr>
+                <th class="sl">Sl</th>
+                <th class="loc">Location / Part</th>
+                <th style="width:16mm;">Nos</th>
+                <th style="width:14mm;">&#215;</th>
+                <th style="width:22mm;">L</th>
+                <th style="width:22mm;">B</th>
+                <th style="width:22mm;">H</th>
+                <th style="width:26mm;">Qty</th>
+            </tr>
+            <tr th:each="row : ${rows}">
+                <td class="sl" th:text="${row}">1</td>
+                <td></td>
+                <td class="boxes">&#9633;&#9633;</td>
+                <td class="boxes">&#9633;&#9633;</td>
+                <td class="boxes">&#9633;&#9633;.&#9633;&#9633;</td>
+                <td class="boxes">&#9633;&#9633;.&#9633;&#9633;</td>
+                <td class="boxes">&#9633;&#9633;.&#9633;&#9633;</td>
+                <td class="boxes">&#9633;&#9633;&#9633;&#9633;.&#9633;&#9633;</td>
+            </tr>
+            <tr>
+                <td colspan="7" style="text-align:right; padding-right:3mm; font-weight:bold;
+                                       border:0.5pt solid #9dd4e8;">TOTAL</td>
+                <td class="boxes">&#9633;&#9633;&#9633;&#9633;.&#9633;&#9633;</td>
+            </tr>
+        </table>
+
+        <table class="foot">
+            <tr>
+                <td style="width:38mm;">Unit wt (if any)</td>
+                <td class="rule" style="width:26mm;"></td>
+                <td style="width:16mm; padding-left:3mm;">kg/m</td>
+                <td style="padding-left:10mm;">Signature</td>
+                <td class="rule"></td>
+            </tr>
+        </table>
+
+        <p class="hint">
+            One item per sheet. Write the item number exactly as the agreement schedule prints
+            it. Fill every dimension column — a dash where it does not apply, never a blank.
+            Two decimals always (5.80, not 5.8). Write what each row comes to in Qty, and the
+            block total at the foot. Deductions as a (-) row inside the same sheet. Black
+            ballpoint.
+        </p>
+    </div>
+</div>
+</body>
+</html>

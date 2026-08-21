@@ -318,6 +318,65 @@ if the tests pass:
   answer, and a refused one keeps its reason, because a request that vanishes when it is turned
   down is a shed nobody counts twice. One open request per store and material: two are how the
   same correction gets posted twice.
+- **A measurement is not a daily report, and the split is the whole billing feature.**
+  `boq_progress_entries` says what a day *reported* — the supervisor describes it, the engineer
+  signs it in the evening, and it drives the dashboards. `measurement_sheets` say what a tape
+  later *measured*, and they drive the bill. Forcing the two into one act means either the daily
+  record is signed late or the bill inherits a number recalled at seven in the evening, because
+  the tape comes out days later — usually the week the AE is due. The two ledgers are allowed to
+  differ and the difference is information, not a fault; reconciling them by posting automatic
+  adjustments between them is the part that can quietly rewrite a signed figure, and it is
+  deliberately **not built**. Nothing in `billing` writes `boq_progress_entries`.
+- **The sheet is the unit, and its two totals must agree before it is signed.** A measurement
+  sheet is a piece of paper: one contract item, a dozen ruled rows, and a total the engineer
+  worked out by hand at the foot. `written_total` is that figure and `computed_total` is what the
+  rows come to; signing while they differ is refused in `MeasurementService.sign` and by
+  `ck_sheet_signed_agrees` under it. That one number catches a typing slip, a skipped row, a
+  transposed 5.8 for 8.5, and his own arithmetic, and it needs no cleverness — only subtraction.
+  **The browser computes the same total** so he sees the answer while typing, which makes
+  `types.ts`'s `round2` a second implementation of `MeasurementLine.computeContents`: it rounds
+  half-up on the decimal a human would have written, because `Math.round(v * 100) / 100` sends
+  1.005 *down* and the server sends it up — and a client that disagrees tells him his sheet
+  balances and then watches the signature be refused. Six shapes cover every line in a real bill
+  (`nos × mult × L × B × H` and its four subsets, plus a length taken against a tested kg/m), and
+  **a blank dimension is not a zero**: a linear item has no breadth.
+- **A quantity is paid once, and a passed bill is what was paid.** `measurement_sheets.ra_bill_id`
+  holds one value, so the second bill cannot see a sheet the first claimed — the double-payment
+  guard is the column, not a rule somebody has to keep remembering. `ra_bill_items` is a snapshot
+  written at the moment a bill is passed and read for ever after, so measuring more work moves the
+  next bill and never this one. Everything the CPWA-26 form needs falls out of those two: "since
+  previous" is this bill's own sheets, "up to date" is those plus every earlier bill's, and the
+  previous-bill amount comes off the earlier snapshot — which is how a hundred and fifteen
+  hand-typed figures per bill stop existing. A correction after a bill is passed is a **fresh
+  sheet with negative rows** in the next bill; a bill sent back before it is passed re-opens
+  through the same chain and counts the revision, exactly as an expense does.
+- **The tender's details are asked once, at its first bill.** `agreements` holds what prints on
+  every page of every bill of that tender — contractor, the officer who measured, who prepared
+  and checked it, the division — and the rate chain. `RaBillService.create` refuses the first bill
+  without them rather than printing a CPWA-26 with blanks on it. **The chain is stored, never the
+  rate**: schedule rate × coefficient, + cost index, − tender percentage, each step rounded as the
+  printed analysis rounds it. A cost index revised by circular then reprices every derived rate
+  instead of needing forty cells found and changed, and the derivation can be *shown* when the AE
+  questions it. That the source workbook retyped these into forty-three sheets is why it says
+  "3rd RA Bill" on its measurement pages, "4th RA Bill" on its abstract, and carries a sheet named
+  `MB1st RA`.
+- **A BILLING_ONLY project still gets a site.** `projects.mode` marks a tender imported from a NIT
+  to prepare bills and nothing else — no muster, no store, no daily report. `NitImportService`
+  already produced exactly that shape (a project with `boq_items` and no sites), and the flag only
+  decides what the screens offer. But `SiteAccessGuard` takes a site id, and a project with no
+  sites has nothing to scope on; the alternative to giving it one is a second access model beside
+  the first, which is how a system gets a hole in whichever of the two nobody updates. So it is
+  given one site and the billing screens never show a picker — the same argument `SiteService`
+  already makes about stores. **Assign the importing user to it in the same act**, or he creates a
+  project he cannot read and the failure looks like a permissions bug.
+- **The paper is generic, and its serial is the duplicate guard.** One master sheet design,
+  printed in bulk, used on any tender — the engineer writes the item number and picks the project
+  and item in the app when he enters the page. A per-project register would need a print pipeline
+  and would go stale the day a deviation item was approved. The pre-printed serial is unique, and
+  entering a page twice is refused: two people each assuming the other had not is how a quantity
+  gets paid twice. The corner marks and dropout-coloured boxes on `measurement-sheet.html` cost
+  nothing now and are what would let a photograph be read automatically later without reprinting
+  the books — **nothing reads them yet**, and the photograph on a sheet is evidence, not input.
 - **A site is never without a store.** `SiteService.create` gives every new site one, named
   `site-<site code>` after it, because a store is not a decision anybody was making and an
   empty store picker strands a lorry at the gate. The Stores screen is for the second store
@@ -479,6 +538,23 @@ time, and mints **one permission**, `dpr:approve`, for the office alone — not 
 office accepting it, and an organisation that got the second by granting the first would have a
 two-signature document carrying one signature. It moves no measurement-book row: the quantities
 were claimed at the signature and V37 does not touch them.
+
+`V46` is the billing module: `projects.mode`, `agreements` (the tender's details and its rate
+chain), `dsr_schedules`/`dsr_items`, `measurement_sheets`/`measurement_lines`, and
+`ra_bills`/`ra_bill_items`. **Five permissions**, split between four different people —
+`billing:read`, `billing:measure` (the engineer's, and deliberately not `dpr:verify`),
+`billing:prepare`, `billing:sign` (separate from preparing for the same reason `dpr:approve` is
+separate from `dpr:verify`), and `dsr:manage` (an administrator's alone: a rate is the multiplier
+on every quantity in the document). ADMIN gets all five, ENGINEER read and measure, ACCOUNTANT
+read and prepare — so no existing user's screens change until a permission is granted.
+
+**A note on JPQL and optional parameters.** `(:param IS NULL OR column = :param)` expands to two
+placeholders, and Postgres cannot infer a type for the one standing alone in `? IS NULL` — it
+refuses to prepare the statement with `could not determine data type of parameter`. The billing
+repositories pass a typed boolean flag beside an always-bound value instead
+(`:ignoreCutoff = TRUE OR s.measuredOn <= :cutoff`), so every parameter appears in a typed
+comparison. Older queries elsewhere still use the `IS NULL` form; they work only because nothing
+calls them down the null path.
 
 Hibernate is `ddl-auto: validate`. Flyway owns the schema; an entity that drifts from a
 migration fails at startup.

@@ -32,6 +32,13 @@ public interface BoqLookup {
             BigDecimal contractQuantity,
             UUID unitId,
             BigDecimal contractAmount,
+            /**
+             * The rate the contract states, not {@code contractAmount / contractQuantity}.
+             * Billing needs the figure as tendered: a bill prices work at the agreement rate
+             * and a rate recovered by division carries whatever rounding the amount was
+             * stored with, which is exactly the sort of drift a checker notices.
+             */
+            BigDecimal contractRate,
             boolean synthetic) {
     }
 

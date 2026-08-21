@@ -58,7 +58,7 @@ describe('RootLayout', () => {
 
   /**
    * Navigation used to be one home icon on an AppBar, because the tile grid was the only way
-   * back from a task screen. The bar carries the five destinations directly, so neither the
+   * back from a task screen. The bar carries the destinations directly, so neither the
    * AppBar nor the icon has anything left to do.
    */
   it('carries no AppBar and no way-home icon', () => {
@@ -68,14 +68,14 @@ describe('RootLayout', () => {
     expect(screen.queryByRole('link', { name: 'Go to home' })).not.toBeInTheDocument();
   });
 
-  it('offers the five main destinations from any task screen', () => {
+  it('offers the main destinations from any task screen', () => {
     renderAt('/attendance/verify');
 
     expect(
       within(bottomBar())
         .getAllByRole('link')
         .map((link) => link.textContent?.trim()),
-    ).toEqual(['Today', 'Registers', 'Sign-off', 'Reports', 'More']);
+    ).toEqual(['Today', 'Registers', 'Sign-off', 'Billing', 'Reports', 'More']);
   });
 
   it('marks the section the current screen belongs to', () => {

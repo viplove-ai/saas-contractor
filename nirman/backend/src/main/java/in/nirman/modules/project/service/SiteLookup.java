@@ -47,6 +47,18 @@ public interface SiteLookup {
     SiteInfo require(UUID siteId);
 
     /**
+     * Every live site of one project, in code order.
+     *
+     * <p>Published for billing, which has to answer "which site does this measurement belong
+     * to" for a project the user never chose a site for. A BILLING_ONLY project has exactly
+     * one — created for it precisely because authorisation is site-scoped and a project with
+     * no sites has nothing to scope on — so the caller takes the single element and never
+     * shows a picker. Site access is <b>not</b> checked here: the caller scopes the site it
+     * settles on, which is the check that matters.</p>
+     */
+    List<SiteInfo> forProject(UUID projectId);
+
+    /**
      * A store and the site it stands at. Every stock movement names a store, and every
      * permission decision about that movement is made about the site — so inventory needs
      * both together, on every call, and this is what saves it a join it should not be
