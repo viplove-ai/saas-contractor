@@ -69,20 +69,34 @@ export function VendorsPage() {
         )}
       </Stack>
 
+      {/*
+        Both filters carry an explicit flex basis, and on a desk neither of them may be left
+        to work one out for itself.
+
+        The theme makes every TextField `fullWidth`, so a field with the default
+        `flex-basis: auto` measures itself as the whole row. That is what the Kind picker did:
+        it took all 950px of a desktop row, leaving no free space for the Search box beside it
+        — which asks for `flex: 1`, a basis of zero, and therefore rendered exactly zero pixels
+        wide. A search field that is invisible until the window is narrow enough to stack the
+        two is not a subtle piece of misalignment.
+
+        Only from `sm` up, where the row exists. Stacked on a phone the fields run down the
+        page and full width is right; a basis there would be setting their height.
+      */}
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
         <TextField
           label="Search"
           value={q}
           onChange={(event) => setQ(event.target.value)}
           placeholder="Name or code"
-          sx={{ maxWidth: 320, flex: 1 }}
+          sx={{ flex: { sm: '1 1 0' }, maxWidth: { sm: 320 } }}
         />
         <TextField
           select
           label="Kind"
           value={type}
           onChange={(event) => setType(event.target.value)}
-          sx={{ minWidth: 200 }}
+          sx={{ flex: { sm: '0 0 200px' } }}
         >
           <MenuItem value="">All kinds</MenuItem>
           {(Object.keys(VENDOR_TYPE_LABEL) as VendorType[]).map((option) => (
