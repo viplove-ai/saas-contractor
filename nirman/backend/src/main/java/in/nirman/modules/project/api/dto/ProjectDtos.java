@@ -51,6 +51,12 @@ public final class ProjectDtos {
             Integer defectLiabilityMonths,
             UUID projectManagerId,
             Project.Status status,
+            /**
+             * How much of the system this project is run through. BILLING_ONLY was imported
+             * from a NIT to prepare bills and nothing else — the screens read this to decide
+             * what to offer, and the billing register to decide whether to show a site picker.
+             */
+            Project.Mode mode,
             String description,
             Instant deletedAt,
             UUID deletedBy,

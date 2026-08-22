@@ -7,6 +7,7 @@ import type {
   BoqItem,
   MeasurementLineInput,
   Project,
+  PageResponse,
   Sheet,
   UnbilledSummary,
   Unit,
@@ -34,10 +35,21 @@ const REFERENCE_STALE_TIME = 15 * 60_000;
   money, and a figure that was true ten minutes ago is not an answer.
 */
 
+/**
+ * Projects to bill against.
+ *
+ * <p>`/projects` is paginated and hands back a `PageResponse`, not an array — the register
+ * screens have always unwrapped `content` and this one has to as well. Asking for the maximum
+ * page rather than the default 25 because this is a picker, not a register: a contractor with
+ * thirty tenders would otherwise be unable to reach the last five, with nothing on screen to
+ * say why.</p>
+ */
 export function useBillingProjects() {
   return useQuery({
     queryKey: billingKeys.projects,
-    queryFn: async () => (await apiClient.get<Project[]>('/projects')).data,
+    queryFn: async () =>
+      (await apiClient.get<PageResponse<Project>>('/projects', { params: { size: 100 } })).data
+        .content,
     staleTime: REFERENCE_STALE_TIME,
   });
 }

@@ -170,6 +170,17 @@ export interface BoqItem {
   contractRate: string;
 }
 
+/** What every paginated list endpoint returns. See `PageResponse` on the server. */
+export interface PageResponse<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+}
+
 export interface Project {
   id: string;
   code: string;
