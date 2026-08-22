@@ -50,6 +50,23 @@ public class ProjectLookupService implements ProjectLookup {
                 .stream().map(ProjectLookupService::toCalendar).toList();
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Not narrowed by site assignment, deliberately. Billing is scoped on the site each
+     * measurement names, which is where the check belongs; narrowing the tender list as well
+     * would hide a project from the accountant preparing its bill because he is not posted to
+     * the site the engineer measured on.</p>
+     */
+    @Override
+    public List<BillableProject> billable() {
+        return projects.findByOrgIdAndDeletedAtIsNullOrderByCode(currentUser.currentOrgId())
+                .stream()
+                .map(project -> new BillableProject(project.getId(), project.getCode(),
+                        project.getName(), project.getMode() == Project.Mode.BILLING_ONLY))
+                .toList();
+    }
+
     @Override
     public List<ContractCalendar> allCalendars() {
         return projects.findByOrgIdAndDeletedAtIsNullOrderByCode(currentUser.currentOrgId())

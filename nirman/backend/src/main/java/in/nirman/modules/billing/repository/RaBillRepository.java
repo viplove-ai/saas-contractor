@@ -15,6 +15,21 @@ public interface RaBillRepository extends JpaRepository<RaBill, UUID> {
 
     List<RaBill> findByOrgIdAndProjectIdAndDeletedAtIsNullOrderBySerialNoDesc(UUID orgId, UUID projectId);
 
+    /**
+     * What the last passed bill said the work had come to.
+     *
+     * <p>Cumulative by construction — every bill's gross is the work up to its own cutoff — so
+     * the latest passed one is the total billed to date and there is nothing to add up.</p>
+     */
+    @Query("""
+            SELECT b.grossWorkDone FROM RaBill b
+            WHERE b.projectId = :projectId AND b.deletedAt IS NULL
+              AND b.status = in.nirman.modules.billing.domain.RaBill$Status.PASSED
+            ORDER BY b.serialNo DESC
+            LIMIT 1
+            """)
+    Optional<java.math.BigDecimal> grossBilledToDate(@Param("projectId") UUID projectId);
+
     /** The serial the next bill takes. A project's first bill is the 1st RA. */
     @Query("""
             SELECT COALESCE(MAX(b.serialNo), 0) FROM RaBill b

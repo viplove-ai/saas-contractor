@@ -69,6 +69,30 @@ public interface MeasurementSheetRepository extends JpaRepository<MeasurementShe
     List<MeasurementSheet> findByRaBillIdOrderByBoqItemIdAscMeasuredOnAsc(UUID raBillId);
 
     /**
+     * How many signed sheets are waiting on a project, for the card that has to say whether
+     * there is anything to bill.
+     *
+     * <p>A count and not a value: pricing them means resolving every item's rate, which is the
+     * Bills screen's job and far too much work to do once per project just to draw a list.</p>
+     */
+    @Query("""
+            SELECT COUNT(s) FROM MeasurementSheet s
+            WHERE s.orgId = :orgId AND s.projectId = :projectId
+              AND s.deletedAt IS NULL AND s.raBillId IS NULL
+              AND s.status = in.nirman.modules.billing.domain.MeasurementSheet$Status.SIGNED
+            """)
+    long countUnbilled(@Param("orgId") UUID orgId, @Param("projectId") UUID projectId);
+
+    /** Sheets recorded but not yet signed — work half entered, which a card should surface. */
+    @Query("""
+            SELECT COUNT(s) FROM MeasurementSheet s
+            WHERE s.orgId = :orgId AND s.projectId = :projectId
+              AND s.deletedAt IS NULL
+              AND s.status = in.nirman.modules.billing.domain.MeasurementSheet$Status.DRAFT
+            """)
+    long countDrafts(@Param("orgId") UUID orgId, @Param("projectId") UUID projectId);
+
+    /**
      * The highest pre-printed serial this organisation has entered, as a number.
      *
      * <p>Native, because the serial is text — {@code M-000123} — and the ordering that matters

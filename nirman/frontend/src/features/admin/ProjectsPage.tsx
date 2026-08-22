@@ -72,6 +72,7 @@ export function ProjectsPage() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [showDeleted, setShowDeleted] = useState(false);
+  const [billingOnly, setBillingOnly] = useState(false);
 
   const canWrite = hasPermission('project:write');
   const canDelete = hasPermission('project:delete');
@@ -82,7 +83,16 @@ export function ProjectsPage() {
   const sites = useAdminSites('', showDeleted);
   const deleteProject = useDeleteProject();
   const restoreProject = useRestoreProject();
-  const filtered = search !== '' || status !== '';
+  const filtered = search !== '' || status !== '' || billingOnly;
+
+  /*
+    Narrowed here rather than on the server. Mode is one flag on a list the screen already
+    holds, and adding a query parameter for it would mean a round trip to answer a question the
+    page can answer itself — unlike deleted, which is genuinely a different set of rows.
+  */
+  const visibleProjects = (projects.data ?? []).filter(
+    (project) => !billingOnly || project.mode === 'BILLING_ONLY',
+  );
 
   const sitesOf = (projectId: string) =>
     sites.data?.filter((site) => site.projectId === projectId) ?? [];
@@ -160,6 +170,20 @@ export function ProjectsPage() {
           status picker, because deleted is not a status a project moves through: it is the
           other list, and mixing the two is exactly what this screen exists to avoid.
         */}
+        {/*
+          Its own switch for the same reason deleted has one: billing-only is not a stage a
+          project passes through, it is a different kind of record, and folding it into the
+          status picker would mix two questions the screen exists to keep apart.
+        */}
+        <FormControlLabel
+          control={
+            <Switch
+              checked={billingOnly}
+              onChange={(event) => setBillingOnly(event.target.checked)}
+            />
+          }
+          label="Billing only"
+        />
         {canDelete && (
           <FormControlLabel
             control={
@@ -193,7 +217,7 @@ export function ProjectsPage() {
           spacing={2}
           sx={{ display: { xs: 'flex', md: 'none' }, listStyle: 'none', m: 0, p: 0 }}
         >
-          {projects.data.map((project) => (
+          {visibleProjects.map((project) => (
             <ProjectCard
               key={project.id}
               project={project}
@@ -205,7 +229,7 @@ export function ProjectsPage() {
               onRestore={() => restoreProject.mutate(project.id)}
             />
           ))}
-          {projects.data.length === 0 && (
+          {visibleProjects.length === 0 && (
             <Typography component="li" color="text.secondary">
               {showDeleted ? NONE_DELETED : filtered ? NOTHING_MATCHED : NO_PROJECTS_YET}
             </Typography>
@@ -231,7 +255,7 @@ export function ProjectsPage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {projects.data.map((project) => (
+              {visibleProjects.map((project) => (
                 <TableRow key={project.id} hover>
                   <TableCell>
                     {/*
@@ -326,7 +350,7 @@ export function ProjectsPage() {
                   )}
                 </TableRow>
               ))}
-              {projects.data.length === 0 && (
+              {visibleProjects.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={canWrite ? 6 : 5}>
                     <Typography color="text.secondary" sx={{ py: 2 }}>
@@ -416,12 +440,22 @@ function ProjectCard({
               {project.name}
             </Typography>
           </Box>
-          <Chip
-            size="small"
-            color={deleted ? 'error' : STATUS_COLOR[project.status]}
-            variant={deleted ? 'outlined' : 'filled'}
-            label={deleted ? 'Deleted' : STATUS_LABEL[project.status]}
-          />
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            {/*
+              Beside the status, not instead of it: a billing-only tender still moves through
+              PLANNED and ACTIVE like any other, and what it says is how much of the system is
+              running against it — no muster, no store, no daily report.
+            */}
+            {project.mode === 'BILLING_ONLY' && (
+              <Chip size="small" variant="outlined" label="Billing only" />
+            )}
+            <Chip
+              size="small"
+              color={deleted ? 'error' : STATUS_COLOR[project.status]}
+              variant={deleted ? 'outlined' : 'filled'}
+              label={deleted ? 'Deleted' : STATUS_LABEL[project.status]}
+            />
+          </Stack>
         </Stack>
 
         <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="baseline">

@@ -209,6 +209,37 @@ public final class BillingDtos {
         public enum Action { SUBMIT, CHECK, PASS, REOPEN }
     }
 
+    // ------------------------------------------------------------------ the projects list
+
+    /**
+     * One tender as the billing list needs to see it.
+     *
+     * <p>Shaped for the card rather than assembled from four calls on the client: what it is,
+     * whether anything is waiting, and where its bill series has got to. Deliberately no
+     * unbilled <i>value</i> — pricing the waiting sheets means resolving every item's rate,
+     * which is the Bills screen's work and far too much to do once per project to draw a
+     * list.</p>
+     *
+     * @param billingOnly the tender was imported to prepare bills and nothing else
+     * @param grossBilledToDate what the last passed bill came to, which is cumulative already
+     */
+    public record BillingProjectSummary(
+            UUID id,
+            String code,
+            String name,
+            boolean billingOnly,
+            String agreementNo,
+            String contractorName,
+            int boqItemCount,
+            long unbilledSheets,
+            long draftSheets,
+            int billCount,
+            String lastBillTitle,
+            RaBill.Status lastBillStatus,
+            BigDecimal grossBilledToDate,
+            boolean agreementRecorded) {
+    }
+
     // ------------------------------------------------------------------ the agreement
 
     public record AgreementRequest(

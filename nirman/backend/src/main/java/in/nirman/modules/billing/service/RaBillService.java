@@ -3,6 +3,7 @@ package in.nirman.modules.billing.service;
 import in.nirman.common.BusinessException;
 import in.nirman.modules.audit.AuditService;
 import in.nirman.modules.billing.api.dto.BillingDtos.BillItemResponse;
+import in.nirman.modules.billing.api.dto.BillingDtos.BillingProjectSummary;
 import in.nirman.modules.billing.api.dto.BillingDtos.BillResponse;
 import in.nirman.modules.billing.api.dto.BillingDtos.BillSummary;
 import in.nirman.modules.billing.api.dto.BillingDtos.CreateBillRequest;
@@ -17,6 +18,7 @@ import in.nirman.modules.billing.repository.MeasurementSheetRepository;
 import in.nirman.modules.billing.repository.RaBillItemRepository;
 import in.nirman.modules.billing.repository.RaBillRepository;
 import in.nirman.modules.project.service.BoqLookup;
+import in.nirman.modules.project.service.ProjectLookup;
 import in.nirman.security.CurrentUserProvider;
 import in.nirman.security.SiteAccessGuard;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -64,22 +66,67 @@ public class RaBillService {
     private final MeasurementSheetRepository sheets;
     private final AgreementRepository agreements;
     private final BoqLookup boqItems;
+    private final ProjectLookup projectLookup;
     private final SiteAccessGuard siteAccessGuard;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
 
     public RaBillService(RaBillRepository bills, RaBillItemRepository billItems,
                          MeasurementSheetRepository sheets, AgreementRepository agreements,
-                         BoqLookup boqItems, SiteAccessGuard siteAccessGuard,
+                         BoqLookup boqItems, ProjectLookup projectLookup,
+                         SiteAccessGuard siteAccessGuard,
                          CurrentUserProvider currentUser, AuditService audit) {
         this.bills = bills;
         this.billItems = billItems;
         this.sheets = sheets;
         this.agreements = agreements;
         this.boqItems = boqItems;
+        this.projectLookup = projectLookup;
         this.siteAccessGuard = siteAccessGuard;
         this.currentUser = currentUser;
         this.audit = audit;
+    }
+
+    // ------------------------------------------------------------------ the projects list
+
+    /**
+     * Every tender this caller can bill, with enough on each to decide what to open.
+     *
+     * <p>One call rather than four per project. It walks the project list and asks each one two
+     * counts and its latest bill — which is a query per project, and acceptable because a
+     * contractor has tens of tenders, not thousands. If that ever stops being true this becomes
+     * one aggregate query; it is not worth the SQL today.</p>
+     */
+    @PreAuthorize("hasAuthority('billing:read')")
+    @Transactional(readOnly = true)
+    public List<BillingProjectSummary> projects() {
+        UUID orgId = currentUser.currentOrgId();
+        List<BillingProjectSummary> summaries = new ArrayList<>();
+
+        for (ProjectLookup.BillableProject project : projectLookup.billable()) {
+            List<RaBill> series =
+                    bills.findByOrgIdAndProjectIdAndDeletedAtIsNullOrderBySerialNoDesc(orgId,
+                            project.id());
+            RaBill latest = series.isEmpty() ? null : series.get(0);
+            var agreement = agreements.findByOrgIdAndProjectId(orgId, project.id());
+
+            summaries.add(new BillingProjectSummary(
+                    project.id(),
+                    project.code(),
+                    project.name(),
+                    project.billingOnly(),
+                    agreement.map(a -> a.getAgreementNo()).orElse(null),
+                    agreement.map(a -> a.getContractorName()).orElse(null),
+                    boqItems.forProject(project.id()).size(),
+                    sheets.countUnbilled(orgId, project.id()),
+                    sheets.countDrafts(orgId, project.id()),
+                    series.size(),
+                    latest == null ? null : latest.getTitle(),
+                    latest == null ? null : latest.getStatus(),
+                    bills.grossBilledToDate(project.id()).orElse(null),
+                    agreement.isPresent()));
+        }
+        return summaries;
     }
 
     // ------------------------------------------------------------------ the unbilled queue

@@ -28,6 +28,19 @@ public interface ProjectLookup {
     Optional<ProjectContract> contract(UUID projectId);
 
     /**
+     * Projects a bill can be prepared against, narrowed to what the caller may see.
+     *
+     * @param billingOnly imported to prepare bills and nothing else. Billing shows both kinds
+     *                    in one list — a tender imported only to bill is still a tender, and
+     *                    the engineer looking for it should not have to know which way it was
+     *                    set up.
+     */
+    record BillableProject(UUID id, String code, String name, boolean billingOnly) {
+    }
+
+    List<BillableProject> billable();
+
+    /**
      * The dates and figures a deposit's release schedule hangs off.
      *
      * <p>Shaped for the treasury register rather than exposing the entity, in the manner of

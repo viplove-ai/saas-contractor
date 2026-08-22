@@ -4,12 +4,11 @@ import type { SheetGeometry } from './reader/geometry';
 import type {
   Agreement,
   AgreementSuggestion,
+  BillingProjectSummary,
   Bill,
   BillSummary,
   BoqItem,
   MeasurementLineInput,
-  Project,
-  PageResponse,
   ReferenceDocument,
   Sheet,
   TenderDocument,
@@ -40,21 +39,19 @@ const REFERENCE_STALE_TIME = 15 * 60_000;
 */
 
 /**
- * Projects to bill against.
+ * Tenders to bill, each with enough on it to decide what to open.
  *
- * <p>`/projects` is paginated and hands back a `PageResponse`, not an array — the register
- * screens have always unwrapped `content` and this one has to as well. Asking for the maximum
- * page rather than the default 25 because this is a picker, not a register: a contractor with
- * thirty tenders would otherwise be unable to reach the last five, with nothing on screen to
- * say why.</p>
+ * <p>One call rather than four per project — the card needs to say whether anything is waiting
+ * and where the bill series has got to, and assembling that on the client would be a request
+ * per tender per field.</p>
  */
 export function useBillingProjects() {
   return useQuery({
     queryKey: billingKeys.projects,
     queryFn: async () =>
-      (await apiClient.get<PageResponse<Project>>('/projects', { params: { size: 100 } })).data
-        .content,
-    staleTime: REFERENCE_STALE_TIME,
+      (await apiClient.get<BillingProjectSummary[]>('/billing/projects')).data,
+    // Counts move whenever a sheet is signed, so this is not reference data.
+    staleTime: 30_000,
   });
 }
 

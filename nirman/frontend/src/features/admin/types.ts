@@ -85,6 +85,12 @@ export type WorkNature = 'CONSTRUCTION' | 'MAINTENANCE';
 
 /** A contract. Sites hang off it, and every transaction reaches a project through its site. */
 export interface AdminProject {
+  /**
+   * BILLING_ONLY was imported from a NIT to prepare bills and nothing else — no muster, no
+   * store, no daily report. It is still a real project with a real schedule, so it stands in
+   * the same list; the card says which kind it is.
+   */
+  mode?: 'FULL' | 'BILLING_ONLY';
   id: string;
   code: string;
   name: string;

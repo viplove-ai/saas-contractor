@@ -181,6 +181,24 @@ export interface PageResponse<T> {
   last: boolean;
 }
 
+/** One tender as the billing list needs it — what it is, what is waiting, where the series is. */
+export interface BillingProjectSummary {
+  id: string;
+  code: string;
+  name: string;
+  billingOnly: boolean;
+  agreementNo: string | null;
+  contractorName: string | null;
+  boqItemCount: number;
+  unbilledSheets: number;
+  draftSheets: number;
+  billCount: number;
+  lastBillTitle: string | null;
+  lastBillStatus: BillStatus | null;
+  grossBilledToDate: string | null;
+  agreementRecorded: boolean;
+}
+
 export interface Project {
   id: string;
   code: string;

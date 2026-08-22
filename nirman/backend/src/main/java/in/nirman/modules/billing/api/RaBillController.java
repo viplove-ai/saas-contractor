@@ -4,6 +4,7 @@ import in.nirman.modules.billing.api.dto.BillingDtos.AgreementRequest;
 import in.nirman.modules.billing.api.dto.BillingDtos.AgreementResponse;
 import in.nirman.modules.billing.api.dto.BillingDtos.BillResponse;
 import in.nirman.modules.billing.api.dto.BillingDtos.BillSummary;
+import in.nirman.modules.billing.api.dto.BillingDtos.BillingProjectSummary;
 import in.nirman.modules.billing.api.dto.BillingDtos.CreateBillRequest;
 import in.nirman.modules.billing.api.dto.BillingDtos.DecideBillRequest;
 import in.nirman.modules.billing.api.dto.BillingDtos.UnbilledSummary;
@@ -66,6 +67,14 @@ public class RaBillController {
     public AgreementResponse saveAgreement(@PathVariable UUID projectId,
                                            @Valid @RequestBody AgreementRequest request) {
         return agreements.save(projectId, request);
+    }
+
+    // ------------------------------------------------------------------ the projects list
+
+    @GetMapping("/billing/projects")
+    @Operation(summary = "Tenders to bill, each with what is waiting and where its series has got to")
+    public List<BillingProjectSummary> projects() {
+        return bills.projects();
     }
 
     // ------------------------------------------------------------------ the unbilled queue

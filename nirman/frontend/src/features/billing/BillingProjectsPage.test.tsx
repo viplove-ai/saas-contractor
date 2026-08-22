@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BillingProjectsPage } from './BillingProjectsPage';
@@ -25,71 +26,112 @@ function renderPage() {
 }
 
 /*
-  This file exists because the screen shipped broken.
+  This file exists because the screen once shipped broken: it read a paginated envelope as an
+  array and died on `.map is not a function` before drawing anything. The types said otherwise
+  and the compiler believed them, because a response body is the one thing it cannot check.
 
-  `/projects` is paginated and returns a PageResponse — an object with a `content` array —
-  and the hook treated it as an array, so the page died on `.map is not a function` before it
-  drew anything. A test that renders the component against the shape the server actually sends
-  is the only kind that catches that; the types said `Project[]` and TypeScript believed them,
-  because a response body is not something the compiler can check.
-
-  So the fixture below is deliberately a whole PageResponse, envelope and all, rather than the
-  array the component wants.
+  So the fixture is whatever the server actually sends, and the assertions are about what the
+  card is for: telling somebody whether anything of theirs is waiting here, and where this
+  tender's billing got to.
 */
 
-describe('the billing project picker', () => {
+const summaries = [
+  {
+    id: 'p1',
+    code: 'KSN01',
+    name: 'Kausani Guest House Extension',
+    billingOnly: false,
+    agreementNo: 'AGR/2024/117',
+    contractorName: 'M/s Unique Associates',
+    boqItemCount: 42,
+    unbilledSheets: 3,
+    draftSheets: 1,
+    billCount: 2,
+    lastBillTitle: '2nd RA Bill',
+    lastBillStatus: 'PASSED',
+    grossBilledToDate: '4600200.00',
+    agreementRecorded: true,
+  },
+  {
+    id: 'p2',
+    code: 'ITBP7',
+    name: 'ITBP Watch Towers',
+    billingOnly: true,
+    agreementNo: null,
+    contractorName: null,
+    boqItemCount: 74,
+    unbilledSheets: 0,
+    draftSheets: 0,
+    billCount: 0,
+    lastBillTitle: null,
+    lastBillStatus: null,
+    grossBilledToDate: null,
+    agreementRecorded: false,
+  },
+];
+
+describe('the billing project cards', () => {
   beforeEach(() => {
     get.mockReset();
+    get.mockResolvedValue({ data: summaries });
   });
 
-  const page = {
-    data: {
-      content: [
-        { id: 'p1', code: 'KSN01', name: 'Kausani Guest House Extension', mode: 'FULL' },
-        { id: 'p2', code: 'ITBP7', name: 'ITBP Watch Towers', mode: 'BILLING_ONLY' },
-      ],
-      page: 0,
-      size: 100,
-      totalElements: 2,
-      totalPages: 1,
-      first: true,
-      last: true,
-    },
-  };
-
-  it('reads the projects out of the paginated envelope', async () => {
-    get.mockResolvedValue(page);
+  it('asks the billing endpoint, not the plain project list', async () => {
     renderPage();
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/billing/projects'));
+  });
 
+  it('shows both kinds of tender in one list', async () => {
+    renderPage();
     await waitFor(() =>
       expect(screen.getByText('Kausani Guest House Extension')).toBeInTheDocument(),
     );
     expect(screen.getByText('ITBP Watch Towers')).toBeInTheDocument();
-    expect(screen.getByText('KSN01')).toBeInTheDocument();
   });
 
-  /** A picker that silently showed the first 25 of 30 tenders would be worse than an error. */
-  it('asks for a page big enough to be a picker rather than a register', async () => {
-    get.mockResolvedValue(page);
+  it('marks the tender imported only to bill', async () => {
     renderPage();
+    await waitFor(() => expect(screen.getByText('ITBP Watch Towers')).toBeInTheDocument());
 
-    await waitFor(() => expect(get).toHaveBeenCalled());
-    expect(get).toHaveBeenCalledWith('/projects', { params: { size: 100 } });
+    // Two: the filter chip, which is a button, and the marker on the one billing-only card,
+    // which is not. Asserting the count catches the marker disappearing without the filter
+    // masking it.
+    const labels = screen.getAllByText('Billing only');
+    expect(labels).toHaveLength(2);
+    expect(labels.filter((label) => label.closest('[role="button"]') === null)).toHaveLength(1);
   });
 
-  it('marks a tender imported only to bill', async () => {
-    get.mockResolvedValue(page);
+  /** The question somebody arrives with: is there anything of mine waiting here. */
+  it('leads with what is waiting, and totals it across tenders', async () => {
     renderPage();
+    await waitFor(() => expect(screen.getByText('3 sheets waiting')).toBeInTheDocument());
+    expect(screen.getByText('3 sheets')).toBeInTheDocument();
+    expect(screen.getByText('1 unsigned')).toBeInTheDocument();
+  });
 
-    await waitFor(() => expect(screen.getByText('Billing only')).toBeInTheDocument());
+  it('says where the bill series got to, and says so when it has not started', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/2nd RA Bill · passed/)).toBeInTheDocument());
+    expect(screen.getByText('No bills yet')).toBeInTheDocument();
+  });
+
+  /** Filtering is local — mode is a flag on a list the page already holds. */
+  it('narrows to billing-only tenders without another request', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Kausani Guest House Extension')).toBeInTheDocument());
+
+    const callsBefore = get.mock.calls.length;
+    await user.click(screen.getByRole('button', { name: 'Billing only' }));
+
+    expect(screen.queryByText('Kausani Guest House Extension')).not.toBeInTheDocument();
+    expect(screen.getByText('ITBP Watch Towers')).toBeInTheDocument();
+    expect(get.mock.calls.length).toBe(callsBefore);
   });
 
   it('says so plainly when there is nothing to bill against', async () => {
-    get.mockResolvedValue({
-      data: { content: [], page: 0, size: 100, totalElements: 0, totalPages: 0, first: true, last: true },
-    });
+    get.mockResolvedValue({ data: [] });
     renderPage();
-
-    await waitFor(() => expect(screen.getByText(/No projects yet/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/No tenders yet/i)).toBeInTheDocument());
   });
 });
