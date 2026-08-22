@@ -29,8 +29,9 @@ spring:
       write-dates-as-timestamps: false
   servlet:
     multipart:
-      max-file-size: 15MB
-      max-request-size: 60MB
+      # Has to admit the largest document; the per-kind limits above are what actually decide.
+      max-file-size: 120MB
+      max-request-size: 130MB
 
 server:
   port: 8080
@@ -68,6 +69,8 @@ app:
     bucket: ${STORAGE_BUCKET:nirman-files}
     signed-url-minutes: 10
     max-file-size-bytes: 15728640
+    # 120 MB. A DSR volume is a thousand pages of scanned government print.
+    max-document-size-bytes: 125829120
     allowed-content-types: image/jpeg,image/png,image/webp,application/pdf
   business:
     default-standard-shift-hours: 8

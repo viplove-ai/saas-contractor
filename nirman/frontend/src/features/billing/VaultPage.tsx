@@ -194,13 +194,15 @@ export function VaultPage() {
                       <Chip size="small" label="Held" color="success" variant="outlined" />
                     ) : (
                       <Tooltip title="Upload the PDF">
-                        <IconButton
-                          size="small"
-                          disabled={uploadingFor === document.id}
-                          onClick={() => pickFile(document.id)}
-                        >
-                          <UploadFileIcon fontSize="small" />
-                        </IconButton>
+                        <span>
+                          {uploadingFor === document.id ? (
+                            <CircularProgress size={20} />
+                          ) : (
+                            <IconButton size="small" onClick={() => pickFile(document.id)}>
+                              <UploadFileIcon fontSize="small" />
+                            </IconButton>
+                          )}
+                        </span>
                       </Tooltip>
                     )}
                   </TableCell>
@@ -223,6 +225,7 @@ export function VaultPage() {
       <input
         ref={fileInput}
         type="file"
+        accept="application/pdf,image/jpeg,image/png,image/webp"
         hidden
         onChange={(event) => void onFileChosen(event.target.files?.[0])}
       />

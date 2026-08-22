@@ -357,11 +357,22 @@ export function useWithdrawDocument() {
   });
 }
 
-/** Uploads the file, then points the edition at it. Two calls because the file is its own row. */
+/**
+ * Uploads the file, then points the edition at it. Two calls because the file is its own row —
+ * an edition can exist before anybody finds a copy, and the copy can be replaced later.
+ *
+ * <p>Two things this call has to get right, and both were wrong first time. `ownerEntityType`
+ * is required by the server and decides where the object is filed; omitting it produced an
+ * unhandled error and the generic "request could not be completed". And apiClient sends JSON
+ * by default, so a multipart body has to ask for its own boundary or the parts never arrive.</p>
+ */
 export async function uploadDocumentFile(documentId: string, file: File): Promise<void> {
   const form = new FormData();
-  form.append('file', file);
-  const uploaded = await apiClient.post<{ id: string }>('/attachments', form);
+  form.append('file', file, file.name);
+  const uploaded = await apiClient.post<{ id: string }>('/attachments', form, {
+    params: { ownerEntityType: 'REFERENCE_DOCUMENT', kind: 'DOCUMENT' },
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
   await apiClient.post(`/reference-documents/${documentId}/attach`, {
     attachmentId: uploaded.data.id,
   });

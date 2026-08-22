@@ -62,10 +62,15 @@ public class AttachmentService {
         if (file.isEmpty()) {
             throw new BusinessException("attachment.empty", "The uploaded file is empty.");
         }
-        if (file.getSize() > properties.maxFileSizeBytes()) {
+        // A document and a photograph are not the same kind of thing. A published schedule of
+        // rates is a thousand-page PDF; a challan snapped on a site phone is not, and holding
+        // both to the schedule's limit would let a handset upload its whole camera roll.
+        long limit = kind == Attachment.Kind.DOCUMENT
+                ? properties.maxDocumentSizeBytes()
+                : properties.maxFileSizeBytes();
+        if (file.getSize() > limit) {
             throw new BusinessException("attachment.too-large",
-                    "The file exceeds the limit of "
-                            + (properties.maxFileSizeBytes() / (1024 * 1024)) + " MB.");
+                    "The file exceeds the limit of " + (limit / (1024 * 1024)) + " MB.");
         }
         String contentType = file.getContentType();
         if (contentType == null || !properties.allowedContentTypes().contains(contentType)) {

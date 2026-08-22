@@ -3,6 +3,7 @@ package in.nirman.modules.billing;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.nirman.AbstractIntegrationTest;
+import in.nirman.InMemoryStorageConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -10,6 +11,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.math.BigDecimal;
@@ -20,6 +23,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -42,6 +46,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p><b>A passed bill is what was paid.</b> Its figures are a snapshot written at the moment it
  * was passed, so measuring more work afterwards moves the next bill and never this one.</p>
  */
+// The suite does not run MinIO — the application is built to start without it — so the upload
+// tests below stand the bucket up in a map. See InMemoryStorageConfig.
+@Import(InMemoryStorageConfig.class)
 class RaBillWorkflowIntegrationTest extends AbstractIntegrationTest {
 
     private static final String PASSWORD = "Nirman@123";
@@ -104,6 +111,7 @@ class RaBillWorkflowIntegrationTest extends AbstractIntegrationTest {
                 + "WHERE code LIKE 'DSR-%' OR code LIKE 'CI-%'");
         jdbc.update("DELETE FROM reference_documents "
                 + "WHERE code LIKE 'DSR-%' OR code LIKE 'CI-%'");
+        jdbc.update("DELETE FROM attachments WHERE owner_entity_type = 'REFERENCE_DOCUMENT'");
     }
 
     // ---------------------------------------------------------------- the checksum
@@ -703,6 +711,77 @@ class RaBillWorkflowIntegrationTest extends AbstractIntegrationTest {
                                 """.formatted(code)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.type").value("https://nirman/errors/vault.code-taken"));
+    }
+
+    /**
+     * The upload path the vault screen actually uses, exercised end to end.
+     *
+     * <p>It shipped broken: the client omitted the required {@code ownerEntityType} and sent the
+     * body without a multipart boundary, which surfaced as "the request could not be completed"
+     * with no clue in it. Neither a type checker nor a unit test could have caught that — only
+     * something that calls the real endpoint the way the screen does.</p>
+     */
+    @Test
+    @DisplayName("a schedule PDF uploads and attaches to its edition")
+    void documentFileUploadsAndAttaches() throws Exception {
+        String token = loginToken("uttam");
+        String documentId = createDocument(token, "DSR", "DSR-FILE-" + shortId(),
+                "Delhi Schedule of Rates", 2023, null);
+
+        MockMultipartFile pdf = new MockMultipartFile("file", "dsr-2023.pdf",
+                "application/pdf", "%PDF-1.4 pretend schedule".getBytes());
+
+        MvcResult uploaded = mockMvc.perform(multipart("/api/v1/attachments")
+                        .file(pdf)
+                        .param("ownerEntityType", "REFERENCE_DOCUMENT")
+                        .param("kind", "DOCUMENT")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String attachmentId = objectMapper.readTree(uploaded.getResponse().getContentAsString())
+                .get("id").asText();
+
+        mockMvc.perform(post("/api/v1/reference-documents/{id}/attach", documentId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"attachmentId\":\"%s\"}".formatted(attachmentId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attachmentId").value(attachmentId));
+    }
+
+    /**
+     * A schedule of rates is a thousand-page government PDF; a challan photographed on a site
+     * phone is not. Holding both to the photograph's limit meant a real DSR could never be
+     * stored at all.
+     */
+    @Test
+    @DisplayName("a document may be far larger than a photograph")
+    void documentsGetTheirOwnSizeLimit() throws Exception {
+        String token = loginToken("uttam");
+        // Larger than the 15 MB photograph cap, well under the document one.
+        byte[] big = new byte[20 * 1024 * 1024];
+        big[0] = '%';
+        MockMultipartFile pdf = new MockMultipartFile("file", "dsr-vol-1.pdf",
+                "application/pdf", big);
+
+        mockMvc.perform(multipart("/api/v1/attachments")
+                        .file(pdf)
+                        .param("ownerEntityType", "REFERENCE_DOCUMENT")
+                        .param("kind", "DOCUMENT")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated());
+
+        // The same bytes as a photograph are still refused, which is the point of two limits.
+        MockMultipartFile photo = new MockMultipartFile("file", "site.jpg",
+                "image/jpeg", big);
+        mockMvc.perform(multipart("/api/v1/attachments")
+                        .file(photo)
+                        .param("ownerEntityType", "REFERENCE_DOCUMENT")
+                        .param("kind", "PHOTO")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.type")
+                        .value("https://nirman/errors/attachment.too-large"));
     }
 
     private String createDocument(String token, String kind, String code, String title,
