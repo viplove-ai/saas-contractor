@@ -20,11 +20,11 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { BillingGuide } from './BillingGuide';
-import { downloadBlankSheets, useSheets } from './api';
+import { downloadBlankSheets, useNextSerial, useSheets } from './api';
 
 /*
   Every sheet on a project, newest first, with the unbilled ones first-class because that is
@@ -40,10 +40,19 @@ export function SheetRegisterPage() {
   // meaningful if a sheet number exists on exactly one piece of paper.
   const [guideOpen, setGuideOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
-  const [from, setFrom] = useState('1');
+  const [from, setFrom] = useState('');
+  const [fromEdited, setFromEdited] = useState(false);
   const [count, setCount] = useState('20');
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
+
+  // Suggested when the dialog opens, and only into a box he has not touched — overwriting a
+  // number he typed because a query resolved late is worse than not suggesting at all.
+  const suggestion = useNextSerial(printOpen);
+  useEffect(() => {
+    if (!printOpen || fromEdited || !suggestion.data) return;
+    setFrom(String(suggestion.data.nextSerial));
+  }, [printOpen, fromEdited, suggestion.data]);
 
   const print = async () => {
     setPrinting(true);
@@ -136,7 +145,15 @@ export function SheetRegisterPage() {
 
       <BillingGuide open={guideOpen} onClose={() => setGuideOpen(false)} />
 
-      <Dialog open={printOpen} onClose={() => setPrintOpen(false)} fullWidth maxWidth="xs">
+      <Dialog
+        open={printOpen}
+        onClose={() => {
+          setPrintOpen(false);
+          setFromEdited(false);
+        }}
+        fullWidth
+        maxWidth="xs"
+      >
         <DialogTitle>Print blank measurement sheets</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ pt: 1 }}>
@@ -154,7 +171,15 @@ export function SheetRegisterPage() {
                 label="Start at sheet no."
                 type="number"
                 value={from}
-                onChange={(event) => setFrom(event.target.value)}
+                onChange={(event) => {
+                  setFromEdited(true);
+                  setFrom(event.target.value);
+                }}
+                helperText={
+                  suggestion.data?.lastUsed
+                    ? `Last entered was ${suggestion.data.lastUsed}`
+                    : 'No sheets entered yet'
+                }
                 sx={{ flex: 1 }}
               />
               <TextField
@@ -170,7 +195,11 @@ export function SheetRegisterPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPrintOpen(false)}>Cancel</Button>
-          <Button variant="contained" disabled={printing} onClick={() => void print()}>
+          <Button
+            variant="contained"
+            disabled={printing || !from}
+            onClick={() => void print()}
+          >
             Download PDF
           </Button>
         </DialogActions>

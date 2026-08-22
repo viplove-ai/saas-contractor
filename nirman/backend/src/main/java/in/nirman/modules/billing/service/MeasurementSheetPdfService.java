@@ -2,6 +2,7 @@ package in.nirman.modules.billing.service;
 
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import in.nirman.common.BusinessException;
+import in.nirman.modules.billing.repository.MeasurementSheetRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import in.nirman.security.CurrentUserProvider;
@@ -42,12 +43,40 @@ public class MeasurementSheetPdfService {
     private static final int MAX_SHEETS = 200;
 
     private final SpringTemplateEngine templates;
+    private final MeasurementSheetRepository sheets;
     private final CurrentUserProvider currentUser;
 
     public MeasurementSheetPdfService(SpringTemplateEngine templates,
+                                      MeasurementSheetRepository sheets,
                                       CurrentUserProvider currentUser) {
         this.templates = templates;
+        this.sheets = sheets;
         this.currentUser = currentUser;
+    }
+
+    /**
+     * @param nextSerial where the next print run should start
+     * @param lastUsed   the highest serial already entered, or null if none has been. Returned
+     *                   so the screen can say <i>why</i> it is suggesting that number rather
+     *                   than presenting it as a fact — the office may hold a part-used book the
+     *                   system has never seen, and only the person holding it knows.
+     */
+    public record SerialSuggestion(int nextSerial, Integer lastUsed) {
+    }
+
+    /**
+     * Where to start the next run of blank sheets.
+     *
+     * <p>One serial, one sheet, for ever: the register refuses a number it has already seen, so
+     * a run that reprinted numbers would produce paper that cannot be entered. Suggesting the
+     * next one after the highest already used is the honest default, and it stays editable
+     * because the system only knows about sheets that were entered — not about the forty blanks
+     * still in the book.</p>
+     */
+    @PreAuthorize("hasAuthority('billing:measure')")
+    public SerialSuggestion nextSerial() {
+        Integer highest = sheets.highestSerialNumber(currentUser.currentOrgId());
+        return new SerialSuggestion(highest == null ? 1 : highest + 1, highest);
     }
 
     /**

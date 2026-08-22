@@ -1,3 +1,4 @@
+import AddIcon from '@mui/icons-material/Add';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import {
   Alert,
@@ -11,7 +12,9 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ImportTenderDialog } from './ImportTenderDialog';
 import { useBillingProjects } from './api';
 
 /*
@@ -21,6 +24,7 @@ import { useBillingProjects } from './api';
 */
 export function BillingProjectsPage() {
   const projects = useBillingProjects();
+  const [importOpen, setImportOpen] = useState(false);
 
   if (projects.isLoading) {
     return (
@@ -33,6 +37,15 @@ export function BillingProjectsPage() {
   return (
     <Stack spacing={2} sx={{ p: 2 }}>
       <Typography variant="h6">Billing</Typography>
+
+      <Button
+        variant="contained"
+        startIcon={<AddIcon />}
+        onClick={() => setImportOpen(true)}
+        sx={{ alignSelf: 'flex-start' }}
+      >
+        Bill a tender
+      </Button>
 
       <Button
         startIcon={<MenuBookIcon />}
@@ -63,6 +76,8 @@ export function BillingProjectsPage() {
           </ListItemButton>
         ))}
       </List>
+
+      <ImportTenderDialog open={importOpen} onClose={() => setImportOpen(false)} />
     </Stack>
   );
 }

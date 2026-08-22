@@ -83,6 +83,12 @@ public class MeasurementController {
      * two places is a reader that silently starts on the wrong column the first time somebody
      * nudges a margin.</p>
      */
+    @GetMapping("/next-serial")
+    @Operation(summary = "Where the next run of blank sheets should start")
+    public MeasurementSheetPdfService.SerialSuggestion nextSerial() {
+        return blankSheets.nextSerial();
+    }
+
     @GetMapping("/geometry")
     @Operation(summary = "The printed sheet's box positions, shared by the printer and the reader")
     public SheetGeometryResponse geometry() {

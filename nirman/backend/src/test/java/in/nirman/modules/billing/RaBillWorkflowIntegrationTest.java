@@ -555,6 +555,51 @@ class RaBillWorkflowIntegrationTest extends AbstractIntegrationTest {
         throw new AssertionError("no formula containing " + needle + " on " + sheet.getSheetName());
     }
 
+    // ---------------------------------------------------------------- the print run
+
+    /**
+     * One serial, one sheet, for ever. The register refuses a number it has already seen, so a
+     * run that reprinted numbers would produce paper nobody could enter — which is why the
+     * screen suggests where to start rather than defaulting to 1 every time.
+     */
+    @Test
+    @DisplayName("the next print run is suggested after the highest serial already entered")
+    void nextSerialFollowsTheHighestUsed() throws Exception {
+        String token = loginToken("uttam");
+        String projectId = billingProject(token);
+
+        createSheet(token, projectId, BOQ_COLUMNS, "M-000041", "1.00", """
+                [{"location":"A","nos":1,"mult":1,"length":1.00,"breadth":1.00,"height":1.00}]
+                """);
+        createSheet(token, projectId, BOQ_BEAMS, "M-000007", "1.00", """
+                [{"location":"B","nos":1,"mult":1,"length":1.00,"breadth":1.00,"height":1.00}]
+                """);
+
+        // 41 and not 7: the comparison is numeric, so M-000007 does not out-rank M-000041 by
+        // being read as a string.
+        mockMvc.perform(get("/api/v1/measurement-sheets/next-serial")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lastUsed").value(41))
+                .andExpect(jsonPath("$.nextSerial").value(42));
+    }
+
+    /** With nothing entered there is nothing to follow, and the first book starts at one. */
+    @Test
+    @DisplayName("with no sheets entered the suggestion is the first serial")
+    void firstPrintRunStartsAtOne() throws Exception {
+        String token = loginToken("uttam");
+        // Only this suite's own rows. A test that reaches past its own fixture is how one
+        // suite starts deciding whether another passes.
+        jdbc.update("UPDATE measurement_sheets SET deleted_at = now() "
+                + "WHERE deleted_at IS NULL AND (sheet_serial LIKE 'M-%' OR sheet_serial LIKE 'MB-%')");
+
+        mockMvc.perform(get("/api/v1/measurement-sheets/next-serial")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nextSerial").value(1));
+    }
+
     // ---------------------------------------------------------------- the vault
 
     /**

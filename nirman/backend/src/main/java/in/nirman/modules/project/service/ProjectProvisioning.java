@@ -39,7 +39,21 @@ public interface ProjectProvisioning {
             int sortOrder) {
     }
 
-    record ProvisionRequest(CreateProjectRequest project, List<ImportedBoqLine> lines, String source) {
+    /**
+     * @param billingOnly the tender was imported to prepare bills and nothing else — no muster,
+     *                    no store, no daily report. It still gets one site and the importing
+     *                    user is posted to it, because authorisation is site-scoped and a
+     *                    project with no sites has nothing to scope on. Without that posting he
+     *                    creates a project he cannot then read, and the failure looks like a
+     *                    permissions bug rather than a missing assignment.
+     */
+    record ProvisionRequest(CreateProjectRequest project, List<ImportedBoqLine> lines,
+                            String source, boolean billingOnly) {
+
+        public ProvisionRequest(CreateProjectRequest project, List<ImportedBoqLine> lines,
+                                String source) {
+            this(project, lines, source, false);
+        }
     }
 
     record ProvisionResult(ProjectResponse project, int lineCount, BigDecimal boqValue) {

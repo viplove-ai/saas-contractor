@@ -199,7 +199,13 @@ public final class NitDtos {
             @Valid ScheduleTerms scheduleTerms,
             @Valid @Size(max = 2000) List<ConfirmedBoqLine> boqLines,
             /** Echoed back from the preview, so the record keeps what the reader was unsure of. */
-            List<String> warnings) {
+            List<String> warnings,
+            /**
+             * Import the tender to prepare bills and nothing else — no muster, no store, no
+             * daily report. It still gets one site, because authorisation is site-scoped, and
+             * the importing user is posted to it in the same act.
+             */
+            boolean billingOnly) {
     }
 
     public record NitImportResponse(

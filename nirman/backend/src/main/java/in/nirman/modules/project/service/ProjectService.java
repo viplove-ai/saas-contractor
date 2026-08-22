@@ -10,6 +10,7 @@ import in.nirman.modules.project.api.dto.ProjectDtos.ProjectSummaryResponse;
 import in.nirman.modules.project.api.dto.ProjectDtos.UpdateProjectRequest;
 import in.nirman.modules.project.domain.BoqItem;
 import in.nirman.modules.project.domain.Project;
+import in.nirman.modules.identity.service.SiteStaffing;
 import in.nirman.modules.project.domain.Site;
 import in.nirman.modules.project.mapper.ProjectMapper;
 import in.nirman.modules.project.repository.BoqItemRepository;
@@ -46,13 +47,15 @@ public class ProjectService implements ProjectProvisioning {
     private final BoqItemRepository boqItems;
     private final SiteService siteService;
     private final SiteDeletionGuard deletionGuard;
+    private final SiteStaffing staffing;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
     private final ProjectMapper mapper;
 
     public ProjectService(ProjectRepository projects, SiteRepository sites, StoreRepository stores,
                           BoqItemRepository boqItems, SiteService siteService,
-                          SiteDeletionGuard deletionGuard, CurrentUserProvider currentUser,
+                          SiteDeletionGuard deletionGuard, SiteStaffing staffing,
+                          CurrentUserProvider currentUser,
                           AuditService audit, ProjectMapper mapper) {
         this.projects = projects;
         this.sites = sites;
@@ -60,6 +63,7 @@ public class ProjectService implements ProjectProvisioning {
         this.boqItems = boqItems;
         this.siteService = siteService;
         this.deletionGuard = deletionGuard;
+        this.staffing = staffing;
         this.currentUser = currentUser;
         this.audit = audit;
         this.mapper = mapper;
@@ -132,6 +136,9 @@ public class ProjectService implements ProjectProvisioning {
     @PreAuthorize("hasAuthority('project:write') and hasAuthority('boq:write')")
     public ProvisionResult createWithBoq(ProvisionRequest request) {
         Project project = createProject(request.project());
+        if (request.billingOnly()) {
+            project.setMode(Project.Mode.BILLING_ONLY);
+        }
 
         Set<String> itemNumbers = new LinkedHashSet<>();
         List<BoqItem> items = new ArrayList<>(request.lines().size());
@@ -158,10 +165,55 @@ public class ProjectService implements ProjectProvisioning {
         }
         boqItems.saveAll(items);
 
+        if (request.billingOnly()) {
+            provisionBillingSite(project);
+        }
+
         audit.record("PROJECT", project.getId(), "IMPORT_BOQ", null,
                 Map.of("code", project.getCode(), "source", request.source(),
                         "lines", items.size(), "value", value), null);
         return new ProvisionResult(mapper.toResponse(project), items.size(), value);
+    }
+
+    /**
+     * The one site a BILLING_ONLY project gets, and the posting that makes it readable.
+     *
+     * <p>{@link in.nirman.security.SiteAccessGuard} takes a site id, so a project with no sites
+     * has nothing to scope on. The alternative to giving it one is a second access model beside
+     * the first, which is how a system ends up with a hole in whichever of the two nobody
+     * remembers to update — so it gets a site, and the billing screens never show a picker for
+     * it. The same argument {@code createDefaultStore} already makes about stores.</p>
+     *
+     * <p><b>And the importer is posted to it in the same act.</b> Otherwise he creates a tender
+     * he immediately cannot read, and the failure surfaces as a permissions error rather than
+     * as the missing assignment it is.</p>
+     */
+    private void provisionBillingSite(Project project) {
+        String code = uniqueSiteCode(project.getOrgId(), project.getCode());
+        Site site = new Site(project.getOrgId(), project.getId(), code, project.getName());
+        sites.save(site);
+
+        UUID importer = currentUser.currentUserIdOrNull();
+        if (importer != null) {
+            staffing.updateSiteAccess(project.getOrgId(), site.getId(), Set.of(importer), Set.of());
+        }
+        audit.record("SITE", site.getId(), "CREATE", null,
+                Map.of("code", site.getCode(), "projectId", project.getId().toString(),
+                        "derivedFrom", "billing-only import"), null);
+    }
+
+    /** Site codes are unique per organisation, and two tenders may share a project code stem. */
+    private String uniqueSiteCode(UUID orgId, String projectCode) {
+        String base = ("S-" + projectCode);
+        if (base.length() > 36) {
+            base = base.substring(0, 36);
+        }
+        String candidate = base;
+        int suffix = 2;
+        while (sites.findByOrgIdAndCode(orgId, candidate).isPresent()) {
+            candidate = base + "-" + suffix++;
+        }
+        return candidate;
     }
 
     private Project createProject(CreateProjectRequest request) {

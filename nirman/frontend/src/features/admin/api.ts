@@ -483,6 +483,12 @@ export interface NitImportInput {
   scheduleTerms: ScheduleTerms;
   boqLines: ConfirmedBoqLine[];
   warnings: string[];
+  /**
+   * Import the tender to prepare bills and nothing else — no muster, no store, no daily
+   * report. The server still gives it one site and posts the importer to it, because
+   * authorisation is site-scoped and a project with no sites has nothing to scope on.
+   */
+  billingOnly?: boolean;
 }
 
 /** Creates the project, its BOQ and its tender record from the reviewed preview. */

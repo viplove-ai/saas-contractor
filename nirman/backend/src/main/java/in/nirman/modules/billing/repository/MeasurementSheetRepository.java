@@ -69,6 +69,26 @@ public interface MeasurementSheetRepository extends JpaRepository<MeasurementShe
     List<MeasurementSheet> findByRaBillIdOrderByBoqItemIdAscMeasuredOnAsc(UUID raBillId);
 
     /**
+     * The highest pre-printed serial this organisation has entered, as a number.
+     *
+     * <p>Native, because the serial is text — {@code M-000123} — and the ordering that matters
+     * is the numeric one: {@code M-000099} must sort below {@code M-000100}, which a string
+     * comparison gets right only by luck of the zero padding. Reading the digits out and
+     * comparing those says what is meant rather than relying on the format never changing.</p>
+     *
+     * <p>Used to suggest where the next print run starts. A suggestion only — the office may
+     * have a part-used book in a drawer, and only the person holding it knows.</p>
+     */
+    @Query(value = """
+            SELECT MAX(CAST(substring(sheet_serial FROM '[0-9]+$') AS integer))
+              FROM measurement_sheets
+             WHERE org_id = :orgId
+               AND deleted_at IS NULL
+               AND sheet_serial ~ '[0-9]+$'
+            """, nativeQuery = true)
+    Integer highestSerialNumber(@Param("orgId") UUID orgId);
+
+    /**
      * The quantity a bill's own sheets claim for one item. Section sheets are excluded from
      * this sum and added by the caller, because their claim is the row total times a unit
      * weight and the database has no business doing that multiplication in two places.

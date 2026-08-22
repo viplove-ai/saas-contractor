@@ -168,7 +168,8 @@ public class NitImportService {
         }
 
         ProjectProvisioning.ProvisionResult provisioned = projects.createWithBoq(
-                new ProjectProvisioning.ProvisionRequest(request.project(), lines, "NIT_IMPORT"));
+                new ProjectProvisioning.ProvisionRequest(request.project(), lines, "NIT_IMPORT",
+                        request.billingOnly()));
 
         NitDocument document = saveNitDocument(request, provisioned);
 

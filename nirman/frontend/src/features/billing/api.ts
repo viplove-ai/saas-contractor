@@ -417,3 +417,25 @@ export function useSheetGeometry(enabled: boolean) {
     gcTime: Infinity,
   });
 }
+
+/**
+ * Where the next run of blank sheets should start.
+ *
+ * <p>One serial, one sheet, for ever — the register refuses a number it has already seen, so a
+ * run that reprinted numbers would produce paper nobody could enter. Suggested, never imposed:
+ * the system knows about sheets that were entered, not about the forty blanks still in the
+ * book, and only the person holding the book knows that.</p>
+ */
+export function useNextSerial(enabled: boolean) {
+  return useQuery({
+    queryKey: ['billing', 'next-serial'] as const,
+    queryFn: async () =>
+      (
+        await apiClient.get<{ nextSerial: number; lastUsed: number | null }>(
+          '/measurement-sheets/next-serial',
+        )
+      ).data,
+    enabled,
+    staleTime: 0,
+  });
+}
