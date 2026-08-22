@@ -113,6 +113,11 @@ export const router = createBrowserRouter([
           screen('billing/:projectId/bills', async () => ({
             Component: (await import('../features/billing/BillsPage')).BillsPage,
           })),
+          // The shelf. Reading it goes with reading a bill; changing it is dsr:manage, which
+          // the server enforces — this route only decides where the screen lives.
+          screen('billing/vault', async () => ({
+            Component: (await import('../features/billing/VaultPage')).VaultPage,
+          })),
           screen('billing/sheets/new', async () => ({
             Component: (await import('../features/billing/MeasurementSheetPage'))
               .MeasurementSheetPage,

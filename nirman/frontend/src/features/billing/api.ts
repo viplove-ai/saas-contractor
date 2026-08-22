@@ -2,13 +2,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../shared/apiClient';
 import type {
   Agreement,
+  AgreementSuggestion,
   Bill,
   BillSummary,
   BoqItem,
   MeasurementLineInput,
   Project,
   PageResponse,
+  ReferenceDocument,
   Sheet,
+  TenderDocument,
   UnbilledSummary,
   Unit,
 } from './types';
@@ -288,4 +291,110 @@ export async function downloadBillExcel(id: string, title: string): Promise<void
   anchor.download = `${title.replace(/[^A-Za-z0-9._-]/g, '-')}.xlsx`;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+// ------------------------------------------------------------------ the vault
+
+export const vaultKeys = {
+  documents: (kind?: string) => ['billing', 'vault', kind ?? 'all'] as const,
+  tenderDocuments: (projectId: string) => ['billing', 'vault', 'tender', projectId] as const,
+  suggestion: (projectId: string) => ['billing', 'vault', 'suggestion', projectId] as const,
+};
+
+export function useReferenceDocuments(kind?: string) {
+  return useQuery({
+    queryKey: vaultKeys.documents(kind),
+    queryFn: async () =>
+      (
+        await apiClient.get<ReferenceDocument[]>('/reference-documents', {
+          params: kind ? { kind } : undefined,
+        })
+      ).data,
+  });
+}
+
+export function useSaveReferenceDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id?: string } & Partial<ReferenceDocument>) => {
+      const { id, ...body } = input;
+      return id
+        ? (await apiClient.put<ReferenceDocument>(`/reference-documents/${id}`, body)).data
+        : (await apiClient.post<ReferenceDocument>('/reference-documents', body)).data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['billing', 'vault'] });
+    },
+  });
+}
+
+/** Marks an edition replaced. Moves nothing that already cites it — that is the whole point. */
+export function useSupersedeDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; replacedBy: string }) =>
+      (
+        await apiClient.post<ReferenceDocument>(`/reference-documents/${input.id}/supersede`, {
+          replacedBy: input.replacedBy,
+        })
+      ).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['billing', 'vault'] });
+    },
+  });
+}
+
+export function useWithdrawDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient.delete(`/reference-documents/${id}`);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['billing', 'vault'] });
+    },
+  });
+}
+
+/** Uploads the file, then points the edition at it. Two calls because the file is its own row. */
+export async function uploadDocumentFile(documentId: string, file: File): Promise<void> {
+  const form = new FormData();
+  form.append('file', file);
+  const uploaded = await apiClient.post<{ id: string }>('/attachments', form);
+  await apiClient.post(`/reference-documents/${documentId}/attach`, {
+    attachmentId: uploaded.data.id,
+  });
+}
+
+export function useTenderDocuments(projectId: string | undefined) {
+  return useQuery({
+    queryKey: vaultKeys.tenderDocuments(projectId ?? ''),
+    queryFn: async () =>
+      (await apiClient.get<TenderDocument[]>(`/projects/${projectId}/agreement/documents`)).data,
+    enabled: Boolean(projectId),
+  });
+}
+
+export function useLinkTenderDocuments(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (documentIds: string[]) =>
+      (
+        await apiClient.put<TenderDocument[]>(`/projects/${projectId}/agreement/documents`,
+          documentIds.map((documentId) => ({ documentId, role: 'SCHEDULE_OF_RATES' })))
+      ).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['billing', 'vault'] });
+    },
+  });
+}
+
+/** What the tender notice said. Suggestions only — nothing here decides anything. */
+export function useAgreementSuggestion(projectId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: vaultKeys.suggestion(projectId ?? ''),
+    queryFn: async () =>
+      (await apiClient.get<AgreementSuggestion>(`/projects/${projectId}/agreement/suggestion`)).data,
+    enabled: Boolean(projectId) && enabled,
+  });
 }

@@ -58,4 +58,25 @@ public interface NitLookup {
 
     /** @return empty when the project was not created from a tender this system read */
     Optional<TenderTerms> forProject(UUID projectId);
+
+    /**
+     * What the notice said the work would be priced under.
+     *
+     * <p>The reader has extracted these since the tender module was built and nothing could use
+     * them: the agreement's rate chain was typed in by hand at the first bill, off the same
+     * notice the system had already read. Billing asks for them so the office confirms a figure
+     * rather than transcribing one.</p>
+     *
+     * <p>Civil and electrical are separate because a tender ordinarily prices them under
+     * different schedules, which is why the notice states two of each. Any field may be null —
+     * a notice is a scanned government PDF and some defeat the reader.</p>
+     */
+    record RateBasis(
+            Integer civilDsrYear,
+            BigDecimal civilCostIndexPercent,
+            Integer electricalDsrYear,
+            BigDecimal electricalCostIndexPercent) {
+    }
+
+    Optional<RateBasis> rateBasis(UUID projectId);
 }

@@ -79,8 +79,10 @@ const STEPS: Step[] = [
       'Bills tab. The top of the screen shows everything measured and not yet billed, with its '
       + 'value. Set the date to bill up to, and tap Prepare bill.',
     watch:
-      'The first bill of a tender asks once for the agreement number, contractor, who measured '
-      + 'and the rate adjustments. Later bills never ask again.',
+      'The first bill of a tender asks once for the agreement number, contractor, who measured, '
+      + 'the rate adjustments, and which schedule of rates it was let under. It offers what the '
+      + 'tender notice said, so you are confirming rather than typing. Later bills never ask '
+      + 'again.',
   },
   {
     title: '6. Download the Excel',

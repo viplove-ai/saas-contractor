@@ -46,6 +46,23 @@ public class NitLookupService implements NitLookup {
                 projectId, currentUser.currentOrgId()).map(this::toTerms);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Read straight off the stored notice, with no fallback to a current schedule: what a
+     * tender is priced under is a fact about that tender, and offering today's edition where
+     * the notice was silent would be the system inventing the answer.</p>
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<RateBasis> rateBasis(UUID projectId) {
+        return documents.findByProjectIdAndOrgIdAndDeletedAtIsNull(
+                        projectId, currentUser.currentOrgId())
+                .map(document -> new RateBasis(document.getCivilDsrYear(),
+                        document.getCivilCostIndexPercent(), document.getElectricalDsrYear(),
+                        document.getElectricalCostIndexPercent()));
+    }
+
     private TenderTerms toTerms(NitDocument document) {
         Map<String, BigDecimal> thresholds = new LinkedHashMap<>();
         minimums.findByNitDocumentId(document.getId()).forEach(minimum ->

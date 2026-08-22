@@ -95,6 +95,15 @@ class RaBillWorkflowIntegrationTest extends AbstractIntegrationTest {
             jdbc.update("DELETE FROM projects WHERE id = ?::uuid", projectId);
         }
         createdProjects.clear();
+        // The vault is org-scoped, not project-scoped, so its rows outlive the projects
+        // above and would pile up across runs. Same rule as the sites: leave nothing behind.
+        jdbc.update("DELETE FROM agreement_documents WHERE document_id IN "
+                + "(SELECT id FROM reference_documents WHERE code LIKE 'DSR-%' "
+                + "OR code LIKE 'CI-%')");
+        jdbc.update("UPDATE reference_documents SET supersedes_id = NULL "
+                + "WHERE code LIKE 'DSR-%' OR code LIKE 'CI-%'");
+        jdbc.update("DELETE FROM reference_documents "
+                + "WHERE code LIKE 'DSR-%' OR code LIKE 'CI-%'");
     }
 
     // ---------------------------------------------------------------- the checksum
@@ -544,6 +553,148 @@ class RaBillWorkflowIntegrationTest extends AbstractIntegrationTest {
             }
         }
         throw new AssertionError("no formula containing " + needle + " on " + sheet.getSheetName());
+    }
+
+    // ---------------------------------------------------------------- the vault
+
+    /**
+     * The property the vault exists for.
+     *
+     * <p>A tender is priced under a particular edition and stays priced under it. Publishing a
+     * newer schedule says what to use next; it must not touch a single agreement already citing
+     * the old one, because a bill that repriced itself when the shelf changed would invent
+     * money in one direction or the other.</p>
+     */
+    @Test
+    @DisplayName("superseding an edition leaves the tenders already priced under it alone")
+    void supersedingDoesNotRepriceExistingTenders() throws Exception {
+        String token = loginToken("uttam");
+        String projectId = billingProject(token);
+        saveAgreement(token, projectId);
+
+        String dsr2023 = createDocument(token, "DSR", "DSR-2023-" + shortId(),
+                "Delhi Schedule of Rates 2023", 2023, null);
+        link(token, projectId, dsr2023);
+        assertThat(tenderDocuments(token, projectId).get(0).get("code").asText())
+                .startsWith("DSR-2023-");
+
+        String dsr2026 = createDocument(token, "DSR", "DSR-2026-" + shortId(),
+                "Delhi Schedule of Rates 2026", 2026, null);
+        mockMvc.perform(post("/api/v1/reference-documents/{id}/supersede", dsr2023)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"replacedBy\":\"%s\"}".formatted(dsr2026)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUPERSEDED"));
+
+        // The tender still cites 2023, and still says so.
+        JsonNode still = tenderDocuments(token, projectId).get(0);
+        assertThat(still.get("documentId").asText()).isEqualTo(dsr2023);
+        assertThat(still.get("code").asText()).startsWith("DSR-2023-");
+    }
+
+    /** An edition a tender is billing under cannot vanish from under it. */
+    @Test
+    @DisplayName("an edition a tender is priced under cannot be withdrawn")
+    void inUseDocumentCannotBeWithdrawn() throws Exception {
+        String token = loginToken("uttam");
+        String projectId = billingProject(token);
+        saveAgreement(token, projectId);
+        String dsr = createDocument(token, "DSR", "DSR-USE-" + shortId(), "In use", 2023, null);
+        link(token, projectId, dsr);
+
+        mockMvc.perform(delete("/api/v1/reference-documents/{id}", dsr)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.type")
+                        .value("https://nirman/errors/vault.document-in-use"));
+    }
+
+    /**
+     * A cost index exists to state a percentage; a schedule of rates has thousands of rates and
+     * no single number. Letting either carry the other's shape is how a figure gets used for
+     * something it never meant.
+     */
+    @Test
+    @DisplayName("only a cost index carries a percentage, and it must carry one")
+    void percentBelongsOnlyToACostIndex() throws Exception {
+        String token = loginToken("uttam");
+
+        mockMvc.perform(post("/api/v1/reference-documents")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"kind":"COST_INDEX","code":"CI-%s","title":"Mussoorie 2025"}
+                                """.formatted(shortId())))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.type")
+                        .value("https://nirman/errors/vault.cost-index-needs-percent"));
+
+        mockMvc.perform(post("/api/v1/reference-documents")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"kind":"DSR","code":"DSR-BAD-%s","title":"With a percentage",
+                                 "indexPercent":23}
+                                """.formatted(shortId())))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.type")
+                        .value("https://nirman/errors/vault.percent-not-applicable"));
+    }
+
+    /** Two rows answering to one code make every later question about it ambiguous. */
+    @Test
+    @DisplayName("an edition code cannot be used twice")
+    void editionCodeIsUnique() throws Exception {
+        String token = loginToken("uttam");
+        String code = "DSR-DUP-" + shortId();
+        createDocument(token, "DSR", code, "First", 2023, null);
+
+        mockMvc.perform(post("/api/v1/reference-documents")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"kind":"DSR","code":"%s","title":"Second","editionYear":2023}
+                                """.formatted(code)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.type").value("https://nirman/errors/vault.code-taken"));
+    }
+
+    private String createDocument(String token, String kind, String code, String title,
+                                  Integer year, String percent) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/v1/reference-documents")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"kind":"%s","code":"%s","title":"%s","editionYear":%s%s}
+                                """.formatted(kind, code, title, year,
+                                percent == null ? "" : ",\"indexPercent\":" + percent)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asText();
+    }
+
+    private void link(String token, String projectId, String documentId) throws Exception {
+        mockMvc.perform(put("/api/v1/projects/{id}/agreement/documents", projectId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                [{"documentId":"%s","role":"SCHEDULE_OF_RATES"}]
+                                """.formatted(documentId)))
+                .andExpect(status().isOk());
+    }
+
+    private JsonNode tenderDocuments(String token, String projectId) throws Exception {
+        MvcResult result = mockMvc.perform(
+                        get("/api/v1/projects/{id}/agreement/documents", projectId)
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    private static String shortId() {
+        return UUID.randomUUID().toString().substring(0, 8);
     }
 
     // ---------------------------------------------------------------- helpers

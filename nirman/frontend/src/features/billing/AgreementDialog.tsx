@@ -1,18 +1,27 @@
 import {
   Alert,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
+  MenuItem,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
-import { useAgreement, useSaveAgreement } from './api';
+import {
+  useAgreement,
+  useAgreementSuggestion,
+  useLinkTenderDocuments,
+  useReferenceDocuments,
+  useSaveAgreement,
+  useTenderDocuments,
+} from './api';
 
 /*
   The tender's own details, asked once — at the first bill of that tender — and standing for
@@ -39,6 +48,14 @@ interface Props {
 export function AgreementDialog({ projectId, open, onClose, onSaved }: Props) {
   const existing = useAgreement(projectId);
   const save = useSaveAgreement(projectId);
+  // What the notice said. Asked only while the dialog is open, and only ever offered — the
+  // office confirms a figure rather than transcribing it off the same PDF the system read.
+  const suggestion = useAgreementSuggestion(projectId, open);
+  const shelf = useReferenceDocuments();
+  const linked = useTenderDocuments(projectId);
+  const link = useLinkTenderDocuments(projectId);
+  const [scheduleId, setScheduleId] = useState('');
+  const [suggestionApplied, setSuggestionApplied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
@@ -82,6 +99,29 @@ export function AgreementDialog({ projectId, open, onClose, onSaved }: Props) {
     }
   }, [existing.data]);
 
+  useEffect(() => {
+    setScheduleId(linked.data?.[0]?.documentId ?? '');
+  }, [linked.data]);
+
+  // Offered once, and only into boxes still holding their defaults — typing over somebody's
+  // correction because a query resolved late is worse than not offering at all.
+  useEffect(() => {
+    if (!open || existing.data || suggestionApplied || !suggestion.data) return;
+    const notice = suggestion.data;
+    if (notice.civilCostIndexPercent === null && notice.suggestedDocuments.length === 0) return;
+    setSuggestionApplied(true);
+    setForm((current) => ({
+      ...current,
+      costIndexPct:
+        current.costIndexPct === '0' && notice.civilCostIndexPercent !== null
+          ? notice.civilCostIndexPercent
+          : current.costIndexPct,
+    }));
+    if (notice.suggestedDocuments[0]) {
+      setScheduleId((current) => current || notice.suggestedDocuments[0]!.id);
+    }
+  }, [open, existing.data, suggestion.data, suggestionApplied]);
+
   const set = (key: keyof typeof form) => (event: { target: { value: string } }) =>
     setForm((current) => ({ ...current, [key]: event.target.value }));
 
@@ -106,6 +146,10 @@ export function AgreementDialog({ projectId, open, onClose, onSaved }: Props) {
         tenderPct: form.tenderPct,
         deviationLimitPct: form.deviationLimitPct,
       } as never);
+      // The agreement has to exist before a document can govern it, so this follows the save.
+      if (scheduleId) {
+        await link.mutateAsync([scheduleId]);
+      }
       onSaved();
     } catch (caught) {
       setError(apiErrorDetail(caught));
@@ -145,6 +189,54 @@ export function AgreementDialog({ projectId, open, onClose, onSaved }: Props) {
           </Stack>
           <TextField label="Executive Engineer" value={form.executiveEngineer} onChange={set('executiveEngineer')} fullWidth />
           <TextField label="CMB no." value={form.cmbNo} onChange={set('cmbNo')} fullWidth />
+
+          <Divider />
+          <Typography variant="subtitle2">What this tender is priced under</Typography>
+          {suggestion.data?.civilDsrYear != null && (
+            <Alert severity="info" icon={false}>
+              The tender notice says <strong>DSR {suggestion.data.civilDsrYear}</strong>
+              {suggestion.data.civilCostIndexPercent !== null && (
+                <>
+                  {' '}with a cost index of{' '}
+                  <strong>{suggestion.data.civilCostIndexPercent}%</strong>
+                </>
+              )}
+              . Confirm or change it below.
+            </Alert>
+          )}
+          <TextField
+            select
+            label="Schedule of rates"
+            value={scheduleId}
+            onChange={(event) => setScheduleId(event.target.value)}
+            fullWidth
+            helperText="The edition this tender was let under. It stays this edition when a newer one is published."
+          >
+            <MenuItem value="">
+              <em>Not recorded</em>
+            </MenuItem>
+            {(shelf.data ?? [])
+              .filter((d) => d.kind === 'DSR' || d.kind === 'DAR')
+              .map((d) => (
+                <MenuItem key={d.id} value={d.id}>
+                  {d.code} — {d.title}
+                  {d.status !== 'CURRENT' ? ' (superseded)' : ''}
+                </MenuItem>
+              ))}
+          </TextField>
+          {(shelf.data ?? []).length === 0 && (
+            <Alert severity="warning">
+              Nothing on the shelf yet. Add the edition under Billing → Reference documents, and
+              it will be selectable here.
+            </Alert>
+          )}
+          {linked.data?.[0]?.status === 'SUPERSEDED' && (
+            <Chip
+              size="small"
+              variant="outlined"
+              label="This edition has been superseded — which is fine, the tender keeps citing it"
+            />
+          )}
 
           <Divider />
           <Typography variant="subtitle2">How a schedule rate becomes this contract's rate</Typography>

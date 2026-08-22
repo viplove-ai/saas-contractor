@@ -272,3 +272,60 @@ export function sheetTotal(lines: MeasurementLineInput[]): number {
 
 export const isEditable = (sheet: Sheet): boolean =>
   sheet.status === 'DRAFT' && sheet.raBillId === null;
+
+// ------------------------------------------------------------------ the vault
+
+/**
+ * What a document is, which decides what it may be attached to. DSR and DAR price work;
+ * COST_INDEX moves a station's percentage; the rest are read by people and price nothing.
+ */
+export type DocumentKind = 'DSR' | 'DAR' | 'COST_INDEX' | 'SPECIFICATION' | 'CIRCULAR' | 'OTHER';
+export type DocumentStatus = 'CURRENT' | 'SUPERSEDED' | 'WITHDRAWN';
+export type DocumentRole = 'SCHEDULE_OF_RATES' | 'COST_INDEX' | 'SPECIFICATION' | 'OTHER';
+
+export const DOCUMENT_KIND_LABEL: Record<DocumentKind, string> = {
+  DSR: 'Schedule of Rates',
+  DAR: 'Analysis of Rates',
+  COST_INDEX: 'Cost index',
+  SPECIFICATION: 'Specification',
+  CIRCULAR: 'Circular',
+  OTHER: 'Other',
+};
+
+export interface ReferenceDocument {
+  id: string;
+  kind: DocumentKind;
+  code: string;
+  title: string;
+  editionYear: number | null;
+  station: string | null;
+  indexPercent: string | null;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+  attachmentId: string | null;
+  supersedesId: string | null;
+  status: DocumentStatus;
+  notes: string | null;
+  version: number;
+}
+
+export interface TenderDocument {
+  id: string;
+  documentId: string;
+  role: DocumentRole;
+  workPart: string | null;
+  code: string | null;
+  title: string | null;
+  editionYear: number | null;
+  status: DocumentStatus | null;
+  attachmentId: string | null;
+}
+
+/** What the NIT said, offered so the office confirms a figure rather than transcribing one. */
+export interface AgreementSuggestion {
+  civilDsrYear: number | null;
+  civilCostIndexPercent: string | null;
+  electricalDsrYear: number | null;
+  electricalCostIndexPercent: string | null;
+  suggestedDocuments: ReferenceDocument[];
+}

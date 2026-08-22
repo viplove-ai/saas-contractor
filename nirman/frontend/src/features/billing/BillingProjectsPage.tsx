@@ -1,4 +1,16 @@
-import { Alert, Box, Chip, CircularProgress, List, ListItemButton, ListItemText, Stack, Typography } from '@mui/material';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  List,
+  ListItemButton,
+  ListItemText,
+  Stack,
+  Typography,
+} from '@mui/material';
 import { Link } from 'react-router-dom';
 import { useBillingProjects } from './api';
 
@@ -21,6 +33,16 @@ export function BillingProjectsPage() {
   return (
     <Stack spacing={2} sx={{ p: 2 }}>
       <Typography variant="h6">Billing</Typography>
+
+      <Button
+        startIcon={<MenuBookIcon />}
+        size="small"
+        component={Link}
+        to="/billing/vault"
+        sx={{ alignSelf: 'flex-start' }}
+      >
+        Reference documents
+      </Button>
       {(projects.data ?? []).length === 0 && (
         <Alert severity="info">
           No projects yet. Import a tender's NIT to prepare bills against it.

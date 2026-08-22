@@ -360,6 +360,29 @@ if the tests pass:
   questions it. That the source workbook retyped these into forty-three sheets is why it says
   "3rd RA Bill" on its measurement pages, "4th RA Bill" on its abstract, and carries a sheet named
   `MB1st RA`.
+- **A tender is priced under an edition, and stays priced under it.** `reference_documents` is
+  the shelf — schedules of rates, cost index circulars, specifications — with the file itself in
+  `attachments` beside the row, so a rate questioned in March can be opened at its own page.
+  What matters is not holding the latest edition but being able to say **which one a given
+  tender was let under**, so `agreement_documents` stores that link rather than resolving
+  "whichever is current" at read time: an agreement let in 2025 is a DSR 2023 agreement for as
+  long as it runs, and a bill that repriced itself the day DSR 2026 was published would invent
+  money in one direction or the other. `supersede` therefore moves a status and touches no
+  agreement, and withdrawing an edition a tender still cites is refused — a document that
+  vanished from under a live agreement would leave its bills unable to say what priced them.
+  Registering an edition **without a file is allowed**: the office knows the notice cites DSR
+  2023 the moment it reads it and may not have a copy for weeks. Only a `COST_INDEX` carries a
+  single percentage (`ck_refdoc_index_percent`); a schedule has thousands of rates and no one
+  number. **No new permission** — `dsr:manage` was minted for exactly this custody, and deciding
+  which edition governs a tender *is* deciding its rates.
+- **The notice already knew.** `NitPdfParser` has extracted `civil_dsr_year` and
+  `civil_cost_index_percent` since the tender module was built, and `nit_documents` has been
+  storing them with nothing able to use them — the agreement's rate chain was typed in by hand
+  at the first bill, off the same PDF the system had already read. `NitLookup.rateBasis` closes
+  that loop: the agreement form is *offered* the year and percentage the notice stated and the
+  matching edition on the shelf, and the office confirms. It is a suggestion and never a
+  decision, applied once and only into boxes still holding their defaults — typing over
+  somebody's correction because a query resolved late is worse than not offering at all.
 - **A BILLING_ONLY project still gets a site.** `projects.mode` marks a tender imported from a NIT
   to prepare bills and nothing else — no muster, no store, no daily report. `NitImportService`
   already produced exactly that shape (a project with `boq_items` and no sites), and the flag only
@@ -547,6 +570,12 @@ chain), `dsr_schedules`/`dsr_items`, `measurement_sheets`/`measurement_lines`, a
 separate from `dpr:verify`), and `dsr:manage` (an administrator's alone: a rate is the multiplier
 on every quantity in the document). ADMIN gets all five, ENGINEER read and measure, ACCOUNTANT
 read and prepare — so no existing user's screens change until a permission is granted.
+
+`V47` is the document vault: `reference_documents` (the shelf, with the PDF in `attachments`),
+`agreement_documents` (which editions govern a tender — a stored fact, never a lookup), and
+`dsr_schedules.document_id` tying parsed rates back to the edition they were read out of.
+**No new permission**: `dsr:manage` already holds this custody, and `billing:read` covers
+reading the shelf. See the two rules above for why superseding moves nothing.
 
 **A note on JPQL and optional parameters.** `(:param IS NULL OR column = :param)` expands to two
 placeholders, and Postgres cannot infer a type for the one standing alone in `? IS NULL` — it
