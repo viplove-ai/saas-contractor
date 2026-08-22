@@ -271,3 +271,21 @@ export async function downloadBlankSheets(from: number, count: number): Promise<
   anchor.click();
   URL.revokeObjectURL(url);
 }
+
+/**
+ * The bill as the workbook that goes to the division — Front Page, Measurement Book, Abstract
+ * of Cost, Bill Form, Recovery Statement and Deviation Statement, linked by live formulas.
+ *
+ * <p>A bill that has not been passed downloads too, and says DRAFT in its own file name. Taking
+ * the file to the department to have the measurements checked before submitting is what a draft
+ * is for.</p>
+ */
+export async function downloadBillExcel(id: string, title: string): Promise<void> {
+  const response = await apiClient.get<Blob>(`/ra-bills/${id}/excel`, { responseType: 'blob' });
+  const url = URL.createObjectURL(response.data);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${title.replace(/[^A-Za-z0-9._-]/g, '-')}.xlsx`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}

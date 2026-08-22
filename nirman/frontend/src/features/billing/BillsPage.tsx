@@ -24,11 +24,15 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import DownloadIcon from '@mui/icons-material/Download';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { AgreementDialog } from './AgreementDialog';
+import { BillingGuide } from './BillingGuide';
 import {
+  downloadBillExcel,
   useAgreement,
   useBill,
   useBills,
@@ -57,6 +61,8 @@ export function BillsPage() {
   const [cutoff, setCutoff] = useState(() => new Date().toISOString().slice(0, 10));
   const [openBillId, setOpenBillId] = useState<string | null>(null);
   const [agreementOpen, setAgreementOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const openBill = useBill(openBillId ?? undefined);
 
@@ -104,6 +110,10 @@ export function BillsPage() {
       </Tabs>
 
       {error && <Alert severity="error">{error}</Alert>}
+
+      <Button startIcon={<HelpOutlineIcon />} size="small" onClick={() => setGuideOpen(true)}>
+        How billing works
+      </Button>
 
       <Paper sx={{ p: 2 }}>
         <Stack spacing={1.5}>
@@ -259,6 +269,21 @@ export function BillsPage() {
           )}
         </DialogContent>
         <DialogActions>
+          <Button
+            startIcon={<DownloadIcon />}
+            disabled={downloading || !openBill.data}
+            onClick={() => {
+              if (!openBill.data) return;
+              setDownloading(true);
+              setError(null);
+              void downloadBillExcel(openBill.data.id, openBill.data.title)
+                .catch((caught) => setError(apiErrorDetail(caught)))
+                .finally(() => setDownloading(false));
+            }}
+          >
+            Download Excel
+          </Button>
+          <Box sx={{ flex: 1 }} />
           {openBill.data?.status === 'DRAFT' && (
             <Button onClick={() => void decide('SUBMIT')}>Submit</Button>
           )}
@@ -273,6 +298,8 @@ export function BillsPage() {
           <Button onClick={() => setOpenBillId(null)}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      <BillingGuide open={guideOpen} onClose={() => setGuideOpen(false)} />
 
       <AgreementDialog
         projectId={projectId ?? ''}

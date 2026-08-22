@@ -471,6 +471,81 @@ class RaBillWorkflowIntegrationTest extends AbstractIntegrationTest {
                         .value("https://nirman/errors/billing.print-run-out-of-range"));
     }
 
+    /**
+     * The workbook that leaves the system, opened and read back.
+     *
+     * <p>The point of generating formulas rather than frozen numbers is that the Assistant
+     * Engineer can click a cell and see the arithmetic. A test that only checked the values
+     * would pass on a workbook of dead numbers, so this one reads the formula strings and the
+     * cross-sheet reference that ties the abstract to the measurement book.</p>
+     */
+    @Test
+    @DisplayName("the exported bill carries live formulas and real cross-sheet references")
+    void exportedWorkbookIsLinked() throws Exception {
+        String token = loginToken("uttam");
+        String projectId = billingProject(token);
+        saveAgreement(token, projectId);
+        signedSheet(token, projectId, BOQ_COLUMNS, "MB-9001", "3.61", """
+                [{"location":"GD Room","nos":1,"mult":1,"length":6.22,"breadth":5.80,"height":0.10}]
+                """);
+        String billId = createBill(token, projectId, "2026-06-30");
+
+        byte[] body = mockMvc.perform(get("/api/v1/ra-bills/{id}/excel", billId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        try (var workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
+                new java.io.ByteArrayInputStream(body))) {
+            assertThat(sheetNames(workbook)).contains("Front Page", "Measurement Book",
+                    "Abstract of Cost", "Bill Form", "Recovery Statement", "Deviation Statement");
+
+            // The measurement row multiplies only the dimensions given, and rounds as the book
+            // rounds: nos x mult x L x B x H for a volume item.
+            String rowFormula = firstFormulaContaining(workbook.getSheet("Measurement Book"),
+                    "ROUND(C");
+            assertThat(rowFormula).matches("ROUND\\(C\\d+\\*D\\d+\\*E\\d+\\*F\\d+\\*G\\d+,2\\)");
+
+            // The abstract does not carry its own copy of the quantity — it points at the block
+            // total in the measurement book.
+            assertThat(firstFormulaContaining(workbook.getSheet("Abstract of Cost"),
+                    "'Measurement Book'!"))
+                    .startsWith("'Measurement Book'!H");
+
+            // The amount is the rate times that quantity, live.
+            assertThat(firstFormulaContaining(workbook.getSheet("Abstract of Cost"), "ROUND(F"))
+                    .matches("ROUND\\(F\\d+\\*D\\d+,2\\)");
+
+            // And the statutory forms read the abstract rather than restating it.
+            assertThat(firstFormulaContaining(workbook.getSheet("Bill Form"), "Abstract of Cost"))
+                    .contains("'Abstract of Cost'!G");
+            assertThat(firstFormulaContaining(workbook.getSheet("Recovery Statement"), "2.5%"))
+                    .contains("ROUND(E");
+        }
+    }
+
+    private static java.util.List<String> sheetNames(
+            org.apache.poi.xssf.usermodel.XSSFWorkbook workbook) {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+            names.add(workbook.getSheetName(i));
+        }
+        return names;
+    }
+
+    private static String firstFormulaContaining(org.apache.poi.ss.usermodel.Sheet sheet,
+                                                 String needle) {
+        for (org.apache.poi.ss.usermodel.Row row : sheet) {
+            for (org.apache.poi.ss.usermodel.Cell cell : row) {
+                if (cell.getCellType() == org.apache.poi.ss.usermodel.CellType.FORMULA
+                        && cell.getCellFormula().contains(needle)) {
+                    return cell.getCellFormula();
+                }
+            }
+        }
+        throw new AssertionError("no formula containing " + needle + " on " + sheet.getSheetName());
+    }
+
     // ---------------------------------------------------------------- helpers
 
     /**

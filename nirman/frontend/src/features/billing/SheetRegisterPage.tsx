@@ -1,4 +1,5 @@
 import AddIcon from '@mui/icons-material/Add';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import PrintIcon from '@mui/icons-material/Print';
 import {
   Alert,
@@ -22,6 +23,7 @@ import {
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
+import { BillingGuide } from './BillingGuide';
 import { downloadBlankSheets, useSheets } from './api';
 
 /*
@@ -36,6 +38,7 @@ export function SheetRegisterPage() {
   // Printing blank paper. The serials are permanent and never reprinted, so the dialog asks
   // where this run starts rather than guessing — the duplicate guard in the register is only
   // meaningful if a sheet number exists on exactly one piece of paper.
+  const [guideOpen, setGuideOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [from, setFrom] = useState('1');
   const [count, setCount] = useState('20');
@@ -71,6 +74,10 @@ export function SheetRegisterPage() {
         <Tab label="Measurements" />
         <Tab label="Bills" />
       </Tabs>
+
+      <Button startIcon={<HelpOutlineIcon />} size="small" onClick={() => setGuideOpen(true)}>
+        How billing works
+      </Button>
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
         <Button
@@ -126,6 +133,8 @@ export function SheetRegisterPage() {
           </ListItemButton>
         ))}
       </List>
+
+      <BillingGuide open={guideOpen} onClose={() => setGuideOpen(false)} />
 
       <Dialog open={printOpen} onClose={() => setPrintOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>Print blank measurement sheets</DialogTitle>
