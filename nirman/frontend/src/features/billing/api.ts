@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../shared/apiClient';
+import type { SheetGeometry } from './reader/geometry';
 import type {
   Agreement,
   AgreementSuggestion,
@@ -396,5 +397,23 @@ export function useAgreementSuggestion(projectId: string | undefined, enabled: b
     queryFn: async () =>
       (await apiClient.get<AgreementSuggestion>(`/projects/${projectId}/agreement/suggestion`)).data,
     enabled: Boolean(projectId) && enabled,
+  });
+}
+
+/**
+ * Where every box sits on the printed page.
+ *
+ * <p>Fetched, never duplicated: the PDF is rendered from these millimetres and the reader
+ * corrects a photograph onto the same ones. Cached hard because it changes only when the sheet
+ * design does, and a reader that re-fetched it per photo would be useless in a valley.</p>
+ */
+export function useSheetGeometry(enabled: boolean) {
+  return useQuery({
+    queryKey: ['billing', 'sheet-geometry'] as const,
+    queryFn: async () =>
+      (await apiClient.get<SheetGeometry>('/measurement-sheets/geometry')).data,
+    enabled,
+    staleTime: Infinity,
+    gcTime: Infinity,
   });
 }

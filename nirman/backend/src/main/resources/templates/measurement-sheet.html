@@ -2,146 +2,105 @@
 <!--
   The blank master measurement sheet — the paper the engineer fills in with a pen at the site.
 
-  It is deliberately GENERIC. One design, printed in bulk, used on any tender: the engineer
-  writes the item number himself and chooses the project and item in the app when he enters
-  the page. A per-project register would need a print pipeline, would go stale the day a
-  deviation item was approved, and would have to travel to whichever site he was posted to.
+  Generic on purpose: one design, printed in bulk, used on any tender. He writes the item number
+  himself and picks the project and item in the app when he enters the page.
 
-  Three things on this page exist for a reader that does not exist yet, and cost nothing now.
+  EVERY POSITION ON THIS PAGE COMES FROM SheetGeometry, and none of it is laid out by the
+  browser. Boxes are absolutely positioned in millimetres from values the server computed, and
+  the reader that photographs this page fetches those same values. A layout defined twice is a
+  reader that silently starts on the wrong column the first time somebody nudges a margin.
 
-  The four corner marks let a photograph be perspective-corrected to the printed geometry, so
-  a future reader would compute each box's position rather than having to find it. The boxes
-  are ruled in a light dropout colour so the printed lines can be removed by a colour channel
-  drop, leaving only the pen strokes. And the sheet number is pre-printed and sequential.
+  The four corner marks are the reader's origin: it finds them, corrects the perspective onto
+  these coordinates, and every box becomes arithmetic instead of a search. The bottom-left mark
+  is deliberately wider than the other three, so a page photographed upside down can be told
+  from one the right way up — a symmetric set would read a rotated sheet as valid and transpose
+  every row on it.
 
-  That last one earns its keep immediately, with no reader at all: one serial, one sheet, so a
-  page entered twice — by two people each assuming the other had not — is refused rather than
-  paid twice. That is the expensive error in a billing system.
+  Boxes are ruled in a light dropout colour so a colour-channel drop erases the printing and
+  leaves only the pen strokes.
 
-  The Qty column is the checksum. He writes what each row comes to and the total at the foot;
-  the app multiplies the dimensions itself and compares. Two independent arrivals at one
-  number, and the signature is blocked while they differ.
-
-  Rendered by MeasurementSheetPdfService through openhtmltopdf, which needs well-formed
-  XHTML — every tag closes.
+  Rendered by MeasurementSheetPdfService through openhtmltopdf, which needs well-formed XHTML —
+  every tag closes, and entities are numeric because there is no DTD to declare &nbsp;.
 -->
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
 <head>
     <meta charset="utf-8" />
     <title>Measurement sheets</title>
     <style>
-        @page { size: A4; margin: 10mm 9mm; }
-        body { font-family: Helvetica, Arial, sans-serif; font-size: 9pt; color: #111; }
-        .sheet { page-break-after: always; position: relative; height: 268mm; }
+        @page { size: A4; margin: 0; }
+        body { font-family: Helvetica, Arial, sans-serif; font-size: 9pt; color: #111; margin: 0; }
+        .sheet { position: relative; width: 210mm; height: 297mm; page-break-after: always; }
         .sheet:last-child { page-break-after: auto; }
 
-        /* Registration marks. Solid black squares at a known offset from the page corners. */
-        .mark { position: absolute; width: 5mm; height: 5mm; background: #000; }
-        .mark.tl { top: 0; left: 0; }
-        .mark.tr { top: 0; right: 0; }
-        .mark.bl { bottom: 0; left: 0; }
-        .mark.br { bottom: 0; right: 0; }
-
-        .head { margin: 8mm 8mm 0 8mm; }
-        .title { font-size: 11pt; font-weight: bold; letter-spacing: 0.06em; }
-        .serial { font-size: 12pt; font-weight: bold; font-family: 'Courier New', monospace; }
-        .fields { width: 100%; border-collapse: collapse; margin-top: 3mm; }
-        .fields td { padding: 1.6mm 0; font-size: 9pt; }
-        .rule { border-bottom: 0.4pt solid #333; }
-
-        /* Everything the pen writes into is ruled in a dropout colour, never black. */
-        table.grid { width: 100%; border-collapse: collapse; margin-top: 3mm; }
-        table.grid th, table.grid td { border: 0.5pt solid #9dd4e8; height: 8.6mm; }
-        table.grid th { background: #eaf7fc; font-size: 8pt; font-weight: bold; height: 6mm;
-                        color: #16556b; }
-        .boxes { text-align: center; letter-spacing: 0.5mm; color: #9dd4e8;
-                 font-family: 'Courier New', monospace; font-size: 10pt; }
-        .sl { width: 7mm; text-align: center; font-size: 8pt; color: #16556b; }
-        .loc { width: 34mm; }
-        .foot { width: 100%; border-collapse: collapse; margin-top: 4mm; font-size: 8.5pt; }
-        .foot td { padding: 2mm 0; }
-        .hint { font-size: 7pt; color: #777; margin-top: 2mm; line-height: 1.5; }
+        .mark { position: absolute; background: #000; }
+        .box { position: absolute; border: 0.4pt solid #9dd4e8; }
+        .rule { position: absolute; border-bottom: 0.4pt solid #333; }
+        .lbl { position: absolute; font-size: 7.5pt; color: #16556b; }
+        .hdr { position: absolute; font-size: 8.5pt; color: #111; }
+        .title { position: absolute; font-size: 11pt; font-weight: bold; letter-spacing: 0.06em; }
+        .serial { position: absolute; font-size: 12pt; font-weight: bold;
+                  font-family: 'Courier New', monospace; }
+        .hint { position: absolute; font-size: 6.8pt; color: #777; line-height: 1.5; }
+        .colhead { position: absolute; font-size: 7.5pt; font-weight: bold; color: #16556b;
+                   text-align: center; }
+        .dot { position: absolute; font-size: 10pt; color: #9dd4e8; }
     </style>
 </head>
 <body>
-<div class="sheet" th:each="serial : ${serials}">
-    <div class="mark tl"></div>
-    <div class="mark tr"></div>
-    <div class="mark bl"></div>
-    <div class="mark br"></div>
+<div class="sheet" th:each="sheet : ${sheets}">
+    <!-- Corner marks. Bottom-left is wide; that asymmetry is what makes orientation readable. -->
+    <div class="mark" th:each="m : ${marks}"
+         th:style="'left:' + ${m.leftMm} + 'mm; top:' + ${m.topMm} + 'mm; width:'
+                   + ${m.widthMm} + 'mm; height:' + ${m.heightMm} + 'mm;'"></div>
 
-    <div class="head">
-        <table style="width:100%; border-collapse:collapse;">
-            <tr>
-                <td class="title">MEASUREMENT SHEET</td>
-                <td style="text-align:right;">
-                    <span style="font-size:8pt; color:#555;">Sheet No.&#160;</span>
-                    <span class="serial" th:text="${serial}">M-000001</span>
-                </td>
-            </tr>
-        </table>
+    <div class="title" style="left:16mm; top:22mm;">MEASUREMENT SHEET</div>
+    <div class="hdr" style="left:150mm; top:22mm;">Sheet No.</div>
+    <div class="serial" style="left:168mm; top:21mm;" th:text="${sheet}">M-000001</div>
 
-        <table class="fields">
-            <tr>
-                <td style="width:14mm;">Date</td>
-                <td class="rule" style="width:34mm;"></td>
-                <td style="width:14mm; padding-left:6mm;">Work</td>
-                <td class="rule"></td>
-            </tr>
-            <tr>
-                <td>Item No.</td>
-                <td class="rule"></td>
-                <td style="padding-left:6mm;">Unit</td>
-                <td class="rule"></td>
-            </tr>
-        </table>
+    <div class="hdr" style="left:16mm; top:36mm;">Date</div>
+    <div class="rule" style="left:30mm; top:41mm; width:36mm;"></div>
+    <div class="hdr" style="left:74mm; top:36mm;">Work</div>
+    <div class="rule" style="left:88mm; top:41mm; width:106mm;"></div>
 
-        <table class="grid">
-            <tr>
-                <th class="sl">Sl</th>
-                <th class="loc">Location / Part</th>
-                <th style="width:16mm;">Nos</th>
-                <th style="width:14mm;">&#215;</th>
-                <th style="width:22mm;">L</th>
-                <th style="width:22mm;">B</th>
-                <th style="width:22mm;">H</th>
-                <th style="width:26mm;">Qty</th>
-            </tr>
-            <tr th:each="row : ${rows}">
-                <td class="sl" th:text="${row}">1</td>
-                <td></td>
-                <td class="boxes">&#9633;&#9633;</td>
-                <td class="boxes">&#9633;&#9633;</td>
-                <td class="boxes">&#9633;&#9633;.&#9633;&#9633;</td>
-                <td class="boxes">&#9633;&#9633;.&#9633;&#9633;</td>
-                <td class="boxes">&#9633;&#9633;.&#9633;&#9633;</td>
-                <td class="boxes">&#9633;&#9633;&#9633;&#9633;.&#9633;&#9633;</td>
-            </tr>
-            <tr>
-                <td colspan="7" style="text-align:right; padding-right:3mm; font-weight:bold;
-                                       border:0.5pt solid #9dd4e8;">TOTAL</td>
-                <td class="boxes">&#9633;&#9633;&#9633;&#9633;.&#9633;&#9633;</td>
-            </tr>
-        </table>
+    <div class="hdr" style="left:16mm; top:48mm;">Item No.</div>
+    <div class="rule" style="left:34mm; top:53mm; width:60mm;"></div>
+    <div class="hdr" style="left:104mm; top:48mm;">Unit</div>
+    <div class="rule" style="left:118mm; top:53mm; width:36mm;"></div>
 
-        <table class="foot">
-            <tr>
-                <td style="width:38mm;">Unit wt (if any)</td>
-                <td class="rule" style="width:26mm;"></td>
-                <td style="width:16mm; padding-left:3mm;">kg/m</td>
-                <td style="padding-left:10mm;">Signature</td>
-                <td class="rule"></td>
-            </tr>
-        </table>
-
-        <p class="hint">
-            One item per sheet. Write the item number exactly as the agreement schedule prints
-            it. Fill every dimension column — a dash where it does not apply, never a blank.
-            Two decimals always (5.80, not 5.8). Write what each row comes to in Qty, and the
-            block total at the foot. Deductions as a (-) row inside the same sheet. Black
-            ballpoint.
-        </p>
+    <div class="hint" style="left:16mm; top:60mm; width:178mm;">
+        One item per sheet. Item number exactly as the agreement schedule prints it. One digit
+        per box, right aligned. A dash in a column that does not apply — never a blank, never a
+        zero. Write what each row comes to in Qty, and the block total at the foot. Black
+        ballpoint.
     </div>
+
+    <!-- Column headings, positioned from the same field origins as the boxes below them. -->
+    <div class="colhead" style="left:16mm; top:90mm; width:40mm;">Location / Part</div>
+    <div class="colhead" th:each="h : ${columnHeads}"
+         th:style="'left:' + ${h.leftMm} + 'mm; top:90mm; width:' + ${h.widthMm} + 'mm;'"
+         th:text="${h.label}">L</div>
+
+    <!-- The ruled line each location is written on. -->
+    <div class="rule" th:each="l : ${locationRules}"
+         th:style="'left:' + ${l.leftMm} + 'mm; top:' + ${l.topMm} + 'mm; width:'
+                   + ${l.widthMm} + 'mm;'"></div>
+
+    <!-- Every digit box, straight from SheetGeometry.boxes(). -->
+    <div class="box" th:each="b : ${boxes}"
+         th:style="'left:' + ${b.leftMm} + 'mm; top:' + ${b.topMm} + 'mm; width:'
+                   + ${b.widthMm} + 'mm; height:' + ${b.heightMm} + 'mm;'"></div>
+
+    <!-- Printed decimal points, so he never has to write one. -->
+    <div class="dot" th:each="d : ${decimalPoints}"
+         th:style="'left:' + ${d.leftMm} + 'mm; top:' + ${d.topMm} + 'mm;'">.</div>
+
+    <div class="colhead" th:style="'left:150mm; top:' + ${totalTopMm} + 'mm; width:22mm;'">TOTAL</div>
+
+    <div class="hdr" style="left:16mm; top:270mm;">Unit wt (if any)</div>
+    <div class="rule" style="left:52mm; top:275mm; width:26mm;"></div>
+    <div class="hdr" style="left:80mm; top:270mm;">kg/m</div>
+    <div class="hdr" style="left:118mm; top:270mm;">Signature</div>
+    <div class="rule" style="left:142mm; top:275mm; width:52mm;"></div>
 </div>
 </body>
 </html>

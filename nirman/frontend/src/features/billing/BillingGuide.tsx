@@ -55,14 +55,17 @@ const STEPS: Step[] = [
       + 'A linear item has no breadth, and a zero would say the work had none.',
   },
   {
-    title: '3. Enter the page in the app',
+    title: '3. Photograph the page, or type it',
     what:
-      'Measurements → New measurement sheet. Pick the item, type the sheet number and the '
-      + 'rows. The boxes shown change with the item’s unit: cum asks for L, B and H, sqm '
-      + 'for L and B, metre for L only.',
+      'Measurements → New measurement sheet. Pick the item, then tap Read from photo and '
+      + 'photograph the filled sheet lying flat with all four corner marks in frame. The rows '
+      + 'fill themselves in. You can also just type them — the boxes shown change with the '
+      + 'item’s unit: cum asks for L, B and H, sqm for L and B, metre for L only.',
     watch:
-      'Use the copy-row button — most rows differ from the one above by a single dimension. '
-      + 'Tick Deduction for an opening taken out; it goes in as a minus.',
+      'The photo is read on this phone — nothing is uploaded and it works with no signal. It '
+      + 'is only a proposal: rows it is unsure of are marked, and nothing is saved until you '
+      + 'check them. Use the copy-row button for rows that differ by one dimension, and tick '
+      + 'Deduction for an opening taken out.',
   },
   {
     title: '4. Type your written total, and sign',

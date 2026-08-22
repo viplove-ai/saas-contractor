@@ -11,6 +11,7 @@ import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
 import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
 
@@ -70,14 +71,107 @@ public class MeasurementSheetPdfService {
         List<String> serials = IntStream.range(0, count)
                 .mapToObj(offset -> "M-%06d".formatted(from + offset))
                 .toList();
-        List<Integer> rows = IntStream.rangeClosed(1, ROWS_PER_SHEET).boxed().toList();
 
         Context context = new Context();
-        context.setVariable("serials", serials);
-        context.setVariable("rows", rows);
-        context.setVariable("orgId", currentUser.currentOrgId());
+        context.setVariable("sheets", serials);
+        context.setVariable("marks", cornerMarks());
+        context.setVariable("boxes", SheetGeometry.boxes());
+        context.setVariable("columnHeads", columnHeads());
+        context.setVariable("locationRules", locationRules());
+        context.setVariable("decimalPoints", decimalPoints());
+        context.setVariable("totalTopMm", SheetGeometry.TOTAL_TOP_MM);
 
         return toPdf(templates.process("measurement-sheet", context));
+    }
+
+
+    // ------------------------------------------------------------------ layout, from geometry
+
+    /** A positioned rectangle in page millimetres — what the template lays everything out with. */
+    public record Placed(double leftMm, double topMm, double widthMm, double heightMm) {
+    }
+
+    public record Labelled(String label, double leftMm, double widthMm) {
+    }
+
+    /**
+     * The four registration marks the reader uses as its origin.
+     *
+     * <p>The bottom-left one is wider than the other three, and that asymmetry is the only thing
+     * telling a page photographed upside down from one the right way up. A symmetric set would
+     * read a rotated sheet as perfectly valid and transpose every row on it.</p>
+     */
+    private static List<Placed> cornerMarks() {
+        double inset = SheetGeometry.MARK_INSET_MM;
+        double size = SheetGeometry.MARK_SIZE_MM;
+        double wide = SheetGeometry.MARK_WIDE_SIZE_MM;
+        double right = SheetGeometry.PAGE_WIDTH_MM - inset - size;
+        double bottom = SheetGeometry.PAGE_HEIGHT_MM - inset - size;
+        return List.of(
+                new Placed(inset, inset, size, size),
+                new Placed(right, inset, size, size),
+                new Placed(inset, bottom, wide, size),
+                new Placed(right, bottom, size, size));
+    }
+
+    private static List<Labelled> columnHeads() {
+        List<Labelled> heads = new ArrayList<>();
+        for (SheetGeometry.Field field : SheetGeometry.FIELDS) {
+            heads.add(new Labelled(headingFor(field.name()), field.leftMm(), field.widthMm()));
+        }
+        return heads;
+    }
+
+    private static String headingFor(String field) {
+        return switch (field) {
+            case "nos" -> "Nos";
+            case "mult" -> "\u00D7";
+            case "length" -> "L";
+            case "breadth" -> "B";
+            case "height" -> "H";
+            case "qty" -> "Qty";
+            default -> field;
+        };
+    }
+
+    /** The line each location is written on, one per row. */
+    private static List<Placed> locationRules() {
+        List<Placed> rules = new ArrayList<>();
+        for (int row = 0; row < SheetGeometry.ROWS; row++) {
+            double top = SheetGeometry.GRID_TOP_MM + row * SheetGeometry.ROW_HEIGHT_MM
+                    + SheetGeometry.ROW_HEIGHT_MM - 2.5;
+            rules.add(new Placed(SheetGeometry.LOCATION_LEFT_MM, top,
+                    SheetGeometry.LOCATION_WIDTH_MM, 0));
+        }
+        return rules;
+    }
+
+    /**
+     * Decimal points are printed, not written. One less stroke to recognise, and one less place
+     * for a smudge to move a figure by a factor of ten.
+     */
+    private static List<Placed> decimalPoints() {
+        List<Placed> dots = new ArrayList<>();
+        for (int row = 0; row < SheetGeometry.ROWS; row++) {
+            double top = SheetGeometry.GRID_TOP_MM + row * SheetGeometry.ROW_HEIGHT_MM
+                    + SheetGeometry.ROW_HEIGHT_MM / 2;
+            for (SheetGeometry.Field field : SheetGeometry.FIELDS) {
+                addDot(dots, field, top);
+            }
+        }
+        addDot(dots, SheetGeometry.TOTAL_FIELD,
+                SheetGeometry.TOTAL_TOP_MM + SheetGeometry.BOX_H_MM / 2);
+        return dots;
+    }
+
+    private static void addDot(List<Placed> dots, SheetGeometry.Field field, double topMm) {
+        if (field.decimals() == 0) {
+            return;
+        }
+        List<Double> lefts = field.boxLefts();
+        int lastInteger = field.digits() - field.decimals() - 1;
+        double left = lefts.get(lastInteger) + SheetGeometry.BOX_W_MM + 0.5;
+        dots.add(new Placed(left, topMm, 2, 2));
     }
 
     private static byte[] toPdf(String html) {

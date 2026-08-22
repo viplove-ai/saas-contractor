@@ -1,4 +1,5 @@
 import AddIcon from '@mui/icons-material/Add';
+import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import {
@@ -18,6 +19,7 @@ import {
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
+import { ScanSheetDialog } from './ScanSheetDialog';
 import {
   useBoqItems,
   useCreateSheet,
@@ -83,6 +85,7 @@ export function MeasurementSheetPage() {
   const [unitWeight, setUnitWeight] = useState('');
   const [lines, setLines] = useState<MeasurementLineInput[]>([{ ...EMPTY_LINE }]);
   const [loadedId, setLoadedId] = useState<string | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Fill the form once from a sheet opened for editing, without fighting the user's typing.
@@ -349,13 +352,22 @@ export function MeasurementSheetPage() {
             </Stack>
           ))}
 
-          <Button
-            startIcon={<AddIcon />}
-            disabled={readOnly}
-            onClick={() => setLines((current) => [...current, { ...EMPTY_LINE }])}
-          >
-            Add row
-          </Button>
+          <Stack direction="row" spacing={1}>
+            <Button
+              startIcon={<AddIcon />}
+              disabled={readOnly}
+              onClick={() => setLines((current) => [...current, { ...EMPTY_LINE }])}
+            >
+              Add row
+            </Button>
+            <Button
+              startIcon={<CameraAltIcon />}
+              disabled={readOnly}
+              onClick={() => setScanOpen(true)}
+            >
+              Read from photo
+            </Button>
+          </Stack>
         </Stack>
       </Paper>
 
@@ -409,6 +421,17 @@ export function MeasurementSheetPage() {
           )}
         </Stack>
       </Paper>
+
+      <ScanSheetDialog
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        onAccept={(scanned, total) => {
+          // Fills the form and nothing more. He still checks every row, still types nothing he
+          // does not want to, and still signs — the reading is a proposal.
+          if (scanned.length > 0) setLines(scanned);
+          if (total !== null) setWrittenTotal(String(total));
+        }}
+      />
 
       {!readOnly && (
         <Stack direction="row" spacing={2}>
