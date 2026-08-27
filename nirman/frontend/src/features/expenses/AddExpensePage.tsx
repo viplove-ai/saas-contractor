@@ -2,9 +2,11 @@ import {
   Alert,
   Button,
   Divider,
+  FormControlLabel,
   MenuItem,
   Paper,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -63,6 +65,17 @@ export function AddExpensePage() {
   const [amountBeforeTax, setAmountBeforeTax] = useState('');
   const [gstPercent, setGstPercent] = useState('0');
   const [noBillReason, setNoBillReason] = useState('');
+  /**
+   * The part of this bill that is a deposit and comes back.
+   *
+   * <p>Behind a switch rather than always on screen. Almost no bill has one, and a box asking
+   * "how much of this is refundable" on every ₹200 of cartage is a box that gets a zero typed
+   * into it out of habit — and then, on the one bill that does have a deposit, gets a zero
+   * out of the same habit.</p>
+   */
+  const [hasDeposit, setHasDeposit] = useState(false);
+  const [refundableAmount, setRefundableAmount] = useState('');
+  const [refundExpectedOn, setRefundExpectedOn] = useState('');
   const [overrideReason, setOverrideReason] = useState('');
   const [candidates, setCandidates] = useState<DuplicateCandidate[] | null>(null);
   const [photo, setPhoto] = useState<File | null>(null);
@@ -114,8 +127,22 @@ export function AddExpensePage() {
   const kindNamed =
     categoryId === CATEGORY_OTHER ? otherName.trim().length > 0 : Boolean(categoryId);
 
+  /**
+   * The deposit, checked here so the server's refusal is the backstop rather than the first
+   * anybody hears of it. More than the bill is a figure typed the wrong way round, and a
+   * switch turned on with nothing in the box is a question half-answered.
+   */
+  const deposit = Number(refundableAmount);
+  const depositValid =
+    !hasDeposit
+    || (Number.isFinite(deposit) && deposit > 0 && deposit <= Math.round(total * 100) / 100);
+
   const complete =
-    Boolean(siteId) && kindNamed && description.trim().length > 0 && total > 0;
+    Boolean(siteId)
+    && kindNamed
+    && description.trim().length > 0
+    && total > 0
+    && depositValid;
 
   /** One button does three calls, so every one of them has to hold it disabled. */
   const correcting =
@@ -145,6 +172,21 @@ export function AddExpensePage() {
    * head does not, and booking it under the wrong head to save the trip is the mess this
    * whole answer exists to avoid.</p>
    */
+  const clearDeposit = () => {
+    setHasDeposit(false);
+    setRefundableAmount('');
+    setRefundExpectedOn('');
+  };
+
+  /**
+   * What goes on the request. Zero when the switch is off, so that turning it off on a
+   * correction actually removes the deposit rather than leaving the old figure standing.
+   */
+  const depositFields = () => ({
+    refundableAmount: hasDeposit ? Number(refundableAmount) : 0,
+    refundExpectedOn: hasDeposit && refundExpectedOn ? refundExpectedOn : undefined,
+  });
+
   /** Puts a sent-back expense into the form above, where it was typed in the first place. */
   const openForCorrection = (expense: Expense) => {
     setEditing(expense);
@@ -159,6 +201,9 @@ export function AddExpensePage() {
     setAmountBeforeTax(String(expense.amountBeforeTax));
     setGstPercent(String(expense.gstPercent));
     setNoBillReason(expense.noBillReason ?? '');
+    setHasDeposit(expense.refundableAmount > 0);
+    setRefundableAmount(expense.refundableAmount > 0 ? String(expense.refundableAmount) : '');
+    setRefundExpectedOn(expense.refundExpectedOn ?? '');
     setPhoto(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -171,6 +216,7 @@ export function AddExpensePage() {
     setBillNumber('');
     setAmountBeforeTax('');
     setNoBillReason('');
+    clearDeposit();
     setPhoto(null);
     setExpenseDate(today());
   };
@@ -207,6 +253,7 @@ export function AddExpensePage() {
       amountBeforeTax: Number(amountBeforeTax),
       gstPercent: Number(gstPercent),
       noBillReason: noBillReason || undefined,
+      ...depositFields(),
       version: editing.version,
     };
     try {
@@ -271,6 +318,7 @@ export function AddExpensePage() {
           amountBeforeTax: Number(amountBeforeTax),
           gstPercent: Number(gstPercent),
           noBillReason: noBillReason || undefined,
+          ...depositFields(),
           duplicateOverrideReason: force ? overrideReason : undefined,
         },
       },
@@ -280,6 +328,7 @@ export function AddExpensePage() {
           setBillNumber('');
           setAmountBeforeTax('');
           setNoBillReason('');
+          clearDeposit();
           setOverrideReason('');
           setCandidates(null);
           setPhoto(null);
@@ -439,6 +488,75 @@ export function AddExpensePage() {
       )}
 
       <Typography color="text.secondary">Total with tax: {formatAmount(total)}</Typography>
+
+      {/*
+        The part of the bill that is coming back.
+
+        Behind a switch, and off by default, because almost no bill has one — a box asking
+        "how much of this is refundable" on every ₹200 of cartage is a box that gets a zero
+        typed into it out of habit, and then gets a zero out of the same habit on the one bill
+        that does. The vendor is still paid the whole amount; what this changes is what the
+        job is told the bill cost, and it puts the money on a register that chases it.
+      */}
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={hasDeposit}
+              onChange={(e) => {
+                setHasDeposit(e.target.checked);
+                if (!e.target.checked) {
+                  setRefundableAmount('');
+                  setRefundExpectedOn('');
+                }
+              }}
+            />
+          }
+          label="Part of this comes back to us"
+        />
+        <Typography variant="body2" color="text.secondary">
+          A security deposit on a connection, money down on hired plant, a cylinder deposit —
+          money we placed and get back when the thing is returned. It is not what the work cost.
+        </Typography>
+
+        {hasDeposit && (
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                label="Refundable amount"
+                type="number"
+                inputMode="decimal"
+                value={refundableAmount}
+                onChange={(e) => setRefundableAmount(e.target.value)}
+                error={refundableAmount.length > 0 && !depositValid}
+                helperText={
+                  refundableAmount.length > 0 && !depositValid
+                    ? `It is part of this bill, so it cannot be more than ${formatAmount(total)}.`
+                    : 'Out of the total above, not on top of it'
+                }
+                sx={{ minWidth: 200 }}
+              />
+              <TextField
+                label="Expected back on"
+                type="date"
+                value={refundExpectedOn}
+                onChange={(e) => setRefundExpectedOn(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                helperText="Leave blank if nobody knows"
+                sx={{ minWidth: 200 }}
+              />
+            </Stack>
+            {depositValid && deposit > 0 && (
+              <Alert severity="info">
+                The vendor is still paid {formatAmount(total)}. Of that, {formatAmount(deposit)}{' '}
+                is ours and comes back — so this bill costs the work{' '}
+                {formatAmount(total - deposit)}, and the deposit goes on the register until it
+                is settled.
+              </Alert>
+            )}
+          </Stack>
+        )}
+      </Paper>
 
       <BillPhotoField file={photo} onPick={setPhoto} />
 

@@ -726,6 +726,21 @@ export function DprWizardPage() {
   /** A cause is required, and "other" on its own is not one. */
   const causeMissing =
     !siteOperational && (!cause || (causeNeedsNote(cause) && !causeNote.trim()));
+  /*
+    A photograph, and the handover will not go without one.
+
+    Every other figure on this half of the report could in principle be reconstructed from
+    another register — the muster has the men, the store has the lorry, the bill book has the
+    cartage. A picture of the work face cannot be produced from a desk, and that is the whole
+    of why it is worth demanding: it is the part of the report that says somebody was standing
+    there. It counts what is already on the report *or* what is waiting on this screen to go
+    up, because the two are the same promise a moment apart.
+
+    The server refuses this too. This is the screen not offering what would be refused, and
+    saying why while the camera is still in his pocket rather than after he presses Submit.
+  */
+  const photographsOnReport = (saved?.photos.length ?? 0) + photos.length;
+  const photographMissing = photographsOnReport === 0;
   const onLastStep = activeStep === steps.length - 1;
 
   return (
@@ -1055,6 +1070,21 @@ export function DprWizardPage() {
         </Stack>
       )}
 
+      {/*
+        Said where the button is, not only where the camera is. A supervisor sees both on one
+        step; an engineer writing the whole report himself is standing on the observations
+        step when he hands it over, three scrolls away from the photograph card, and a
+        disabled button with no sentence beside it reads as a broken screen.
+      */}
+      {onLastStep && !handedOver && photographMissing && (
+        <Alert severity="warning">
+          The day cannot be handed over without a photograph of the site. Add at least one on
+          the first step — it is the only part of the report that shows the day rather than
+          describing it{!siteOperational && ', and on a day the site did not work it is what '
+            + 'the claim rests on'}.
+        </Alert>
+      )}
+
       <Divider />
 
       <Stack direction="row" spacing={2} justifyContent="space-between">
@@ -1090,7 +1120,7 @@ export function DprWizardPage() {
                 <Button
                   variant="contained"
                   onClick={() => void saveAndSubmit()}
-                  disabled={busy || blocked || !siteId || causeMissing}
+                  disabled={busy || blocked || !siteId || causeMissing || photographMissing}
                 >
                   {canVerify ? 'Send for signature' : 'Submit'}
                 </Button>
@@ -1501,8 +1531,26 @@ function PrefillStep({
           <Figure label="Cost incurred" value={formatAmount(data.expense.costIncurred)} />
           <Figure label="Material purchases" value={formatAmount(data.expense.materialPurchases)} />
           <Figure label="Wage payments" value={formatAmount(data.expense.labourDisbursements)} />
+          {/*
+            Only on the days there is one, which is very few of them — but on those days it is
+            the whole of the gap between booked and cost, and a ₹12,000 difference the caption
+            does not explain is a screen the supervisor stops believing.
+          */}
+          {data.expense.refundableDeposits > 0 && (
+            <Figure
+              label="Deposits placed"
+              value={formatAmount(data.expense.refundableDeposits)}
+            />
+          )}
           <Figure label="Total booked" value={formatAmount(data.expense.totalBooked)} />
         </Stack>
+        {data.expense.refundableDeposits > 0 && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            {formatAmount(data.expense.refundableDeposits)} of what was booked today is a
+            deposit — money placed and coming back — so it is out of the cost. It is on the
+            deposits register until it is settled.
+          </Typography>
+        )}
         {data.expense.unapprovedCount > 0 && (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
             {data.expense.unapprovedCount} of {data.expense.expenseCount} bill(s) are not approved

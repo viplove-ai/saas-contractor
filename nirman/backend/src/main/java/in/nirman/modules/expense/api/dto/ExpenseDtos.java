@@ -44,6 +44,18 @@ public final class ExpenseDtos {
             @DecimalMin("0") @DecimalMax("100") BigDecimal gstPercent,
             @Size(max = 20) String paymentMode,
             String noBillReason,
+            /**
+             * How much of the total is a deposit rather than spending — the security on an
+             * electricity meter, the money down on a hired mixer.
+             *
+             * <p>The vendor is still paid the whole bill; this says what part of it is
+             * coming back, so the job is not told it spent money that is still ours. Absent
+             * on almost every expense, which is why it is nullable rather than zero-defaulted
+             * on the client (V48).</p>
+             */
+            @DecimalMin("0") BigDecimal refundableAmount,
+            /** When the deposit is expected back, if anybody knows. Usually nobody does. */
+            LocalDate refundExpectedOn,
             /** Set when this expense is being paid out of a site float. */
             UUID siteAdvanceId,
             String remarks,
@@ -64,6 +76,8 @@ public final class ExpenseDtos {
             @DecimalMin("0") @DecimalMax("100") BigDecimal gstPercent,
             @Size(max = 20) String paymentMode,
             String noBillReason,
+            @DecimalMin("0") BigDecimal refundableAmount,
+            LocalDate refundExpectedOn,
             String remarks,
             @NotNull Long version) {
     }
@@ -123,6 +137,8 @@ public final class ExpenseDtos {
             @DecimalMin("0") @DecimalMax("100") BigDecimal gstPercent,
             @Size(max = 20) String paymentMode,
             String noBillReason,
+            @DecimalMin("0") BigDecimal refundableAmount,
+            LocalDate refundExpectedOn,
             String remarks,
             /** What was wrong with the figure somebody had already approved. */
             @NotBlank @Size(max = 2000) String reason,
@@ -141,6 +157,17 @@ public final class ExpenseDtos {
             BigDecimal companyCost,
             BigDecimal paid,
             BigDecimal payable,
+            /**
+             * Of what was booked, how much is a deposit rather than spending, and how much of
+             * that is still out there.
+             *
+             * <p>Beside the split rather than inside it: booked still equals the site's share
+             * plus the company's, because a deposit is carried by whoever the bill was
+             * charged to. What it is not is <i>cost</i>, and this is the line that says so on
+             * a screen otherwise built entirely out of costs.</p>
+             */
+            BigDecimal refundableDeposits,
+            BigDecimal depositsOutstanding,
             int expenseCount,
             int awaitingApproval,
             int unallocatedCount) {
@@ -211,6 +238,16 @@ public final class ExpenseDtos {
             /** Approved cost less cash paid. The third amount, never merged with the others. */
             BigDecimal payableAmount,
             String noBillReason,
+            /** The part of the total that is a deposit and not spending. Zero on most rows. */
+            BigDecimal refundableAmount,
+            LocalDate refundExpectedOn,
+            BigDecimal refundedAmount,
+            BigDecimal writtenOffAmount,
+            /** Still with somebody else, and still ours. */
+            BigDecimal outstandingDeposit,
+            Expense.DepositStatus depositStatus,
+            /** The total less the deposit: what the work actually cost. */
+            BigDecimal spentAmount,
             UUID siteAdvanceId,
             /** Whose cost it is. The label the register groups by. */
             CostAllocation costAllocation,

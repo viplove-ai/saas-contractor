@@ -28,6 +28,17 @@ export interface AllocationSummary {
   companyCost: number;
   paid: number;
   payable: number;
+  /**
+   * Of what was booked, how much was a deposit rather than spending, and how much of that is
+   * still out there today (V48).
+   *
+   * <p>Beside the split rather than inside it: booked still equals the site's share plus the
+   * company's, because a deposit is carried by whoever the bill was charged to. What it is
+   * not is <i>cost</i>, and this is the line that says so on a screen otherwise built
+   * entirely out of costs.</p>
+   */
+  refundableDeposits: number;
+  depositsOutstanding: number;
   expenseCount: number;
   awaitingApproval: number;
   /** Still carrying its head's proposal — approved without anybody reading the question. */
@@ -35,6 +46,63 @@ export interface AllocationSummary {
 }
 
 export type ApprovalAction = 'APPROVE' | 'REJECT' | 'RETURN';
+
+/** Where the refundable part of a bill has got to. Derived server-side from the amounts. */
+export type DepositStatus = 'NONE' | 'OUTSTANDING' | 'PARTIAL' | 'SETTLED';
+
+/**
+ * What became of a deposit: the money came back, or it is not coming.
+ *
+ * <p>Two outcomes and not three — "still waiting" is the absence of a row, and giving it a
+ * spelling of its own would let one deposit be both waiting and settled.</p>
+ */
+export type RefundOutcome = 'RECEIVED' | 'WRITTEN_OFF';
+
+export interface DepositSettlement {
+  id: string;
+  expenseId: string;
+  outcome: RefundOutcome;
+  settledOn: string;
+  amount: number;
+  paymentMode?: string;
+  referenceNumber?: string;
+  reason?: string;
+  remarks?: string;
+}
+
+/** One deposit on the register, with the bill it came in on. */
+export interface DepositRow {
+  expenseId: string;
+  expenseNumber: string;
+  siteId: string;
+  expenseDate: string;
+  description: string;
+  categoryName?: string;
+  vendorId?: string;
+  vendorName?: string;
+  totalAmount: number;
+  refundableAmount: number;
+  refundedAmount: number;
+  writtenOffAmount: number;
+  outstandingAmount: number;
+  refundExpectedOn?: string;
+  /** The expected date has gone by with money still out there. */
+  overdue: boolean;
+  status: DepositStatus;
+  workflowStatus: ExpenseWorkflow;
+  settlements: DepositSettlement[];
+}
+
+export interface DepositRegister {
+  placed: number;
+  received: number;
+  writtenOff: number;
+  outstanding: number;
+  overdue: number;
+  depositCount: number;
+  openCount: number;
+  rows: DepositRow[];
+}
 
 export interface ExpenseCategory {
   id: string;
@@ -103,6 +171,19 @@ export interface Expense {
   /** Approved cost less cash paid. Derived server-side; never typed. */
   payableAmount: number;
   noBillReason?: string;
+  /**
+   * The part of the total that is a deposit and not spending — a meter security, the money
+   * down on a hired mixer. Zero on almost every expense.
+   */
+  refundableAmount: number;
+  refundExpectedOn?: string;
+  refundedAmount: number;
+  writtenOffAmount: number;
+  /** Still with somebody else, and still ours. */
+  outstandingDeposit: number;
+  depositStatus: DepositStatus;
+  /** The total less the deposit: what the work actually cost. */
+  spentAmount: number;
   siteAdvanceId?: string;
   /** Whose cost it is. The label every screen shows and the register groups by. */
   costAllocation: CostAllocation;

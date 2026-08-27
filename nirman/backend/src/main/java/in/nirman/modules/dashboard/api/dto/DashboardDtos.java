@@ -189,6 +189,17 @@ public final class DashboardDtos {
             BigDecimal costIncurred,
             BigDecimal materialPurchases,
             BigDecimal labourDisbursements,
+            /**
+             * Of what was booked here, how much was a deposit rather than spending, and how
+             * much of that is still out there today (V48).
+             *
+             * <p>The second is not a figure about the period: a security placed in March and
+             * refunded in July is outstanding in every month's reading until July, and the
+             * question the office asks of this tile is "what are we holding out", which is a
+             * question about now.</p>
+             */
+            BigDecimal depositsPlaced,
+            BigDecimal depositsOutstanding,
             BigDecimal paid,
             BigDecimal payable,
             int awaitingApproval) {

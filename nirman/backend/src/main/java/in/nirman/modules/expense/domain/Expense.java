@@ -23,6 +23,12 @@ import java.util.UUID;
  * question the business asks daily — what do we owe, and to whom — into one that cannot be
  * answered (docs/02).</p>
  *
+ * <p>A fourth answers a question none of those three can. {@code refundableAmount} is the part
+ * of the bill that is a deposit — the security on a meter, the money down on a hired mixer —
+ * and it is not spending at all: the vendor is paid the whole bill, and that part of it is
+ * still the company's and comes back. {@link #spentAmount()} is what the work actually cost,
+ * and it is the figure {@code ExpenseLookup} adds to a project (V48).</p>
+ *
  * <p>The id is client-generated so an expense photographed and typed at site with no signal
  * and synced three times is one expense.</p>
  *
@@ -56,6 +62,22 @@ public class Expense extends BaseEntity {
     }
 
     public enum PaymentStatus { UNPAID, PARTIAL, PAID }
+
+    /**
+     * Where the refundable part of a bill has got to. Derived from the amounts on every read
+     * rather than stored beside them, so a corrected deposit cannot leave a status column
+     * saying something the figures deny.
+     */
+    public enum DepositStatus {
+        /** No part of this bill is a deposit — every ordinary expense. */
+        NONE,
+        /** Placed, and nothing has come back yet. */
+        OUTSTANDING,
+        /** Some of it has been settled and some is still out there. */
+        PARTIAL,
+        /** Nothing is left outstanding: received, written off, or a bit of each. */
+        SETTLED
+    }
 
     @Column(name = "org_id", nullable = false, updatable = false)
     private UUID orgId;
@@ -119,6 +141,30 @@ public class Expense extends BaseEntity {
     /** Why there is no bill. Required above the threshold when a bill number is absent. */
     @Column(name = "no_bill_reason")
     private String noBillReason;
+
+    /**
+     * The part of {@code totalAmount} that is a deposit rather than spending — a meter
+     * security, a plant hire deposit, a cylinder deposit. Zero on almost every row.
+     *
+     * <p>The vendor is still paid the whole bill; what this changes is what the <i>project</i>
+     * is told the bill cost. Money placed with somebody and coming back is not cost, and
+     * booking it as cost overstates the job exactly as counting a material purchase twice
+     * does (V48).</p>
+     */
+    @Column(name = "refundable_amount", nullable = false, precision = 18, scale = 2)
+    private BigDecimal refundableAmount = BigDecimal.ZERO;
+
+    /** When it is expected back, if anybody knows. Usually nobody does. */
+    @Column(name = "refund_expected_on")
+    private LocalDate refundExpectedOn;
+
+    /** Running total of deposit money received back. Written by the refund register alone. */
+    @Column(name = "refunded_amount", nullable = false, precision = 18, scale = 2)
+    private BigDecimal refundedAmount = BigDecimal.ZERO;
+
+    /** Running total of deposit money given up on. Written by the refund register alone. */
+    @Column(name = "written_off_amount", nullable = false, precision = 18, scale = 2)
+    private BigDecimal writtenOffAmount = BigDecimal.ZERO;
 
     @Column(name = "goods_receipt_id")
     private UUID goodsReceiptId;
@@ -221,6 +267,64 @@ public class Expense extends BaseEntity {
     }
 
     /**
+     * How much of the bill is a deposit, and when it is expected back.
+     *
+     * <p>Refused above the total rather than clamped to it: a deposit larger than the bill it
+     * came on is a typing mistake, and silently shrinking it would report a day's cost as
+     * zero and leave the register chasing money nobody placed. The service says this in a
+     * sentence first; this is the backstop, and {@code ck_expense_refundable_within_total}
+     * behind it is the backstop to that.</p>
+     */
+    public void setDeposit(BigDecimal refundable, LocalDate expectedOn) {
+        BigDecimal amount = refundable == null ? BigDecimal.ZERO : refundable;
+        if (amount.signum() < 0 || amount.compareTo(totalAmount) > 0) {
+            throw new IllegalArgumentException(
+                    "a refundable deposit is part of the bill, never more than it");
+        }
+        this.refundableAmount = amount;
+        this.refundExpectedOn = amount.signum() == 0 ? null : expectedOn;
+    }
+
+    /**
+     * Money settled against the deposit. Never set directly; the refund register adds to it.
+     *
+     * @param received  what came back
+     * @param writtenOff what was given up on
+     */
+    public void settleDeposit(BigDecimal received, BigDecimal writtenOff) {
+        this.refundedAmount = refundedAmount.add(received);
+        this.writtenOffAmount = writtenOffAmount.add(writtenOff);
+    }
+
+    /** Still with somebody else, and still ours. */
+    public BigDecimal outstandingDeposit() {
+        return refundableAmount.subtract(refundedAmount).subtract(writtenOffAmount);
+    }
+
+    public DepositStatus depositStatus() {
+        if (refundableAmount.signum() == 0) {
+            return DepositStatus.NONE;
+        }
+        if (outstandingDeposit().signum() == 0) {
+            return DepositStatus.SETTLED;
+        }
+        return refundedAmount.add(writtenOffAmount).signum() == 0
+                ? DepositStatus.OUTSTANDING
+                : DepositStatus.PARTIAL;
+    }
+
+    /**
+     * What the bill actually spent: the total less whatever of it is coming back.
+     *
+     * <p>The figure that may be added to a project's cost. {@link #totalAmount} is what left
+     * the books and {@link #paidAmount} is what left the bank; this is the third amount, and
+     * it is the only one of the three that answers "what did the work cost".</p>
+     */
+    public BigDecimal spentAmount() {
+        return totalAmount.subtract(refundableAmount);
+    }
+
+    /**
      * The head's answer, taken while the expense is being booked.
      *
      * <p>Not a decision — the approver's is the decision. This is what he is shown already
@@ -266,6 +370,28 @@ public class Expense extends BaseEntity {
     /** Overhead. Derived, never stored, so a corrected total cannot leave the two disagreeing. */
     public BigDecimal companyCost() {
         return totalAmount.subtract(siteCost());
+    }
+
+    /**
+     * The company's share of what was <i>spent</i>, which is what a cost split needs.
+     *
+     * <p>{@link #companyCost()} answers a question about the whole bill and is what the
+     * register groups by — the office electricity bill is the company's, deposit and all.
+     * This answers the narrower one {@code ExpenseLookup} asks when it takes the four-way
+     * split apart: the deposit has already been carved off the top there, and adding it a
+     * second time inside the company's share would take it out of the day twice and report
+     * the site a negative cost.</p>
+     *
+     * <p>Identical to {@code companyCost()} on every row carrying no deposit, which is nearly
+     * all of them — and a {@code SPLIT} is refused a deposit outright, so the split arm never
+     * has to decide whose refund it is.</p>
+     */
+    public BigDecimal companySpend() {
+        return switch (costAllocation) {
+            case SITE -> BigDecimal.ZERO;
+            case COMPANY -> spentAmount();
+            case SPLIT -> totalAmount.subtract(siteShare);
+        };
     }
 
     /**
@@ -459,6 +585,22 @@ public class Expense extends BaseEntity {
 
     public void setNoBillReason(String noBillReason) {
         this.noBillReason = noBillReason;
+    }
+
+    public BigDecimal getRefundableAmount() {
+        return refundableAmount;
+    }
+
+    public LocalDate getRefundExpectedOn() {
+        return refundExpectedOn;
+    }
+
+    public BigDecimal getRefundedAmount() {
+        return refundedAmount;
+    }
+
+    public BigDecimal getWrittenOffAmount() {
+        return writtenOffAmount;
     }
 
     public UUID getGoodsReceiptId() {

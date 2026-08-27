@@ -156,6 +156,15 @@ public final class DprDtos {
             BigDecimal costIncurred,
             BigDecimal materialPurchases,
             BigDecimal labourDisbursements,
+            /**
+             * Money placed rather than spent, and coming back (V48).
+             *
+             * <p>Carried because the two figures either side of it stop adding up without it.
+             * A ₹18,000 connection with a ₹12,000 meter security shows booked ₹18,000 and cost
+             * ₹6,000, and a supervisor looking at a ₹12,000 gap the caption does not explain
+             * has been handed a screen he stops believing.</p>
+             */
+            BigDecimal refundableDeposits,
             int expenseCount,
             int unapprovedCount) {
     }

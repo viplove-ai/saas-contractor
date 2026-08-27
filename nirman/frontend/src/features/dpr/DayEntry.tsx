@@ -921,7 +921,11 @@ export function PhotoCard({
   return (
     <Card
       title="Photographs"
-      hint="What the work looked like today. They go up when the report is saved."
+      hint={
+        uploaded + files.length === 0
+          ? 'At least one, before the day can be handed over. They go up when the report is saved.'
+          : 'What the work looked like today. They go up when the report is saved.'
+      }
       right={uploaded > 0 ? <Chip size="small" label={`${uploaded} on the report`} /> : undefined}
     >
       <Button component="label" startIcon={<AddIcon />} sx={{ alignSelf: 'flex-start' }}>

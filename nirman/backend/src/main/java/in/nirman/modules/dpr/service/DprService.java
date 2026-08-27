@@ -437,6 +437,18 @@ public class DprService {
      * draft happened to be last touched. Nothing is asked about work done, because on this side
      * of the handover nobody has written any: the check that a report says <i>something</i> has
      * moved to {@link #decide}, where the man who would be signing it is standing.</p>
+     *
+     * <p><b>One photograph, and it is asked here.</b> Everything else on the supervisor's half
+     * is a figure the office could in principle reconstruct from another register — the muster
+     * has the men, the store has the lorry, the bill book has the cartage. The photograph is
+     * the only thing on the whole document that is evidence rather than assertion, and it is
+     * the only thing that cannot be produced from a desk: it says the man was standing on the
+     * site. So it is asked at the handover, which is the moment he says the day's account is
+     * settled, and it is asked on a day the site did not work as much as on a day it did — a
+     * flooded site photographed on the ninth of July is what an extension of time is granted
+     * on, and "no work, rain" with nothing behind it is a sentence the department can refuse.
+     * Reports handed over before this rule existed are untouched by it; it bites at submission
+     * and nowhere else.</p>
      */
     @PreAuthorize("hasAuthority('dpr:draft')")
     public DprResponse submit(UUID id) {
@@ -446,6 +458,13 @@ public class DprService {
             throw new BusinessException("dpr.not-submittable",
                     "Report " + report.getDprNumber() + " is already "
                             + report.getWorkflowStatus().name().toLowerCase() + ".");
+        }
+        if (photos.findByDprIdOrderBySortOrder(id).isEmpty()) {
+            throw new BusinessException("dpr.photograph-required",
+                    "Report " + report.getDprNumber() + " has no photograph on it. Add at "
+                            + "least one picture of the site before handing the day over — it "
+                            + "is the only part of the report that shows the day rather than "
+                            + "describing it.");
         }
 
         refreshSnapshot(report);

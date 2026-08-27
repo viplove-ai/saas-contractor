@@ -274,6 +274,62 @@ describe('AddExpensePage', () => {
     expect(await screen.findByText(/Total with tax: ₹11,800/)).toBeInTheDocument();
   });
 
+  /**
+   * The deposit on a connection.
+   *
+   * <p>₹18,000 leaves the bank and the board keeps ₹12,000 of it against the meter. The
+   * vendor is still owed all of it; what the site spent is ₹6,000, and the ₹12,000 has to go
+   * somewhere that will chase it — the failure it replaces is a job overstated by twice what
+   * it paid for, and a refund arriving eight months later with nowhere to land.</p>
+   */
+  it('carves a refundable deposit out of the bill and says what the work cost', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findByRole('combobox', { name: 'Site' });
+
+    await user.click(screen.getByRole('combobox', { name: 'What kind' }));
+    await user.click(await screen.findByRole('option', { name: 'Site Expenses' }));
+    await user.type(
+      screen.getByRole('textbox', { name: 'What was it for' }),
+      'Electricity connection',
+    );
+    await user.type(screen.getByRole('spinbutton', { name: 'Amount before tax' }), '18000');
+
+    // Off by default: almost no bill has one, and a box on every ₹200 of cartage is a box
+    // that gets a zero typed into it out of habit.
+    expect(
+      screen.queryByRole('spinbutton', { name: 'Refundable amount' }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Part of this comes back to us' }));
+    await user.type(screen.getByRole('spinbutton', { name: 'Refundable amount' }), '12000');
+
+    expect(await screen.findByText(/this bill costs the work ₹6,000/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    const [, body] = post.mock.calls[0] as [string, { refundableAmount: number }];
+    expect(body.refundableAmount).toBe(12000);
+  });
+
+  /** A deposit larger than the bill it came on is a figure typed the wrong way round. */
+  it('refuses a deposit bigger than the bill', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findByRole('combobox', { name: 'Site' });
+
+    await user.click(screen.getByRole('combobox', { name: 'What kind' }));
+    await user.click(await screen.findByRole('option', { name: 'Site Expenses' }));
+    await user.type(screen.getByRole('textbox', { name: 'What was it for' }), 'Connection');
+    await user.type(screen.getByRole('spinbutton', { name: 'Amount before tax' }), '4500');
+    await user.click(screen.getByRole('checkbox', { name: 'Part of this comes back to us' }));
+    await user.type(screen.getByRole('spinbutton', { name: 'Refundable amount' }), '12000');
+
+    expect(await screen.findByText(/cannot be more than ₹4,500/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save as draft' })).toBeDisabled();
+  });
+
   it('sends a client-generated id so an expense synced twice is one expense', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
@@ -373,6 +429,12 @@ describe('AddExpensePage', () => {
           totalAmount: 4000,
           paymentStatus: 'UNPAID',
           paidAmount: 0,
+          refundableAmount: 0,
+          refundedAmount: 0,
+          writtenOffAmount: 0,
+          outstandingDeposit: 0,
+          depositStatus: 'NONE',
+          spentAmount: 4000,
           costAllocation: 'SITE',
           siteCost: 4000,
           companyCost: 0,
@@ -441,6 +503,12 @@ describe('AddExpensePage', () => {
           totalAmount: 4000,
           paymentStatus: 'UNPAID',
           paidAmount: 0,
+          refundableAmount: 0,
+          refundedAmount: 0,
+          writtenOffAmount: 0,
+          outstandingDeposit: 0,
+          depositStatus: 'NONE',
+          spentAmount: 4000,
           costAllocation: 'SITE',
           siteCost: 4000,
           companyCost: 0,
@@ -481,6 +549,12 @@ describe('AddExpensePage', () => {
       paymentStatus: 'UNPAID',
       paidAmount: 0,
       payableAmount: 45000,
+      refundableAmount: 0,
+      refundedAmount: 0,
+      writtenOffAmount: 0,
+      outstandingDeposit: 0,
+      depositStatus: 'NONE',
+      spentAmount: 45000,
       costAllocation: 'SITE',
       siteCost: 45000,
       companyCost: 0,

@@ -97,6 +97,7 @@ function prefill(overrides: Partial<DprPrefill> = {}): DprPrefill {
       costIncurred: 1800,
       materialPurchases: 0,
       labourDisbursements: 0,
+      refundableDeposits: 0,
       expenseCount: 1,
       unapprovedCount: 1,
     },
@@ -178,10 +179,18 @@ function mockGets(data: DprPrefill = prefill(), report: Dpr = existingDraft()) {
   });
 }
 
+/** Small enough to pass the compressor straight through, which is all jsdom can manage. */
+function sitePhoto(): File {
+  return new File([new Uint8Array([1, 2, 3])], 'work-face.jpg', { type: 'image/jpeg' });
+}
+
 describe('DprWizardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     permissions = SUPERVISOR;
+    // jsdom has no object URLs, and the photograph card draws thumbnails off them.
+    URL.createObjectURL = vi.fn(() => 'blob:photo');
+    URL.revokeObjectURL = vi.fn();
     mockGets();
     post.mockResolvedValue({
       data: {
@@ -328,11 +337,46 @@ describe('DprWizardPage', () => {
     renderPage();
 
     await screen.findByText('Labour');
+    await user.upload(screen.getByLabelText('Add photographs'), sitePhoto());
     await user.click(screen.getByRole('button', { name: 'Submit' }));
 
-    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    // The report, then its photograph, then the handover. The picture goes up before the
+    // report is handed over rather than after, because a photograph attached to a submitted
+    // report is not part of what was handed over.
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(4));
     expect(post.mock.calls[0]![0]).toBe('/dprs');
-    expect(post.mock.calls[1]![0]).toBe('/dprs/dpr-1/submit');
+    expect(post.mock.calls[1]![0]).toBe('/attachments');
+    expect(post.mock.calls[2]![0]).toBe('/dprs/dpr-1/photos');
+    expect(post.mock.calls[3]![0]).toBe('/dprs/dpr-1/submit');
+  });
+
+  /**
+   * The one thing on the supervisor's half that is evidence rather than assertion.
+   *
+   * <p>The muster has the men, the store has the lorry, the bill book has the cartage — every
+   * other figure on this report could be reconstructed from another register. A picture of
+   * the work face cannot be produced from a desk, which is the whole of why it is worth
+   * demanding: it says somebody was standing there. The server refuses the handover without
+   * one; this is the screen saying so while the camera is still in his pocket.</p>
+   */
+  it('will not hand the day over without a photograph, and says why', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+
+    await screen.findByText('Labour');
+    expect(screen.getByRole('button', { name: 'Submit' })).toBeDisabled();
+    expect(screen.getByText(/cannot be handed over without a photograph/)).toBeInTheDocument();
+
+    // The draft still saves. What is refused is handing over an account of a day with nothing
+    // behind it — not writing one down.
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+
+    await user.upload(screen.getByLabelText('Add photographs'), sitePhoto());
+
+    expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled();
+    expect(
+      screen.queryByText(/cannot be handed over without a photograph/),
+    ).not.toBeInTheDocument();
   });
 
   /**

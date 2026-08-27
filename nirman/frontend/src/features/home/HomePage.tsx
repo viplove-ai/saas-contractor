@@ -75,6 +75,14 @@ const GROUPS: Group[] = [
         is not offered on 'expense:read'.
       */
       { title: 'Payments register', to: '/payments', permission: 'expense:allocate' },
+      /*
+        The other half of the same ledger, and it earns its own tile because it answers a
+        question the payments register cannot: not what a month cost, but what is out with
+        somebody and has not come back. Offered on expense:read rather than on the settling
+        permission — the man who booked the meter security is the one who asks whether it ever
+        returned, and he does not record the refund.
+      */
+      { title: 'Deposits out', to: '/deposits', permission: 'expense:read' },
     ],
   },
   {

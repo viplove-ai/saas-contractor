@@ -83,9 +83,7 @@ class DprDeletionIntegrationTest extends AbstractIntegrationTest {
     void aSubmittedReportStays() throws Exception {
         String supervisor = loginToken("vivek");
         String id = draft(supervisor, freeDay());
-        mockMvc.perform(post("/api/v1/dprs/" + id + "/submit")
-                        .header("Authorization", "Bearer " + supervisor))
-                .andExpect(status().isOk());
+        handOver(supervisor, id);
 
         mockMvc.perform(deleteReport(id, supervisor, "Changed my mind"))
                 .andExpect(status().isUnprocessableEntity())
@@ -112,9 +110,7 @@ class DprDeletionIntegrationTest extends AbstractIntegrationTest {
         String supervisor = loginToken("vivek");
         String engineer = loginToken("uttam");
         String id = draft(supervisor, freeDay());
-        mockMvc.perform(post("/api/v1/dprs/" + id + "/submit")
-                        .header("Authorization", "Bearer " + supervisor))
-                .andExpect(status().isOk());
+        handOver(supervisor, id);
         mockMvc.perform(post("/api/v1/dprs/" + id + "/verify")
                         .header("Authorization", "Bearer " + engineer)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -165,6 +161,28 @@ class DprDeletionIntegrationTest extends AbstractIntegrationTest {
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /**
+     * The handover, photograph and all. A report cannot be handed over without one, so a test
+     * about deletion has to do what the wizard does before it can get a submitted report.
+     */
+    private void handOver(String token, String id) throws Exception {
+        String attachmentId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO attachments (id, org_id, owner_entity_type, file_name, content_type,
+                                         size_bytes, bucket, object_key, kind)
+                VALUES (?::uuid, '10000000-0000-0000-0000-000000000001', 'DPR',
+                        'site.jpg', 'image/jpeg', 4096, 'nirman', ?, 'PHOTO')""",
+                attachmentId, "test/dpr/" + attachmentId);
+        mockMvc.perform(post("/api/v1/dprs/" + id + "/photos")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"attachmentId\":\"%s\"}".formatted(attachmentId)))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/dprs/" + id + "/submit")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+    }
 
     private static MockHttpServletRequestBuilder deleteReport(String id, String token, String reason) {
         return delete("/api/v1/dprs/" + id)

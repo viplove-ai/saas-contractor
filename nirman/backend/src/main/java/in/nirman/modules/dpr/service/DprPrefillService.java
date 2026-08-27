@@ -70,7 +70,8 @@ public class DprPrefillService {
             Labour, material consumed and cost incurred are the three figures that add to what \
             the day cost. Material received is inventory, not cost — it is costed again when \
             the material is issued. Total booked includes material purchases and wage \
-            payments, which are both costed elsewhere, so it must not be added to anything.""";
+            payments, which are both costed elsewhere, and any deposit placed, which is money \
+            coming back rather than money spent — so it must not be added to anything.""";
 
     private final DailyProgressReportRepository reports;
     private final LabourLookup labour;
@@ -175,7 +176,8 @@ public class DprPrefillService {
 
     private static ExpensePrefill toExpensePrefill(ExpenseLookup.DailySpend day) {
         return new ExpensePrefill(day.totalBooked(), day.costIncurred(), day.materialPurchases(),
-                day.labourDisbursements(), day.expenseCount(), day.unapprovedCount());
+                day.labourDisbursements(), day.refundableDeposits(), day.expenseCount(),
+                day.unapprovedCount());
     }
 
     /**

@@ -169,7 +169,8 @@ public class ExpenseService {
         Collection<UUID> visible = restricted ? currentUser.assignedSiteIds() : List.of();
         if (restricted && visible.isEmpty()) {
             return new AllocationSummary(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                    BigDecimal.ZERO, BigDecimal.ZERO, 0, 0, 0);
+                    BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                    0, 0, 0);
         }
         List<Expense> rows = expenses.findForSummary(orgId(), siteId, allocation, from, to,
                 restricted, visible, ownRecordsOnly(), currentUser.currentUserIdOrNull());
@@ -179,6 +180,8 @@ public class ExpenseService {
         BigDecimal company = BigDecimal.ZERO;
         BigDecimal paid = BigDecimal.ZERO;
         BigDecimal payable = BigDecimal.ZERO;
+        BigDecimal deposits = BigDecimal.ZERO;
+        BigDecimal depositsOut = BigDecimal.ZERO;
         int awaiting = 0;
         int undecided = 0;
 
@@ -187,6 +190,8 @@ public class ExpenseService {
             site = site.add(expense.siteCost());
             company = company.add(expense.companyCost());
             paid = paid.add(expense.getPaidAmount());
+            deposits = deposits.add(expense.getRefundableAmount());
+            depositsOut = depositsOut.add(expense.outstandingDeposit());
             if (expense.getWorkflowStatus() == Expense.Workflow.APPROVED) {
                 payable = payable.add(expense.payableAmount());
             }
@@ -200,8 +205,8 @@ public class ExpenseService {
                 undecided++;
             }
         }
-        return new AllocationSummary(booked, site, company, paid, payable, rows.size(),
-                awaiting, undecided);
+        return new AllocationSummary(booked, site, company, paid, payable, deposits,
+                depositsOut, rows.size(), awaiting, undecided);
     }
 
     @Transactional(readOnly = true)
@@ -263,7 +268,7 @@ public class ExpenseService {
         apply(expense, request.subcategoryId(), request.vendorId(), request.boqItemId(),
                 request.billNumber(), request.billDate(), request.amountBeforeTax(),
                 request.gstPercent(), request.paymentMode(), request.noBillReason(),
-                request.remarks());
+                request.refundableAmount(), request.refundExpectedOn(), request.remarks());
         expense.setSiteAdvanceId(request.siteAdvanceId());
         // The head's proposal, not a decision — the approver's is the decision. Booking it
         // here is what lets him be shown the answer already chosen for the two hundred office
@@ -357,7 +362,7 @@ public class ExpenseService {
         apply(expense, request.subcategoryId(), request.vendorId(), request.boqItemId(),
                 request.billNumber(), request.billDate(), request.amountBeforeTax(),
                 request.gstPercent(), request.paymentMode(), request.noBillReason(),
-                request.remarks());
+                request.refundableAmount(), request.refundExpectedOn(), request.remarks());
         evidence.assertHasEvidence(expense);
 
         expense.submit(Instant.now(), currentUser.currentUserIdOrNull());
@@ -437,7 +442,7 @@ public class ExpenseService {
         apply(expense, request.subcategoryId(), request.vendorId(), request.boqItemId(),
                 request.billNumber(), request.billDate(), request.amountBeforeTax(),
                 request.gstPercent(), request.paymentMode(), request.noBillReason(),
-                request.remarks());
+                request.refundableAmount(), request.refundExpectedOn(), request.remarks());
 
         audit.record(ENTITY_TYPE, id, "UPDATE", null,
                 Map.of("expenseNumber", expense.getExpenseNumber(),
@@ -584,6 +589,24 @@ public class ExpenseService {
                                     .formatted(expense.getTotalAmount().toPlainString())
                             + "a company cost.");
         }
+        /*
+          A deposit is not split. The refundable part of a bill is money the company placed
+          and will get back in one piece from one payer, and a split would be two answers to
+          whose refund it is when it arrives — the same disagreement the split's own bounds
+          are refused for. SITE and COMPANY both work: the office's own meter security is the
+          company's deposit and the site's is the site's, and either way the whole of it goes
+          back where the whole of it came from.
+        */
+        if (allocation == CostAllocation.SPLIT
+                && expense.getRefundableAmount().signum() > 0) {
+            throw new BusinessException("expense.deposit-not-splittable",
+                    "%s carries a refundable deposit of %s, and a deposit comes back in one "
+                            .formatted(expense.getExpenseNumber(),
+                                    expense.getRefundableAmount().toPlainString())
+                            + "piece from one payer. Charge the bill to the site or to the "
+                            + "company; splitting it would leave two answers to whose refund "
+                            + "it is.");
+        }
         if (allocation != CostAllocation.SITE && isCostedElsewhere(expense)) {
             throw new BusinessException("expense.allocation-not-shareable",
                     "%s is booked under a head whose value is counted at the site — material "
@@ -689,6 +712,7 @@ public class ExpenseService {
     private void apply(Expense expense, UUID subcategoryId, UUID vendorId, UUID boqItemId,
                        String billNumber, LocalDate billDate, BigDecimal amountBeforeTax,
                        BigDecimal gstPercent, String paymentMode, String noBillReason,
+                       BigDecimal refundableAmount, LocalDate refundExpectedOn,
                        String remarks) {
         expense.setSubcategoryId(subcategoryId);
         expense.setVendorId(vendorId);
@@ -698,7 +722,41 @@ public class ExpenseService {
         expense.priceAt(amountBeforeTax, gstPercent);
         expense.setPaymentMode(paymentMode);
         expense.setNoBillReason(emptyToNull(noBillReason));
+        applyDeposit(expense, refundableAmount, refundExpectedOn);
         expense.setRemarks(remarks);
+    }
+
+    /**
+     * How much of the bill is a deposit, checked here so the caller gets a sentence.
+     *
+     * <p>{@code ck_expense_refundable_within_total} is behind this and would answer a
+     * repriced bill with 23514, which Spring maps to a 409 and the handler spells "this
+     * record conflicts with one that already exists" — the exact failure V40 went and fixed
+     * in the evidence rule. Nothing conflicts with anything: a ₹12,000 deposit has been left
+     * standing on a bill somebody has just corrected to ₹4,500, and the person who did it is
+     * the one who can say which figure was wrong.</p>
+     *
+     * <p>It is refused rather than clamped, and refused below what has already come back:
+     * shrinking a deposit under its own settlements would leave the register reporting money
+     * received against a deposit nobody placed.</p>
+     */
+    private void applyDeposit(Expense expense, BigDecimal refundable, LocalDate expectedOn) {
+        BigDecimal amount = refundable == null ? BigDecimal.ZERO : refundable;
+        if (amount.compareTo(expense.getTotalAmount()) > 0) {
+            throw new BusinessException("expense.deposit-above-total",
+                    "A refundable deposit of %s is more than the bill it came on (%s). It is "
+                            .formatted(amount.toPlainString(),
+                                    expense.getTotalAmount().toPlainString())
+                            + "part of the bill, never more than it.");
+        }
+        BigDecimal settled = expense.getRefundedAmount().add(expense.getWrittenOffAmount());
+        if (amount.compareTo(settled) < 0) {
+            throw new BusinessException("expense.deposit-below-settled",
+                    "%s of the deposit on %s has already been settled. The deposit cannot be "
+                            .formatted(settled.toPlainString(), expense.getExpenseNumber())
+                            + "corrected below what has come back.");
+        }
+        expense.setDeposit(amount, expectedOn);
     }
 
     private static BigDecimal totalOf(BigDecimal amountBeforeTax, BigDecimal gstPercent) {

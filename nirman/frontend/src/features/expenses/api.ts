@@ -6,6 +6,9 @@ import { queuePhoto } from '../../offline/uploads';
 import { apiClient } from '../../shared/apiClient';
 import type {
   AllocationSummary,
+  DepositRegister,
+  DepositSettlement,
+  RefundOutcome,
   Approval,
   ApprovalAction,
   CostAllocation,
@@ -32,6 +35,9 @@ export const expenseKeys = {
   pending: ['approvals', 'pending'] as const,
   payments: (expenseId: string) => ['payments', expenseId] as const,
   vendorBalances: ['vendors', 'balances'] as const,
+  deposits: (siteId: string, openOnly: boolean) =>
+    ['deposits', siteId, openOnly] as const,
+  depositsAll: ['deposits'] as const,
   attachmentUrl: (attachmentId: string) => ['attachments', attachmentId, 'url'] as const,
 };
 
@@ -131,6 +137,9 @@ export interface ExpenseInput {
   gstPercent: number;
   paymentMode?: string | undefined;
   noBillReason?: string | undefined;
+  /** The part of the bill that is a deposit and comes back. Absent on almost every expense. */
+  refundableAmount?: number | undefined;
+  refundExpectedOn?: string | undefined;
   duplicateOverrideReason?: string | undefined;
 }
 
@@ -226,6 +235,8 @@ export interface ExpenseEdit {
   amountBeforeTax: number;
   gstPercent: number;
   noBillReason?: string | undefined;
+  refundableAmount?: number | undefined;
+  refundExpectedOn?: string | undefined;
   version: number;
 }
 
@@ -571,5 +582,59 @@ export function useAttachmentUrl(attachmentId: string | undefined) {
     enabled: Boolean(attachmentId),
     staleTime: 5 * 60_000,
     gcTime: 5 * 60_000,
+  });
+}
+
+// ------------------------------------------------------------------ deposits
+
+/**
+ * The money placed and not yet back: meter securities, plant hire deposits, cylinder money.
+ *
+ * <p>Never cached beyond the screen's own life. A stale figure here is worse than a missing
+ * one for the reason stock and dashboards are not cached either — the whole question is what
+ * is outstanding <i>now</i>, and an answer from an hour ago is one the office would act on.</p>
+ */
+export function useDeposits(siteId: string | undefined, openOnly: boolean) {
+  return useQuery({
+    queryKey: expenseKeys.deposits(siteId ?? '', openOnly),
+    queryFn: async () =>
+      (
+        await apiClient.get<DepositRegister>('/deposits', {
+          params: { siteId, openOnly },
+        })
+      ).data,
+  });
+}
+
+/**
+ * Records what became of a deposit — money back, or a write-off with the reason on it.
+ *
+ * <p>Not queued when there is no signal. A settlement is a statement about a bank statement
+ * somebody is reading at a desk, and there is no version of it that happens at a site gate
+ * with no connection.</p>
+ */
+export function useSettleDeposit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      expenseId: string;
+      outcome: RefundOutcome;
+      settledOn: string;
+      amount: number;
+      paymentMode?: string | undefined;
+      referenceNumber?: string | undefined;
+      reason?: string | undefined;
+    }) => {
+      const { expenseId, ...body } = input;
+      return (
+        await apiClient.post<DepositSettlement>(`/deposits/${expenseId}/settlements`, body)
+      ).data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: expenseKeys.depositsAll });
+      // The expense's own running totals moved with it, so the register and the bill do not
+      // get to disagree about how much is left.
+      void queryClient.invalidateQueries({ queryKey: expenseKeys.all });
+    },
   });
 }

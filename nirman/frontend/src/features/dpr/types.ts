@@ -170,14 +170,16 @@ export interface MaterialPrefill {
 }
 
 /**
- * The four figures, never one. Only {@link ExpensePrefill.costIncurred} may be added to
- * labour and material consumption — the other two are costed elsewhere.
+ * The figures, never one. Only {@link ExpensePrefill.costIncurred} may be added to labour and
+ * material consumption — the others are costed elsewhere or not costs at all.
  */
 export interface ExpensePrefill {
   totalBooked: number;
   costIncurred: number;
   materialPurchases: number;
   labourDisbursements: number;
+  /** Money placed rather than spent, and coming back. Zero on almost every day. */
+  refundableDeposits: number;
   expenseCount: number;
   unapprovedCount: number;
 }

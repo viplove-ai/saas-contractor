@@ -17,7 +17,7 @@ import java.util.UUID;
  * by most of ₹4,99,528 on the labour side alone (docs/09).</p>
  *
  * <p>So {@link DailySpend} and {@link PeriodSpend} both carry the split, and
- * {@code costIncurred} is the only one of the four that may be added to anything.</p>
+ * {@code costIncurred} is the only one of the five that may be added to anything.</p>
  *
  * <h2>And one the site does not carry at all</h2>
  *
@@ -27,6 +27,18 @@ import java.util.UUID;
  * same reason the other two are: the site did not incur it. The four still add to
  * {@code totalBooked}, which is what makes the omission checkable rather than a matter of
  * trust.</p>
+ *
+ * <h2>And one that is not spending at all</h2>
+ *
+ * <p>{@code refundableDeposits} (V48). The security on an electricity meter, the money down on
+ * a hired mixer: it leaves on an ordinary bill and it is still the company's — it comes back
+ * when the meter is surrendered. Reporting it as the day's cost overstates the job in exactly
+ * the way the other three do, and worse, because nothing ever reports it back: the refund
+ * arrives months later, usually after the site is closed, and lands nowhere. So it is out of
+ * {@code costIncurred} from the day the bill is booked, and it stands in the deposits register
+ * until somebody says what became of it.</p>
+ *
+ * <p>The five still add to {@code totalBooked}.</p>
  */
 public interface ExpenseLookup {
 
@@ -42,6 +54,7 @@ public interface ExpenseLookup {
      *                            there and so nothing was costed, which puts the supplier's
      *                            bill in {@code costIncurred} where it is the only record of
      *                            what the labour cost
+     * @param refundableDeposits  money placed rather than spent, and coming back (V48)
      */
     record DailySpend(
             LocalDate date,
@@ -50,6 +63,7 @@ public interface ExpenseLookup {
             BigDecimal companyOverhead,
             BigDecimal materialPurchases,
             BigDecimal labourDisbursements,
+            BigDecimal refundableDeposits,
             int expenseCount,
             int unapprovedCount) {
     }
@@ -62,6 +76,9 @@ public interface ExpenseLookup {
             BigDecimal companyOverhead,
             BigDecimal materialPurchases,
             BigDecimal labourDisbursements,
+            BigDecimal refundableDeposits,
+            /** Of the deposits above, what is still out there today. Not a period figure. */
+            BigDecimal depositsOutstanding,
             BigDecimal approvedCost,
             BigDecimal paid,
             BigDecimal payable,

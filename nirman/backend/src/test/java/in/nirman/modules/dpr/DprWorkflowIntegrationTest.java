@@ -65,6 +65,63 @@ class DprWorkflowIntegrationTest extends AbstractIntegrationTest {
     /**
      * Describe, sign, claim — end to end, with the measurement book checked before and after.
      */
+    /**
+     * The photograph is the report's only evidence, so it is the one thing the handover
+     * refuses to go without.
+     *
+     * <p>Every other figure on the supervisor's half could in principle be reconstructed from
+     * another register — the muster has the men, the store has the lorry. A picture of the
+     * work face cannot be produced from a desk, which is the whole of why it is worth
+     * demanding: it is the part of the report that says somebody was standing there.</p>
+     */
+    @Test
+    @DisplayName("a day cannot be handed over without a photograph of the site")
+    void handoverNeedsAPhotograph() throws Exception {
+        String supervisor = loginToken("vivek");
+        String engineer = loginToken("uttam");
+        String id = draft(supervisor, engineer, freeDay(), "5");
+
+        mockMvc.perform(post("/api/v1/dprs/" + id + "/submit")
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.detail")
+                        .value(org.hamcrest.Matchers.containsString("no photograph")));
+
+        // And it goes through the moment there is one.
+        photograph(supervisor, id);
+        mockMvc.perform(post("/api/v1/dprs/" + id + "/submit")
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.workflowStatus").value("SUBMITTED"));
+    }
+
+    /**
+     * A day the site did not work needs one too, and this is the case the rule is most for.
+     *
+     * <p>"Nine days lost to rain in July" is a claim against the department. A flooded site
+     * photographed on the ninth is what an extension of time is granted on; the same sentence
+     * with nothing behind it is one the department can refuse.</p>
+     */
+    @Test
+    @DisplayName("a day the site did not work needs a photograph as much as one it did")
+    void aRainDayNeedsAPhotographToo() throws Exception {
+        String supervisor = loginToken("vivek");
+        String id = openDay(supervisor, freeDay(), """
+                "siteOperational":false,"nonOperationalCause":"WEATHER",
+                 "nonOperationalNote":"River road under water from first light\"""");
+
+        mockMvc.perform(post("/api/v1/dprs/" + id + "/submit")
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.detail")
+                        .value(org.hamcrest.Matchers.containsString("no photograph")));
+
+        photograph(supervisor, id);
+        mockMvc.perform(post("/api/v1/dprs/" + id + "/submit")
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isOk());
+    }
+
     @Test
     @DisplayName("verifying a report posts its measured work to the measurement book")
     void verificationPostsMeasuredWork() throws Exception {
@@ -1030,11 +1087,37 @@ class DprWorkflowIntegrationTest extends AbstractIntegrationTest {
                         .formatted(rowId, rate, basis)));
     }
 
+    /**
+     * The handover, with the photograph the handover requires.
+     *
+     * <p>Attached here rather than in every caller because it is now part of what a handover
+     * <i>is</i>: the report's only piece of evidence, and the only thing on it that cannot be
+     * produced from a desk. {@link #handoverNeedsAPhotograph()} is the test that this is
+     * enforced rather than merely done by a helper.</p>
+     */
     private void submit(String token, String id) throws Exception {
+        photograph(token, id);
         mockMvc.perform(post("/api/v1/dprs/" + id + "/submit")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.workflowStatus").value("SUBMITTED"));
+    }
+
+    /** One picture of the site, linked onto the report the way the wizard links it. */
+    private void photograph(String token, String dprId) throws Exception {
+        String attachmentId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO attachments (id, org_id, owner_entity_type, file_name, content_type,
+                                         size_bytes, bucket, object_key, kind)
+                VALUES (?::uuid, '10000000-0000-0000-0000-000000000001', 'DPR',
+                        'site.jpg', 'image/jpeg', 4096, 'nirman', ?, 'PHOTO')""",
+                attachmentId, "test/dpr/" + attachmentId);
+        mockMvc.perform(post("/api/v1/dprs/" + dprId + "/photos")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"attachmentId\":\"%s\",\"caption\":\"the work face\"}"
+                                .formatted(attachmentId)))
+                .andExpect(status().isOk());
     }
 
     private void verify(String token, String id) throws Exception {

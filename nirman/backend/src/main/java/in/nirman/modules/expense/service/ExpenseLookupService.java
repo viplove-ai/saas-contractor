@@ -71,6 +71,7 @@ public class ExpenseLookupService implements ExpenseLookup {
         BigDecimal material = BigDecimal.ZERO;
         BigDecimal labour = BigDecimal.ZERO;
         BigDecimal company = BigDecimal.ZERO;
+        BigDecimal deposits = BigDecimal.ZERO;
         int unapproved = 0;
 
         for (Expense expense : found) {
@@ -86,7 +87,13 @@ public class ExpenseLookupService implements ExpenseLookup {
                 // muster — which is why the service refuses to charge either to the company.
                 // A supplier's bill at an outsourced site arrives here instead, and the same
                 // refusal makes its company share zero, so the whole of it lands on the site.
-                company = company.add(expense.companyCost());
+                //
+                // The deposit comes off the top before the allocation, which is why the
+                // company's share is asked of what was spent rather than of the whole bill:
+                // taking it out of both would take it out of the day twice and report the
+                // site a negative cost.
+                deposits = deposits.add(expense.getRefundableAmount());
+                company = company.add(expense.companySpend());
             }
             if (expense.getWorkflowStatus() != Expense.Workflow.APPROVED) {
                 unapproved++;
@@ -94,8 +101,9 @@ public class ExpenseLookupService implements ExpenseLookup {
         }
 
         return new DailySpend(date, booked,
-                booked.subtract(material).subtract(labour).subtract(company),
-                company, material, labour, found.size(), unapproved);
+                booked.subtract(material).subtract(labour).subtract(company)
+                        .subtract(deposits),
+                company, material, labour, deposits, found.size(), unapproved);
     }
 
     @Override
@@ -108,6 +116,8 @@ public class ExpenseLookupService implements ExpenseLookup {
         BigDecimal material = BigDecimal.ZERO;
         BigDecimal labour = BigDecimal.ZERO;
         BigDecimal company = BigDecimal.ZERO;
+        BigDecimal deposits = BigDecimal.ZERO;
+        BigDecimal depositsOut = BigDecimal.ZERO;
         BigDecimal approved = BigDecimal.ZERO;
         BigDecimal paid = BigDecimal.ZERO;
         BigDecimal payable = BigDecimal.ZERO;
@@ -121,8 +131,14 @@ public class ExpenseLookupService implements ExpenseLookup {
             } else if (settlesCostedWage(expense, category, outsourcedSites)) {
                 labour = labour.add(expense.getTotalAmount());
             } else {
-                company = company.add(expense.companyCost());
+                deposits = deposits.add(expense.getRefundableAmount());
+                company = company.add(expense.companySpend());
             }
+            // Asked of the row as it stands today rather than of the period, and deliberately:
+            // "what is still out there" is a question about now, and a deposit placed in March
+            // and refunded in July is outstanding in neither month's report and in every
+            // month's until July.
+            depositsOut = depositsOut.add(expense.outstandingDeposit());
             if (expense.getWorkflowStatus() == Expense.Workflow.APPROVED) {
                 approved = approved.add(expense.getTotalAmount());
                 payable = payable.add(expense.payableAmount());
@@ -134,8 +150,10 @@ public class ExpenseLookupService implements ExpenseLookup {
         }
 
         return new PeriodSpend(from, to, booked,
-                booked.subtract(material).subtract(labour).subtract(company),
-                company, material, labour, approved, paid, payable, found.size(), awaiting);
+                booked.subtract(material).subtract(labour).subtract(company)
+                        .subtract(deposits),
+                company, material, labour, deposits, depositsOut, approved, paid, payable,
+                found.size(), awaiting);
     }
 
     @Override
@@ -159,9 +177,11 @@ public class ExpenseLookupService implements ExpenseLookup {
             if (settlesCostedWage(expense, category, outsourcedSites)) {
                 continue;
             }
-            // The site's share, not the total: the half of a diesel bill that ran the office
-            // car is on the same trend line otherwise, and the site never spent it.
-            byDay.merge(expense.getExpenseDate(), expense.siteCost(), BigDecimal::add);
+            // The site's share of what was spent, not the total. The half of a diesel bill
+            // that ran the office car is on the same trend line otherwise and the site never
+            // spent it — and neither is a meter security, which the site has not spent at all.
+            byDay.merge(expense.getExpenseDate(),
+                    expense.siteCost().subtract(depositBorneBySite(expense)), BigDecimal::add);
         }
         return byDay.entrySet().stream()
                 .map(entry -> new DailyCost(entry.getKey(), entry.getValue()))
@@ -186,6 +206,19 @@ public class ExpenseLookupService implements ExpenseLookup {
     }
 
     // ------------------------------------------------------------------ internals
+
+    /**
+     * How much of a row's deposit the site is carrying — all of it, or none.
+     *
+     * <p>A {@code SPLIT} never reaches here carrying one: {@code ExpenseService} refuses that
+     * combination, because a deposit comes back in one piece from one payer and a split would
+     * be two answers to whose refund it is.</p>
+     */
+    private static BigDecimal depositBorneBySite(Expense expense) {
+        return expense.getCostAllocation() == in.nirman.common.CostAllocation.COMPANY
+                ? BigDecimal.ZERO
+                : expense.getRefundableAmount();
+    }
 
     /**
      * Whether this row settles a wage the project has already counted, and so must stay out

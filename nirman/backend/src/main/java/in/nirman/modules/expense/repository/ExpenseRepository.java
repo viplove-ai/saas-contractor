@@ -147,6 +147,33 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
                                 @Param("from") LocalDate from,
                                 @Param("to") LocalDate to);
 
+    /**
+     * The deposits register: every bill carrying a refundable part.
+     *
+     * <p>{@code openOnly} is the question the office actually asks — what is still out there
+     * with the electricity board and the plant hirers — and the settled rows are the answer
+     * to "what happened to the one I paid last March", which is worth keeping on the same
+     * screen rather than behind a second one.</p>
+     *
+     * <p>Void rows are out. A deposit on a bill that was never incurred was never placed.</p>
+     */
+    @Query("""
+            SELECT e FROM Expense e
+            WHERE e.orgId = :orgId
+              AND e.refundableAmount > 0
+              AND (:siteId IS NULL OR e.siteId = :siteId)
+              AND (:restricted = false OR e.siteId IN :siteIds)
+              AND (:openOnly = false
+                   OR e.refundedAmount + e.writtenOffAmount < e.refundableAmount)
+              AND e.workflowStatus <> in.nirman.modules.expense.domain.Expense$Workflow.VOIDED
+            ORDER BY e.expenseDate ASC, e.expenseNumber ASC
+            """)
+    List<Expense> findDeposits(@Param("orgId") UUID orgId,
+                               @Param("siteId") UUID siteId,
+                               @Param("openOnly") boolean openOnly,
+                               @Param("restricted") boolean restricted,
+                               @Param("siteIds") Collection<UUID> siteIds);
+
     /** Everything still owed, for the ageing report and vendor balances. */
     @Query("""
             SELECT e FROM Expense e

@@ -34,7 +34,7 @@ interface NavItem {
 
 const ITEMS: NavItem[] = [
   { label: 'Today', to: '/today', match: ['/today', '/home'] },
-  { label: 'Registers', to: '/inventory/stock', match: ['/inventory', '/workers', '/payments'], permission: 'inventory:read' },
+  { label: 'Registers', to: '/inventory/stock', match: ['/inventory', '/workers', '/payments', '/deposits'], permission: 'inventory:read' },
   {
     label: 'Sign-off',
     to: '/approvals',

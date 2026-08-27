@@ -169,6 +169,28 @@ if the tests pass:
   none of it (that is SITE and COMPANY, and two spellings of one fact make a register disagree
   with itself), and anything but SITE on a material-purchase or wage head, whose value is already
   carried by that site's store and that site's muster.
+- **A deposit is not a cost.** Part of a bill can be money *placed* rather than money spent —
+  the security on an electricity meter, the money down on a hired mixer, a cylinder deposit —
+  and it comes back when the meter is surrendered. The vendor is still paid the whole bill and
+  `payments` still reconciles against `total_amount`; what `expenses.refundable_amount` (V48)
+  changes is what the *job* is told the bill cost. Booking it as cost overstates the site in
+  exactly the way counting a material purchase twice does, and worse, because nothing ever
+  reported it back: the refund arrives months later, usually after the site is closed, and
+  landed nowhere. So it is out of `costIncurred` from the day the bill is booked, and
+  `ExpenseLookup` carries it as a **fifth** figure that the other four still add up with —
+  `Expense.spentAmount()` is the total less the deposit and `companySpend()` is the company's
+  share *of what was spent*, because taking the deposit out of both would take it out of the
+  day twice. A `SPLIT` is refused a deposit outright: a deposit comes back in one piece from
+  one payer, and a split would be two answers to whose refund it is. Settling it is
+  `expense_refunds`, a register and not a flag, because a deposit comes back in parts often
+  enough (the board adjusts half against a final bill and refunds the rest) that one
+  date-and-amount would be a lie about a normal case. **A write-off books no cost here**: the
+  loss belongs to the day somebody decided it rather than to the day the connection was taken,
+  so it closes the row with a reason and the loss is a fresh expense under a loss head at that
+  date — the same shape as a correction after an RA bill is passed. **No new permission**:
+  saying part of a bill is a deposit is part of typing the bill (`expense:create`), and
+  recording that the money came back is the mirror of recording that money went out
+  (`payment:record`), the same accountant reading the same bank statement.
 - **An approved expense is re-opened, not edited and not always voided.** Voiding and re-booking
   is right when the expense should not have existed and wrong when a figure was typed badly: the
   replacement carries a new number, the vendor's bill and the system stop agreeing about what the
@@ -199,6 +221,21 @@ if the tests pass:
   stops a supervisor's save, sending an empty work list because his screen has no work step, from
   deleting lines the engineer put on a report he sent back. The "a report that says nothing"
   check sits on `decide` rather than `submit`: nobody has written the work half at handover time.
+- **A report is handed over with a photograph on it, or not at all.** Every other figure on the
+  supervisor's half could in principle be reconstructed from another register — the muster has
+  the men, the store has the lorry, the bill book has the cartage. A picture of the work face
+  cannot be produced from a desk, which is the whole of why it is worth demanding: it is the
+  one part of the document that is evidence rather than assertion, and it says somebody was
+  standing there. So `DprService.submit` refuses a report with no `dpr_photos` row, and it
+  refuses it **on a day the site did not work as much as on one it did** — a flooded site
+  photographed on the ninth of July is what an extension of time is granted on, and "no work,
+  rain" with nothing behind it is a sentence the department can refuse. It bites at the
+  handover and nowhere else: a draft still saves without one, because what is refused is
+  handing over an account of a day with nothing behind it and not writing one down, and reports
+  handed over before the rule existed are untouched by it. The wizard holds the button and says
+  why beside it — the alert is next to the button rather than only next to the camera, because
+  an engineer writing the whole report himself hands it over from the observations step, three
+  scrolls from the photograph card.
 - **The day's account stays with the site until the report is signed; the figures freeze at the
   handover.** Two different promises, and only the second one is about the snapshot. Whoever
   holds `dpr:draft` at that site may still correct the weather, the operational status and the
@@ -576,6 +613,14 @@ read and prepare — so no existing user's screens change until a permission is 
 `dsr_schedules.document_id` tying parsed rates back to the edition they were read out of.
 **No new permission**: `dsr:manage` already holds this custody, and `billing:read` covers
 reading the shelf. See the two rules above for why superseding moves nothing.
+
+`V48` is the part of a bill that is coming back: `expenses.refundable_amount`,
+`refund_expected_on`, and the `refunded_amount`/`written_off_amount` running totals the
+`expense_refunds` register writes and nothing else does — exactly as `paid_amount` is written
+by `PaymentService` alone. The checks keep a deposit inside its own bill, keep what has been
+settled inside the deposit, and keep both out of a bill nobody has approved (the same guard V8
+put on `paid_amount`, and `VOIDED` is allowed for the same reason). **No new permission** — see
+the deposit rule above.
 
 **A note on JPQL and optional parameters.** `(:param IS NULL OR column = :param)` expands to two
 placeholders, and Postgres cannot infer a type for the one standing alone in `? IS NULL` — it

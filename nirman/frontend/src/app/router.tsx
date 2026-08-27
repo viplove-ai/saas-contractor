@@ -90,6 +90,13 @@ export const router = createBrowserRouter([
             Component: (await import('../features/expenses/PaymentsRegisterPage'))
               .PaymentsRegisterPage,
           })),
+          // The other half of the payments register: what left the books and is coming back.
+          // Its own screen because the question is asked months later and usually by somebody
+          // else — "what are we holding out with the electricity board" is a treasury question
+          // that happens to be answered out of the expense register.
+          screen('deposits', async () => ({
+            Component: (await import('../features/expenses/DepositsPage')).DepositsPage,
+          })),
           screen('dpr/new', async () => ({
             Component: (await import('../features/dpr/DprWizardPage')).DprWizardPage,
           })),
