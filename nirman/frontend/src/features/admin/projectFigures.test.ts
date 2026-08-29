@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { budgetFor, quotedCost } from './projectFigures';
+import { budgetFor, formatQuotedPercent, quotedCost } from './projectFigures';
 
 describe('quotedCost', () => {
   it('moves the estimate up by a quote above it', () => {
@@ -53,5 +53,26 @@ describe('budgetFor', () => {
     expect(budgetFor(null)).toBeNull();
     expect(budgetFor('')).toBeNull();
     expect(budgetFor(undefined)).toBeNull();
+  });
+});
+
+describe('formatQuotedPercent', () => {
+  it('keeps the sign, which is the whole content of the figure', () => {
+    expect(formatQuotedPercent(-12.5)).toBe('-12.5%');
+    expect(formatQuotedPercent(4)).toBe('+4%');
+  });
+
+  it('drops the zeros a numeric(7,3) column carries', () => {
+    expect(formatQuotedPercent(-12.5)).toBe('-12.5%');
+    expect(formatQuotedPercent(6.25)).toBe('+6.25%');
+  });
+
+  it('gives bidding at par its name rather than a zero', () => {
+    expect(formatQuotedPercent(0)).toBe('At par');
+  });
+
+  it('says nothing about a project that carries no quote', () => {
+    expect(formatQuotedPercent(null)).toBe('\u2014');
+    expect(formatQuotedPercent(undefined)).toBe('\u2014');
   });
 });

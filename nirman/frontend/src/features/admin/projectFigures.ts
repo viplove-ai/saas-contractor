@@ -79,3 +79,22 @@ function format(amount: number): string {
   const fixed = amount.toFixed(2);
   return fixed.endsWith('.00') ? fixed.slice(0, -3) : fixed;
 }
+
+/**
+ * The quote as it is spoken: `-12.5%`, `+4%`, `At par`.
+ *
+ * <p>The sign is the whole content of the figure — 12.5 below the estimate and 12.5 above it
+ * are opposite facts about a contract — so a positive quote is printed with its `+` rather
+ * than left bare, which is the one case where an unsigned number could be read as either.
+ * Zero is neither, and `0%` invites a second look at a row where nothing is wrong: bidding at
+ * par is a real bid and has a name.</p>
+ *
+ * <p>Nothing at all when the project carries no quote. A project let before the column existed
+ * has no answer, and `0%` would claim it was bid at par.</p>
+ */
+export function formatQuotedPercent(percent: number | null | undefined): string {
+  if (percent == null) return '\u2014';
+  const value = Number(percent.toFixed(3));
+  if (value === 0) return 'At par';
+  return `${value > 0 ? '+' : ''}${value}%`;
+}

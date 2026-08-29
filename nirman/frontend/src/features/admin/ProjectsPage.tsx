@@ -29,6 +29,7 @@ import {
   useRestoreProject,
 } from './api';
 import { headlineAmount, summarise, type PortfolioBand, type PortfolioSummary } from './projectPortfolio';
+import { formatQuotedPercent } from './projectFigures';
 import { DeleteRecordDialog } from '../../shared/DeleteRecordDialog';
 import { ProjectFormDialog } from './ProjectFormDialog';
 import type { AdminProject, ProjectStatus } from './types';
@@ -269,7 +270,13 @@ export function ProjectsPage() {
             <TableHead>
               <TableRow>
                 <TableCell>Project</TableCell>
-                <TableCell>Client</TableCell>
+                {/*
+                  The quote rather than the client department, which is on all but a handful
+                  of these rows the same word repeated down the column. The percent is the one
+                  fact about a contract that is different on every row and changes what every
+                  rupee of it is worth, and the client is still what the search box matches on.
+                */}
+                <TableCell align="right">Quoted %</TableCell>
                 <TableCell align="right">Quoted value</TableCell>
                 <TableCell align="right">Sites</TableCell>
                 {/* On the deleted list, why it went is the fact worth a column. */}
@@ -298,7 +305,11 @@ export function ProjectsPage() {
                       </Typography>
                     </Link>
                   </TableCell>
-                  <TableCell>{project.clientDepartment || '—'}</TableCell>
+                  <TableCell align="right">
+                    <Typography variant="caption">
+                      {formatQuotedPercent(project.quotedPercent)}
+                    </Typography>
+                  </TableCell>
                   <TableCell align="right">
                     <Typography variant="caption">
                       {project.quotedCost == null ? '—' : formatAmount(project.quotedCost)}
@@ -495,9 +506,10 @@ function PortfolioQuickView({ summary }: { summary: PortfolioSummary }) {
  * pushed every card past a screen height and made the list unscannable, and the full name
  * is one tap away on the detail screen.</p>
  *
- * <p>Quoted value and the site count sit on one row as a pair. The site count is the one
- * that decides what you do next — a project with no sites can have nothing recorded against
- * it — so it keeps the words rather than being reduced to a bare number.</p>
+ * <p>The two halves of the money sit on one row as a pair: what the work pays, and the quote
+ * that got it there. The site count keeps its own line and its words — it is the one that
+ * decides what you do next, since a project with no sites can have nothing recorded against
+ * it, and a bare number would not say that.</p>
  */
 function ProjectCard({
   project,
@@ -561,9 +573,9 @@ function ProjectCard({
           </Stack>
           <Stack spacing={0.25} alignItems="flex-end">
             <Typography variant="caption" color="text.secondary">
-              Client
+              Quoted %
             </Typography>
-            <Typography variant="body2">{project.clientDepartment || '—'}</Typography>
+            <Typography variant="body2">{formatQuotedPercent(project.quotedPercent)}</Typography>
           </Stack>
         </Stack>
 

@@ -146,6 +146,30 @@ describe('ProjectsPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows the quote with its sign, on the row and on the card', async () => {
+    renderPage([
+      {
+        id: 'p1',
+        code: 'KSN01',
+        name: 'Kausani Guest House Extension',
+        status: 'ACTIVE',
+        quotedPercent: -12.5,
+        version: 0,
+      },
+      { id: 'p5', code: 'RNK04', name: 'Ranikhet Quarters', status: 'ACTIVE', version: 0 },
+    ]);
+    await screen.findAllByText('KSN01');
+
+    const below = table().getByText('KSN01').closest('tr') as HTMLElement;
+    expect(within(below).getByText('-12.5%')).toBeInTheDocument();
+    // No quote is no answer, not a bid at par.
+    const unquoted = table().getByText('RNK04').closest('tr') as HTMLElement;
+    expect(within(unquoted).getAllByText('\u2014').length).toBeGreaterThan(0);
+
+    const card = cards().getByText('KSN01').closest('li') as HTMLElement;
+    expect(within(card).getByText('-12.5%')).toBeInTheDocument();
+  });
+
   it('shows which projects have no site to record anything against', async () => {
     renderPage();
     await screen.findAllByText('KSN01');
