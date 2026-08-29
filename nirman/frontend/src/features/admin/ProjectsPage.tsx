@@ -30,6 +30,7 @@ import {
 } from './api';
 import { headlineAmount, summarise, type PortfolioBand, type PortfolioSummary } from './projectPortfolio';
 import { formatQuotedPercent } from './projectFigures';
+import { completionLabel } from './projectSchedule';
 import { DeleteRecordDialog } from '../../shared/DeleteRecordDialog';
 import { ProjectFormDialog } from './ProjectFormDialog';
 import type { AdminProject, ProjectStatus } from './types';
@@ -276,9 +277,18 @@ export function ProjectsPage() {
                   fact about a contract that is different on every row and changes what every
                   rupee of it is worth, and the client is still what the search box matches on.
                 */}
-                <TableCell align="right">Quoted %</TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                  Quoted %
+                </TableCell>
                 <TableCell align="right">Quoted value</TableCell>
-                <TableCell align="right">Sites</TableCell>
+                {/*
+                  When it is due rather than how many sites it has. The site count answered a
+                  question about setting the system up, which is asked once; the date is asked
+                  every time the list is opened. What the count was there to catch — a project
+                  nothing can be recorded against — is caught by the chip beside the status,
+                  where it only appears when it is true.
+                */}
+                <TableCell align="right">Completion</TableCell>
                 {/* On the deleted list, why it went is the fact worth a column. */}
                 <TableCell>{showDeleted ? 'Reason' : 'Status'}</TableCell>
                 {canWrite && <TableCell align="right">Actions</TableCell>}
@@ -316,13 +326,7 @@ export function ProjectsPage() {
                     </Typography>
                   </TableCell>
                   <TableCell align="right">
-                    {siteCount(project.id) === 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        None yet
-                      </Typography>
-                    ) : (
-                      <Typography variant="caption">{siteCount(project.id)}</Typography>
-                    )}
+                    <CompletionCell project={project} />
                   </TableCell>
                   <TableCell>
                     {showDeleted ? (
@@ -333,11 +337,22 @@ export function ProjectsPage() {
                         </Typography>
                       </Stack>
                     ) : (
-                      <Chip
-                        size="small"
-                        color={STATUS_COLOR[project.status]}
-                        label={STATUS_LABEL[project.status]}
-                      />
+                      <Stack direction="row" spacing={0.5} alignItems="center">
+                        <Chip
+                          size="small"
+                          color={STATUS_COLOR[project.status]}
+                          label={STATUS_LABEL[project.status]}
+                        />
+                        {/*
+                          The half of the site count that was worth a column: a project with
+                          no site is one nobody can record anything against, which is the state
+                          this screen exists to get you out of. Two sites and three sites were
+                          never a difference anybody acted on from here.
+                        */}
+                        {siteCount(project.id) === 0 && (
+                          <Chip size="small" variant="outlined" color="warning" label="No sites" />
+                        )}
+                      </Stack>
                     )}
                   </TableCell>
                   {canWrite && (
@@ -498,6 +513,41 @@ function PortfolioQuickView({ summary }: { summary: PortfolioSummary }) {
 }
 
 /**
+ * When a contract is due, and how long that leaves, in one cell.
+ *
+ * <p>The countdown is dimmer than the date on a job that is running and coloured on one that
+ * is not: a contract past its date is the single thing on this screen somebody would want to
+ * be caught by, and the rest of the column is a date they are only reading.</p>
+ */
+function CompletionCell({ project }: { project: AdminProject }) {
+  // Read once per render rather than hoisted to a constant: a list left open across midnight
+  // would otherwise go on counting to yesterday.
+  const label = completionLabel(project, new Date());
+  return (
+    <Typography variant="caption" component="span">
+      {/*
+        Each half is kept whole and the line is allowed to break between them. Left to itself
+        a narrow column breaks inside the brackets, and "(152 days" over "late)" is a phrase
+        somebody has to reassemble before they can read the number.
+      */}
+      <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
+        {label.date}
+      </Box>
+      {label.note && (
+        <Typography
+          variant="caption"
+          component="span"
+          color={label.late ? 'warning.main' : 'text.secondary'}
+          sx={{ whiteSpace: 'nowrap' }}
+        >
+          {` (${label.note})`}
+        </Typography>
+      )}
+    </Typography>
+  );
+}
+
+/**
  * One project on a phone.
  *
  * <p>The code and the status go on the top line together, because those are what somebody
@@ -579,9 +629,17 @@ function ProjectCard({
           </Stack>
         </Stack>
 
-        <Typography variant="body2" color="text.secondary">
-          {siteCount === 0 ? 'No sites yet' : `${siteCount} site${siteCount === 1 ? '' : 's'}`}
-        </Typography>
+        <Stack direction="row" spacing={1} alignItems="baseline" justifyContent="space-between">
+          <Typography variant="body2" color="text.secondary">
+            Due <CompletionCell project={project} />
+          </Typography>
+          {/* Only when it is true — see the table's chip. */}
+          {siteCount === 0 && (
+            <Typography variant="body2" color="warning.main">
+              No sites yet
+            </Typography>
+          )}
+        </Stack>
 
         {deleted && (
           <Typography variant="body2" color="text.secondary">

@@ -176,8 +176,36 @@ describe('ProjectsPage', () => {
     const withSite = table().getByText('KSN01').closest('tr') as HTMLElement;
     const withoutSite = table().getByText('BAG02').closest('tr') as HTMLElement;
 
-    expect(within(withSite).getByText('1')).toBeInTheDocument();
-    expect(within(withoutSite).getByText('None yet')).toBeInTheDocument();
+    // The count itself stopped being a column; what it was there to catch did not.
+    expect(within(withoutSite).getByText('No sites')).toBeInTheDocument();
+    expect(within(withSite).queryByText('No sites')).not.toBeInTheDocument();
+  });
+
+  it('says when each contract is due, and how long that leaves', async () => {
+    const today = new Date();
+    const inTenDays = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 10);
+    const iso = (date: Date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+        date.getDate(),
+      ).padStart(2, '0')}`;
+    renderPage([
+      {
+        id: 'p1',
+        code: 'KSN01',
+        name: 'Kausani Guest House Extension',
+        status: 'ACTIVE',
+        expectedCompletionDate: iso(inTenDays),
+        version: 0,
+      },
+      { id: 'p2', code: 'BAG02', name: 'Bageshwar Road Works', status: 'PLANNED', version: 0 },
+    ]);
+    await screen.findAllByText('KSN01');
+
+    const due = table().getByText('KSN01').closest('tr') as HTMLElement;
+    expect(within(due).getByText('(10 days left)')).toBeInTheDocument();
+    // A project with no date says nothing rather than counting to one it does not have.
+    const undated = table().getByText('BAG02').closest('tr') as HTMLElement;
+    expect(within(undated).queryByText(/days/)).not.toBeInTheDocument();
   });
 
   it('says the same thing on a phone, where the table would scroll off the screen', async () => {
@@ -188,8 +216,8 @@ describe('ProjectsPage', () => {
     const withoutSite = cards().getByText('BAG02').closest('li') as HTMLElement;
 
     // The two facts the table put in columns nobody could reach on a phone.
-    expect(within(withSite).getByText('1 site')).toBeInTheDocument();
     expect(within(withSite).getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    expect(within(withSite).queryByText('No sites yet')).not.toBeInTheDocument();
     expect(within(withoutSite).getByText('No sites yet')).toBeInTheDocument();
   });
 
