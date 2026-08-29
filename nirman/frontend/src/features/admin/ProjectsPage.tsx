@@ -12,6 +12,7 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  TableSortLabel,
   TextField,
   Typography,
 } from '@mui/material';
@@ -31,6 +32,13 @@ import {
 import { headlineAmount, summarise, type PortfolioBand, type PortfolioSummary } from './projectPortfolio';
 import { formatQuotedPercent } from './projectFigures';
 import { completionLabel } from './projectSchedule';
+import {
+  DEFAULT_SORT,
+  sortProjects,
+  type SortColumn,
+  type SortDirection,
+  type SortOrder,
+} from './projectSort';
 import { DeleteRecordDialog } from '../../shared/DeleteRecordDialog';
 import { ProjectFormDialog } from './ProjectFormDialog';
 import type { AdminProject, ProjectStatus } from './types';
@@ -82,6 +90,12 @@ export function ProjectsPage() {
   const [status, setStatus] = useState('');
   const [showDeleted, setShowDeleted] = useState(false);
   const [billingOnly, setBillingOnly] = useState(false);
+  /*
+    The order is the table's, not the server's — the list is one page of everything the org
+    has, so a click reorders what is already loaded rather than asking for it again. It starts
+    on the order the server sends so the first paint is not a re-sort of itself.
+  */
+  const [sort, setSort] = useState<SortOrder>(DEFAULT_SORT);
 
   const canWrite = hasPermission('project:write');
   const canDelete = hasPermission('project:delete');
@@ -105,9 +119,22 @@ export function ProjectsPage() {
     holds, and adding a query parameter for it would mean a round trip to answer a question the
     page can answer itself — unlike deleted, which is genuinely a different set of rows.
   */
-  const visibleProjects = (projects.data ?? []).filter(
-    (project) => !billingOnly || project.mode === 'BILLING_ONLY',
+  const visibleProjects = sortProjects(
+    (projects.data ?? []).filter((project) => !billingOnly || project.mode === 'BILLING_ONLY'),
+    sort,
   );
+
+  /*
+    A second click on the column already sorted turns it around; a first click on any other
+    starts it ascending — which for a date is the earliest first and for money the smallest,
+    the way every table anybody has used before this one behaves.
+  */
+  const sortBy = (column: SortColumn) =>
+    setSort((current) => ({
+      column,
+      direction:
+        current.column === column && current.direction === 'asc' ? ('desc' as SortDirection) : ('asc' as SortDirection),
+    }));
 
   const summary = summarise(portfolio.data?.content ?? [], portfolio.data?.totalElements);
 
@@ -270,17 +297,26 @@ export function ProjectsPage() {
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>Project</TableCell>
+                {/*
+                  A floor under the name column. The sort arrows took their width out of the one
+                  column that flexes, and "Kausani Guest House Extension" over four lines makes
+                  every row three rows tall — the same wrap the phone card exists to avoid.
+                */}
+                <SortableHeader column="code" sort={sort} onSort={sortBy} minWidth={180}>
+                  Project
+                </SortableHeader>
                 {/*
                   The quote rather than the client department, which is on all but a handful
                   of these rows the same word repeated down the column. The percent is the one
                   fact about a contract that is different on every row and changes what every
                   rupee of it is worth, and the client is still what the search box matches on.
                 */}
-                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                <SortableHeader align="right" column="quotedPercent" sort={sort} onSort={sortBy}>
                   Quoted %
-                </TableCell>
-                <TableCell align="right">Quoted value</TableCell>
+                </SortableHeader>
+                <SortableHeader align="right" column="quotedCost" sort={sort} onSort={sortBy}>
+                  Quoted value
+                </SortableHeader>
                 {/*
                   When it is due rather than how many sites it has. The site count answered a
                   question about setting the system up, which is asked once; the date is asked
@@ -288,9 +324,20 @@ export function ProjectsPage() {
                   nothing can be recorded against — is caught by the chip beside the status,
                   where it only appears when it is true.
                 */}
-                <TableCell align="right">Completion</TableCell>
-                {/* On the deleted list, why it went is the fact worth a column. */}
-                <TableCell>{showDeleted ? 'Reason' : 'Status'}</TableCell>
+                <SortableHeader align="right" column="completion" sort={sort} onSort={sortBy}>
+                  Completion
+                </SortableHeader>
+                {/*
+                  On the deleted list, why it went is the fact worth a column — and it is prose,
+                  which nothing is gained by ordering, so that one header stays a plain label.
+                */}
+                {showDeleted ? (
+                  <TableCell>Reason</TableCell>
+                ) : (
+                  <SortableHeader column="status" sort={sort} onSort={sortBy}>
+                    Status
+                  </SortableHeader>
+                )}
                 {canWrite && <TableCell align="right">Actions</TableCell>}
               </TableRow>
             </TableHead>
@@ -326,7 +373,7 @@ export function ProjectsPage() {
                     </Typography>
                   </TableCell>
                   <TableCell align="right">
-                    <CompletionCell project={project} />
+                    <CompletionCell project={project} stacked />
                   </TableCell>
                   <TableCell>
                     {showDeleted ? (
@@ -513,36 +560,81 @@ function PortfolioQuickView({ summary }: { summary: PortfolioSummary }) {
 }
 
 /**
+ * A column header that sorts, and says so to a screen reader as well as to an eye.
+ *
+ * <p>`TableSortLabel` inside the cell rather than a click handler on the cell itself: the
+ * arrow only appears on the column in force, `aria-sort` lands on the header where a reader
+ * looks for it, and the whole thing is reachable from the keyboard without any of that being
+ * written twice per column.</p>
+ */
+function SortableHeader({
+  column,
+  sort,
+  onSort,
+  align,
+  minWidth,
+  children,
+}: {
+  column: SortColumn;
+  sort: SortOrder;
+  onSort: (column: SortColumn) => void;
+  align?: 'right' | undefined;
+  minWidth?: number | undefined;
+  children: React.ReactNode;
+}) {
+  const active = sort.column === column;
+  return (
+    <TableCell
+      align={align ?? 'left'}
+      sortDirection={active ? sort.direction : false}
+      sx={{ whiteSpace: 'nowrap', minWidth }}
+    >
+      <TableSortLabel
+        active={active}
+        direction={active ? sort.direction : 'asc'}
+        onClick={() => onSort(column)}
+      >
+        {children}
+      </TableSortLabel>
+    </TableCell>
+  );
+}
+
+/**
  * When a contract is due, and how long that leaves, in one cell.
  *
  * <p>The countdown is dimmer than the date on a job that is running and coloured on one that
  * is not: a contract past its date is the single thing on this screen somebody would want to
  * be caught by, and the rest of the column is a date they are only reading.</p>
  */
-function CompletionCell({ project }: { project: AdminProject }) {
+function CompletionCell({ project, stacked }: { project: AdminProject; stacked?: boolean }) {
   // Read once per render rather than hoisted to a constant: a list left open across midnight
   // would otherwise go on counting to yesterday.
   const label = completionLabel(project, new Date());
+  const note = label.note && (
+    <Typography
+      variant="caption"
+      component={stacked ? 'div' : 'span'}
+      color={label.late ? 'warning.main' : 'text.secondary'}
+      // Kept whole either way: a column narrow enough to break inside the brackets leaves
+      // "(152 days" over "late)", a phrase somebody has to reassemble before reading it.
+      sx={{ whiteSpace: 'nowrap' }}
+    >
+      {stacked ? `(${label.note})` : ` (${label.note})`}
+    </Typography>
+  );
+  /*
+    In the table the countdown goes under the date rather than after it. Held on one line the
+    column claims the width of the whole phrase — enough, with six columns, to push the last
+    one off the edge on a laptop — and the row is already two lines tall because of the project
+    name beside it, so the second line is free. The card has the width and reads as a sentence.
+  */
   return (
-    <Typography variant="caption" component="span">
-      {/*
-        Each half is kept whole and the line is allowed to break between them. Left to itself
-        a narrow column breaks inside the brackets, and "(152 days" over "late)" is a phrase
-        somebody has to reassemble before they can read the number.
-      */}
-      <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
+    <Typography variant="caption" component={stacked ? 'div' : 'span'}>
+      <Box component={stacked ? 'div' : 'span'} sx={{ whiteSpace: 'nowrap' }}>
         {label.date}
       </Box>
-      {label.note && (
-        <Typography
-          variant="caption"
-          component="span"
-          color={label.late ? 'warning.main' : 'text.secondary'}
-          sx={{ whiteSpace: 'nowrap' }}
-        >
-          {` (${label.note})`}
-        </Typography>
-      )}
+      {note}
     </Typography>
   );
 }

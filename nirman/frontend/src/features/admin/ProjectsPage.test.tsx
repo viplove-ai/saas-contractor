@@ -170,6 +170,32 @@ describe('ProjectsPage', () => {
     expect(within(card).getByText('-12.5%')).toBeInTheDocument();
   });
 
+  it('reorders the rows from the headers, and turns a column around on a second click', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage([
+      { id: 'p1', code: 'KSN01', name: 'Kausani', status: 'ACTIVE', quotedCost: 900, version: 0 },
+      { id: 'p2', code: 'ALM03', name: 'Almora', status: 'ACTIVE', quotedCost: 500, version: 0 },
+      { id: 'p3', code: 'BAG02', name: 'Bageshwar', status: 'ACTIVE', version: 0 },
+    ]);
+    await screen.findAllByText('KSN01');
+
+    const codes = () =>
+      table()
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => within(row).getAllByRole('cell')[0]?.textContent?.slice(0, 5));
+
+    // Opens on the order the server sent, which is by code.
+    expect(codes()).toEqual(['ALM03', 'BAG02', 'KSN01']);
+
+    await user.click(screen.getByRole('button', { name: 'Quoted value' }));
+    // Smallest first, and the project with no quoted value at the foot rather than the head.
+    expect(codes()).toEqual(['ALM03', 'KSN01', 'BAG02']);
+
+    await user.click(screen.getByRole('button', { name: 'Quoted value' }));
+    expect(codes()).toEqual(['KSN01', 'ALM03', 'BAG02']);
+  });
+
   it('shows which projects have no site to record anything against', async () => {
     renderPage();
     await screen.findAllByText('KSN01');
