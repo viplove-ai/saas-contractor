@@ -21,7 +21,14 @@ import { Link } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount } from '../../shared/formatters';
 import { useAuth } from '../auth/AuthContext';
-import { useAdminSites, useDeleteProject, useProjects, useRestoreProject } from './api';
+import {
+  useAdminSites,
+  useDeleteProject,
+  useProjectPortfolio,
+  useProjects,
+  useRestoreProject,
+} from './api';
+import { headlineAmount, summarise, type PortfolioBand, type PortfolioSummary } from './projectPortfolio';
 import { DeleteRecordDialog } from '../../shared/DeleteRecordDialog';
 import { ProjectFormDialog } from './ProjectFormDialog';
 import type { AdminProject, ProjectStatus } from './types';
@@ -78,6 +85,12 @@ export function ProjectsPage() {
   const canDelete = hasPermission('project:delete');
 
   const projects = useProjects(search, status, showDeleted);
+  /*
+    The figures at the head of the page are the company's, not the filtered list's, so they
+    come from their own unfiltered query. It is skipped on the deleted list, where they would
+    be answering a question nobody standing there is asking.
+  */
+  const portfolio = useProjectPortfolio(!showDeleted);
   // The site list follows the same side of the line, so a deleted project's site count is
   // the sites that went down with it rather than a flat zero.
   const sites = useAdminSites('', showDeleted);
@@ -93,6 +106,8 @@ export function ProjectsPage() {
   const visibleProjects = (projects.data ?? []).filter(
     (project) => !billingOnly || project.mode === 'BILLING_ONLY',
   );
+
+  const summary = summarise(portfolio.data?.content ?? [], portfolio.data?.totalElements);
 
   const sitesOf = (projectId: string) =>
     sites.data?.filter((site) => site.projectId === projectId) ?? [];
@@ -128,6 +143,14 @@ export function ProjectsPage() {
           </Button>
         )}
       </Stack>
+
+      {/*
+        The order book in four figures. Above the filters because it is about the company
+        rather than about what the boxes below it are asking for, and off the deleted list
+        entirely — that is the other register, and what a removed contract was worth is not a
+        total anybody is working to.
+      */}
+      {!showDeleted && portfolio.data && <PortfolioQuickView summary={summary} />}
 
       {/*
         Two filters and no more. Code, name and client are one box because that is how a
@@ -392,6 +415,75 @@ function formatDeletedAt(value: string | undefined): string {
     month: 'short',
     year: 'numeric',
   });
+}
+
+/**
+ * The order book at a glance: what is running, what is stopped, what has not started and what
+ * is done, each as a count and a rupee figure.
+ *
+ * <p>Four bands and not five statuses, and money that is the quoted cost alone — see
+ * {@link summarise} for why both of those are the way they are. The two notes underneath are
+ * the load-bearing part: a total that quietly left rows out reads exactly like a complete
+ * one, and the whole value of a headline is that somebody trusts it without checking.</p>
+ */
+function PortfolioQuickView({ summary }: { summary: PortfolioSummary }) {
+  const tiles: { label: string; band: PortfolioBand; lead?: boolean }[] = [
+    { label: 'Work in hand', band: summary.running, lead: true },
+    { label: 'On hold', band: summary.onHold },
+    { label: 'Yet to start', band: summary.planned },
+    { label: 'Completed', band: summary.finished },
+  ];
+  return (
+    <Paper
+      component="section"
+      aria-label="Order book"
+      elevation={0}
+      sx={{ p: 2, border: 1, borderColor: 'divider' }}
+    >
+      <Stack spacing={1.5}>
+        <Box
+          sx={{
+            display: 'grid',
+            // Two up on a phone, four across from a tablet. A single row of four on a 375px
+            // screen puts each figure in 90px, which wraps every one of them.
+            gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(4, 1fr)' },
+            gap: 2,
+          }}
+        >
+          {tiles.map((tile) => (
+            <Stack key={tile.label} spacing={0.25} sx={{ minWidth: 0 }}>
+              <Typography variant="caption" color="text.secondary">
+                {tile.label}
+              </Typography>
+              <Typography
+                variant="h6"
+                component="p"
+                fontWeight={700}
+                color={tile.lead ? 'secondary.main' : 'text.primary'}
+              >
+                {headlineAmount(tile.band.value)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {tile.band.count === 1 ? '1 project' : `${tile.band.count} projects`}
+              </Typography>
+            </Stack>
+          ))}
+        </Box>
+        {summary.all.unpriced > 0 && (
+          <Typography variant="caption" color="text.secondary">
+            {summary.all.unpriced === 1
+              ? '1 project carries no quoted value: it is counted above but not totalled.'
+              : `${summary.all.unpriced} projects carry no quoted value: they are counted above but not totalled.`}
+          </Typography>
+        )}
+        {summary.uncounted > 0 && (
+          <Typography variant="caption" color="warning.main">
+            {`These figures cover the ${summary.all.count} most recent projects. ${summary.uncounted} older ones are not in them.`}
+          </Typography>
+        )}
+      </Stack>
+    </Paper>
+  );
 }
 
 /**

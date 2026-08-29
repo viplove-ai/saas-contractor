@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectsPage } from './ProjectsPage';
-import type { AdminProject, AdminSite, AdminUser, PageResponse } from './types';
+import type { AdminProject, AdminSite, AdminUser, PageResponse, ProjectStatus } from './types';
 
 const get = vi.fn();
 const post = vi.fn();
@@ -105,6 +105,45 @@ describe('ProjectsPage', () => {
     vi.clearAllMocks();
     post.mockResolvedValue({ data: {} });
     put.mockResolvedValue({ data: {} });
+  });
+
+  it('heads the page with the order book, banded by where each contract stands', async () => {
+    const priced = (id: string, status: ProjectStatus, quotedCost: number): AdminProject => ({
+      id,
+      code: id.toUpperCase(),
+      name: 'A contract',
+      status,
+      quotedCost,
+      version: 0,
+    });
+    renderPage([
+      priced('p1', 'ACTIVE', 16187500),
+      priced('p3', 'ACTIVE', 5000000),
+      priced('p4', 'COMPLETED', 2500000),
+    ]);
+    await screen.findAllByText('P1');
+
+    const strip = within(screen.getByRole('region', { name: 'Order book' }));
+    const inHand = strip.getByText('Work in hand').closest('div') as HTMLElement;
+    // The two running contracts added, and read as a contractor reads it.
+    expect(within(inHand).getByText('\u20b92.12 Cr')).toBeInTheDocument();
+    expect(within(inHand).getByText('2 projects')).toBeInTheDocument();
+
+    const done = strip.getByText('Completed').closest('div') as HTMLElement;
+    expect(within(done).getByText('\u20b925 L')).toBeInTheDocument();
+    expect(within(done).getByText('1 project')).toBeInTheDocument();
+  });
+
+  it('says how many projects are counted in the strip but not totalled', async () => {
+    // Neither fixture carries a quoted cost, so the headline is zero and has to explain why.
+    renderPage();
+    await screen.findAllByText('KSN01');
+
+    expect(
+      screen.getByText(
+        '2 projects carry no quoted value: they are counted above but not totalled.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('shows which projects have no site to record anything against', async () => {

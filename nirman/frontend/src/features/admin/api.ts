@@ -31,6 +31,7 @@ export const adminKeys = {
   projects: (q: string, status: string, deleted: boolean) =>
     ['admin', 'projects', q, status, deleted] as const,
   allProjects: ['admin', 'projects'] as const,
+  projectPortfolio: ['admin', 'projects', 'portfolio'] as const,
   project: (id: string) => ['admin', 'project', id] as const,
   boqItems: (projectId: string) => ['admin', 'boq-items', projectId] as const,
   nitDocument: (projectId: string) => ['admin', 'nit-document', projectId] as const,
@@ -206,6 +207,26 @@ export function useProjects(q = '', status = '', deleted = false, enabled = true
           },
         })
       ).data.content,
+    staleTime: 15 * 60_000,
+  });
+}
+
+/**
+ * Every live project, for the figures at the head of the list.
+ *
+ * <p>Its own query rather than a cut of the list below it: the list is what the search box
+ * and the status picker asked for, and a headline that moved with them would report an order
+ * book of nothing the moment somebody filtered to COMPLETED. It carries the whole page
+ * envelope, because how many rows the server holds is the thing that says whether the totals
+ * are the whole story.</p>
+ */
+export function useProjectPortfolio(enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: adminKeys.projectPortfolio,
+    queryFn: async () =>
+      (await apiClient.get<PageResponse<AdminProject>>('/projects', { params: { size: PAGE_SIZE } }))
+        .data,
     staleTime: 15 * 60_000,
   });
 }
