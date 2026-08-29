@@ -247,7 +247,7 @@ export function ProjectsPage() {
               <TableRow>
                 <TableCell>Project</TableCell>
                 <TableCell>Client</TableCell>
-                <TableCell align="right">Contract value</TableCell>
+                <TableCell align="right">Quoted value</TableCell>
                 <TableCell align="right">Sites</TableCell>
                 {/* On the deleted list, why it went is the fact worth a column. */}
                 <TableCell>{showDeleted ? 'Reason' : 'Status'}</TableCell>
@@ -278,7 +278,7 @@ export function ProjectsPage() {
                   <TableCell>{project.clientDepartment || '—'}</TableCell>
                   <TableCell align="right">
                     <Typography variant="caption">
-                      {project.contractValue == null ? '—' : formatAmount(project.contractValue)}
+                      {project.quotedCost == null ? '—' : formatAmount(project.quotedCost)}
                     </Typography>
                   </TableCell>
                   <TableCell align="right">
@@ -403,7 +403,7 @@ function formatDeletedAt(value: string | undefined): string {
  * pushed every card past a screen height and made the list unscannable, and the full name
  * is one tap away on the detail screen.</p>
  *
- * <p>Contract value and the site count sit on one row as a pair. The site count is the one
+ * <p>Quoted value and the site count sit on one row as a pair. The site count is the one
  * that decides what you do next — a project with no sites can have nothing recorded against
  * it — so it keeps the words rather than being reduced to a bare number.</p>
  */
@@ -461,10 +461,10 @@ function ProjectCard({
         <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="baseline">
           <Stack spacing={0.25} sx={{ minWidth: 0 }}>
             <Typography variant="caption" color="text.secondary">
-              Contract value
+              Quoted value
             </Typography>
             <Typography variant="body2" fontWeight={600}>
-              {project.contractValue == null ? '—' : formatAmount(project.contractValue)}
+              {project.quotedCost == null ? '—' : formatAmount(project.quotedCost)}
             </Typography>
           </Stack>
           <Stack spacing={0.25} alignItems="flex-end">
