@@ -283,6 +283,64 @@ describe('VendorsPage', () => {
     expect(body).not.toHaveProperty('gstin');
   });
 
+  /**
+   * "Other" is a real answer and an empty one. The five kinds will never fit the scaffolding
+   * hire, the surveyor and the man with the water tanker, and a register row reading "Other"
+   * tells the next reader only what he already knew.
+   */
+  it('asks what he supplies when the list has no word for him', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderRegister();
+    await screen.findAllByText('Kausani Steel Traders');
+
+    await user.click(screen.getByRole('button', { name: 'Onboard a supplier' }));
+    await user.type(await screen.findByLabelText('Firm’s name'), 'Kausani Scaffolding Works');
+    // Not asked for until it is the answer: a note behind a kind that no longer shows it is
+    // a second answer nobody can see.
+    expect(screen.queryByLabelText('What does he supply?')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('combobox', { name: 'What he supplies' }));
+    await user.click(await screen.findByRole('option', { name: 'Something else' }));
+
+    const box = await screen.findByLabelText('What does he supply?');
+    // And required with it, or the answer is the one it replaced.
+    await user.click(screen.getByRole('button', { name: 'Onboard supplier' }));
+    expect(await screen.findByText('Say what he supplies')).toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+
+    await user.type(box, 'Scaffolding on hire');
+    await user.click(screen.getByRole('button', { name: 'Onboard supplier' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    const [url, body] = post.mock.calls[0] as [string, { suppliesNote?: string }];
+    expect(url).toBe('/vendors');
+    expect(body.suppliesNote).toBe('Scaffolding on hire');
+  });
+
+  /** The register calls him what he was called, not "Other". */
+  it('lists his own words where the list had none for him', async () => {
+    get.mockImplementation((url: string) => {
+      if (url === '/vendors') {
+        return Promise.resolve({
+          data: page([
+            {
+              ...VENDORS[0]!,
+              vendorType: 'OTHER' as const,
+              suppliesNote: 'Scaffolding on hire',
+            },
+          ]),
+        });
+      }
+      return Promise.reject(new Error(`unexpected GET ${url}`));
+    });
+    renderRegister();
+
+    await screen.findAllByText('Kausani Steel Traders');
+    const row = within(screen.getByRole('table')).getByText('KSN-STEEL').closest('tr')!;
+    expect(within(row).getByText('Scaffolding on hire')).toBeInTheDocument();
+    expect(within(row).queryByText('Something else')).not.toBeInTheDocument();
+  });
+
   it('refuses a half-typed GSTIN before the round trip', async () => {
     const user = userEvent.setup({ delay: null });
     renderRegister();

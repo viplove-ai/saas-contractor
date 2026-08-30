@@ -66,7 +66,10 @@ public final class MasterDataDtos {
      *                    numbers on it yet: no GSTIN, no bank account, no credit period.
      */
     public record VendorResponse(
-            UUID id, String code, String name, Vendor.Type vendorType, String contactPerson,
+            UUID id, String code, String name, Vendor.Type vendorType,
+            /** What OTHER means for this firm. Absent on every other kind. */
+            String suppliesNote,
+            String contactPerson,
             String mobile, String email, String address, String gstin, String pan,
             String bankAccountNo, String bankIfsc, int creditDays, BigDecimal openingBalance,
             boolean active, boolean provisional, Long version) {
@@ -84,6 +87,8 @@ public final class MasterDataDtos {
             @Size(max = 40) @Pattern(regexp = "[A-Za-z0-9._-]*") String code,
             @NotBlank @Size(max = 200) String name,
             @NotNull Vendor.Type vendorType,
+            /** Required when the kind is OTHER, refused on any other. See V53. */
+            @Size(max = 120) String suppliesNote,
             @Size(max = 150) String contactPerson,
             @Size(max = 20) String mobile,
             @Email @Size(max = 150) String email,
@@ -99,6 +104,7 @@ public final class MasterDataDtos {
     public record UpdateVendorRequest(
             @NotBlank @Size(max = 200) String name,
             @NotNull Vendor.Type vendorType,
+            @Size(max = 120) String suppliesNote,
             @Size(max = 150) String contactPerson,
             @Size(max = 20) String mobile,
             @Email @Size(max = 150) String email,
@@ -123,6 +129,7 @@ public final class MasterDataDtos {
     public record NameVendorRequest(
             @NotBlank @Size(max = 200) String name,
             @NotNull Vendor.Type vendorType,
+            @Size(max = 120) String suppliesNote,
             @Size(max = 150) String contactPerson,
             @Size(max = 20) String mobile,
             @Email @Size(max = 150) String email,
@@ -139,6 +146,7 @@ public final class MasterDataDtos {
     public record CorrectFieldVendorRequest(
             @NotBlank @Size(max = 200) String name,
             @NotNull Vendor.Type vendorType,
+            @Size(max = 120) String suppliesNote,
             @Size(max = 150) String contactPerson,
             @Size(max = 20) String mobile,
             @Email @Size(max = 150) String email,

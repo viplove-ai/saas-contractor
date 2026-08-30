@@ -11,6 +11,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -146,6 +147,44 @@ class FieldSupplierIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.provisional").value(false))
                 .andExpect(jsonPath("$.gstin").value("05AABCU9603R1ZM"));
+    }
+
+    /**
+     * "Other" is a real answer and an empty one. Five kinds will never fit the scaffolding
+     * hire, the surveyor and the man with the water tanker, and a register row reading
+     * "Other" tells the next reader only what he already knew.
+     */
+    @Test
+    @DisplayName("the fifth kind is refused without saying what it means")
+    void refusesOtherWithNothingBesideIt() throws Exception {
+        mockMvc.perform(post("/api/v1/vendors/field")
+                        .header("Authorization", "Bearer " + loginToken("vivek"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Kausani Scaffolding\",\"vendorType\":\"OTHER\"}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.detail").value(containsString("Say what he supplies")));
+    }
+
+    @Test
+    @DisplayName("what he supplies is kept beside OTHER and dropped beside anything else")
+    void keepsTheNoteOnlyWhereItMeansSomething() throws Exception {
+        String token = loginToken("vivek");
+        JsonNode named = nameSupplier(token, """
+                {"name":"Bhowali Scaffolding Works","vendorType":"OTHER",
+                 "suppliesNote":"Scaffolding on hire"}""");
+        assertThat(named.get("suppliesNote").asText()).isEqualTo("Scaffolding on hire");
+
+        // Changed to a kind the list has a word for: the note goes, rather than sitting
+        // invisibly behind a label that does not show it.
+        mockMvc.perform(put("/api/v1/vendors/" + named.get("id").asText() + "/field")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Bhowali Scaffolding Works","vendorType":"TRANSPORT",
+                                 "suppliesNote":"Scaffolding on hire","version":%d}"""
+                                .formatted(named.get("version").asLong())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.suppliesNote").doesNotExist());
     }
 
     @Test

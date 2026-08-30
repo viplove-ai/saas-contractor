@@ -185,6 +185,7 @@ public class MasterDataService {
             requireFreeCode(vendors.existsByOrgIdAndCode(orgId(), code), "Vendor", code);
         }
         Vendor vendor = new Vendor(orgId(), code, request.name(), request.vendorType());
+        vendor.setSuppliesNote(suppliesNoteFor(request.vendorType(), request.suppliesNote()));
         vendor.setContactPerson(request.contactPerson());
         vendor.setMobile(request.mobile());
         vendor.setEmail(request.email());
@@ -212,6 +213,7 @@ public class MasterDataService {
         vendor.setProvisional(false);
         vendor.setName(request.name());
         vendor.setVendorType(request.vendorType());
+        vendor.setSuppliesNote(suppliesNoteFor(request.vendorType(), request.suppliesNote()));
         vendor.setContactPerson(request.contactPerson());
         vendor.setMobile(request.mobile());
         vendor.setEmail(request.email());
@@ -255,6 +257,7 @@ public class MasterDataService {
 
         Vendor vendor = new Vendor(orgId(), generateVendorCode(request.vendorType(), name), name,
                 request.vendorType());
+        vendor.setSuppliesNote(suppliesNoteFor(request.vendorType(), request.suppliesNote()));
         vendor.setContactPerson(request.contactPerson());
         vendor.setMobile(request.mobile());
         vendor.setEmail(request.email());
@@ -297,6 +300,7 @@ public class MasterDataService {
         String was = vendor.getName();
         vendor.setName(name);
         vendor.setVendorType(request.vendorType());
+        vendor.setSuppliesNote(suppliesNoteFor(request.vendorType(), request.suppliesNote()));
         vendor.setContactPerson(request.contactPerson());
         vendor.setMobile(request.mobile());
         vendor.setEmail(request.email());
@@ -307,6 +311,31 @@ public class MasterDataService {
         audit.record("VENDOR", vendor.getId(), "FIELD_CORRECTION", null,
                 Map.of("name", name, "was", was, "provisional", vendor.isProvisional()), null);
         return mapper.toResponse(vendor);
+    }
+
+    /**
+     * What OTHER means for this firm, or nothing at all for every other kind.
+     *
+     * <p>Two rules and they run in opposite directions. <b>Required on OTHER</b>, because
+     * "Kausani Scaffolding Works — Other" tells the next reader only what he already knew, and
+     * a list of five will never fit the scaffolding hire, the surveyor and the man with the
+     * water tanker: Other is a real answer that needs a sentence. <b>Dropped on anything
+     * else</b> rather than refused, because it is not a mistake — it is what somebody typed
+     * before he changed the kind, and carrying it forward would leave "supplies scaffolding"
+     * sitting invisibly beside "Material dealer" for the row's whole life. A check constraint
+     * (V53) says the same thing from underneath, for the write that never comes through here.</p>
+     */
+    private String suppliesNoteFor(Vendor.Type type, String note) {
+        String cleaned = note == null ? null : note.trim();
+        if (type != Vendor.Type.OTHER) {
+            return null;
+        }
+        if (cleaned == null || cleaned.isEmpty()) {
+            throw new BusinessException("vendor.supplies-required",
+                    "Say what he supplies. \"Other\" on its own tells the next person to read "
+                            + "the register nothing he did not already know.");
+        }
+        return cleaned;
     }
 
     private String cleanVendorName(String raw) {

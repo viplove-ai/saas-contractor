@@ -72,11 +72,14 @@ export function VendorFormDialog({ open, vendor, onClose }: Props) {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<VendorForm>({
     resolver: zodResolver(vendorSchema),
     defaultValues: emptyVendor(),
   });
+
+  const supplies = watch('vendorType');
 
   // The dialog stays mounted between openings, so each opening reloads its own supplier —
   // otherwise the second one edited would open on the first one's values.
@@ -90,6 +93,7 @@ export function VendorFormDialog({ open, vendor, onClose }: Props) {
         ? {
             name: vendor.name,
             vendorType: vendor.vendorType,
+            suppliesNote: vendor.suppliesNote ?? '',
             contactPerson: vendor.contactPerson ?? '',
             mobile: vendor.mobile ?? '',
             email: vendor.email ?? '',
@@ -111,6 +115,7 @@ export function VendorFormDialog({ open, vendor, onClose }: Props) {
     const field = {
       name: values.name,
       vendorType: values.vendorType,
+      suppliesNote: values.suppliesNote,
       contactPerson: values.contactPerson,
       mobile: values.mobile,
       email: values.email,
@@ -167,6 +172,27 @@ export function VendorFormDialog({ open, vendor, onClose }: Props) {
               </TextField>
             )}
           />
+          {/*
+            The sentence beside "Something else". The five kinds will never fit the
+            scaffolding hire, the surveyor and the man with the water tanker — and a register
+            row reading "Other" tells the next reader only what he already knew, which is that
+            none of the four fitted. So the box appears with that answer and is required with
+            it. It is not shown otherwise, because a note sitting behind a kind that no longer
+            displays it is a second answer nobody can see; the server drops it on the way past.
+          */}
+          {supplies === 'OTHER' && (
+            <TextField
+              label="What does he supply?"
+              placeholder="Scaffolding on hire, survey work, water tankers…"
+              error={!!errors.suppliesNote}
+              helperText={
+                errors.suppliesNote?.message ??
+                'In your own words. This is what the register will call him.'
+              }
+              inputProps={{ maxLength: 120 }}
+              {...register('suppliesNote')}
+            />
+          )}
 
           <Divider textAlign="left">
             <Typography variant="overline" color="text.secondary">
@@ -307,6 +333,7 @@ function emptyVendor(): VendorForm {
   return {
     name: '',
     vendorType: 'MATERIAL',
+    suppliesNote: '',
     contactPerson: '',
     mobile: '',
     email: '',

@@ -744,6 +744,12 @@ what the record already says, not a second place to say it.
 the picture is of. **No new permission**; the requirement is enforced in `MaterialEvidencePolicy`
 and not by a check constraint. See the rule above.
 
+`V53` gives the supplier register's fifth kind a sentence: `vendors.supplies_note`, set only
+alongside `vendor_type = OTHER` and required there by `MasterDataService` for anything onboarded
+after it. The same split V34 drew for a lost day — the list is the half that can be counted and
+the note is the half a person reads — and the check constraint runs one way only, because rows
+that carried OTHER before the column existed are old rather than wrong. **No new permission.**
+
 **A note on JPQL and optional parameters.** `(:param IS NULL OR column = :param)` expands to two
 placeholders, and Postgres cannot infer a type for the one standing alone in `? IS NULL` — it
 refuses to prepare the statement with `could not determine data type of parameter`. The billing

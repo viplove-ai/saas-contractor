@@ -37,6 +37,8 @@ export function useVendors(q = '', type = '') {
 export interface VendorInput {
   name: string;
   vendorType: VendorType;
+  /** Required when the kind is OTHER, dropped by the server on any other. */
+  suppliesNote?: string | undefined;
   contactPerson?: string | undefined;
   mobile?: string | undefined;
   email?: string | undefined;
@@ -89,6 +91,7 @@ export function useUpdateVendor() {
 export interface FieldVendorInput {
   name: string;
   vendorType: VendorType;
+  suppliesNote?: string | undefined;
   contactPerson?: string | undefined;
   mobile?: string | undefined;
   email?: string | undefined;

@@ -31,6 +31,17 @@ public class Vendor extends BaseEntity {
     @Column(name = "vendor_type", nullable = false, length = 30)
     private Type vendorType = Type.MATERIAL;
 
+    /**
+     * What he supplies, written out, when the list has no word for it — the scaffolding hire,
+     * the surveyor, the man with the water tanker.
+     *
+     * <p>Only ever set alongside {@link Type#OTHER}, and a check constraint keeps it that way:
+     * "Material dealer" with "supplies scaffolding" written beside it is two answers to one
+     * question, and the second is invisible on every screen that shows the first. See V53.</p>
+     */
+    @Column(name = "supplies_note", length = 120)
+    private String suppliesNote;
+
     @Column(name = "contact_person", length = 150)
     private String contactPerson;
 
@@ -107,6 +118,14 @@ public class Vendor extends BaseEntity {
 
     public void setVendorType(Type vendorType) {
         this.vendorType = vendorType;
+    }
+
+    public String getSuppliesNote() {
+        return suppliesNote;
+    }
+
+    public void setSuppliesNote(String suppliesNote) {
+        this.suppliesNote = suppliesNote;
     }
 
     public String getContactPerson() {

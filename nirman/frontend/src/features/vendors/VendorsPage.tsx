@@ -21,7 +21,7 @@ import { apiErrorDetail } from '../../shared/apiClient';
 import { useAuth } from '../auth/AuthContext';
 import { useVendors } from './api';
 import { VendorFormDialog } from './VendorFormDialog';
-import { VENDOR_TYPE_LABEL, type Vendor, type VendorType } from './types';
+import { suppliesLabel, VENDOR_TYPE_LABEL, type Vendor, type VendorType } from './types';
 
 /**
  * The supplier register.
@@ -144,7 +144,7 @@ export function VendorsPage() {
                   <Box sx={{ minWidth: 0 }}>
                     <Typography fontWeight={600}>{vendor.name}</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {vendor.code} · {VENDOR_TYPE_LABEL[vendor.vendorType]}
+                      {vendor.code} · {suppliesLabel(vendor)}
                     </Typography>
                   </Box>
                   {!vendor.active && <Chip size="small" label="Inactive" />}
@@ -224,7 +224,9 @@ export function VendorsPage() {
                       {vendor.provisional && ' · details pending'}
                     </Typography>
                   </TableCell>
-                  <TableCell>{VENDOR_TYPE_LABEL[vendor.vendorType]}</TableCell>
+                  {/* His own words where the list had none for him — "Other" in a column
+                      answers nothing, and the note is what the register is for. */}
+                  <TableCell>{suppliesLabel(vendor)}</TableCell>
                   {/* An em dash, not a blank: "nobody has entered it" is worth reading as
                       a gap rather than as an empty cell somebody might take for none. */}
                   <TableCell>{vendor.contactPerson || '—'}</TableCell>

@@ -7,8 +7,15 @@ export const VENDOR_TYPE_LABEL: Record<VendorType, string> = {
   SUBCONTRACTOR: 'Subcontractor',
   SERVICE: 'Service provider',
   TRANSPORT: 'Transporter',
-  OTHER: 'Other',
+  OTHER: 'Something else',
 };
+
+/** What the register calls this kind — the note where there is one, the label otherwise. */
+export function suppliesLabel(vendor: Pick<Vendor, 'vendorType' | 'suppliesNote'>): string {
+  return vendor.vendorType === 'OTHER' && vendor.suppliesNote
+    ? vendor.suppliesNote
+    : VENDOR_TYPE_LABEL[vendor.vendorType];
+}
 
 /** A dealer as the register holds him. Everything an employer has to be able to reach. */
 export interface Vendor {
@@ -16,6 +23,11 @@ export interface Vendor {
   code: string;
   name: string;
   vendorType: VendorType;
+  /**
+   * What OTHER means for this firm — the scaffolding hire, the surveyor, the man with the
+   * water tanker. Only ever set alongside OTHER, and required there.
+   */
+  suppliesNote?: string;
   contactPerson?: string;
   mobile?: string;
   email?: string;

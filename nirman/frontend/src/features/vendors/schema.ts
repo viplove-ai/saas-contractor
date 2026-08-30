@@ -20,6 +20,7 @@ export const vendorSchema = z.object({
   // what he is called, and only the server can promise it is unique.
   name: z.string().trim().min(1, 'Enter the firm’s name').max(200, 'At most 200 characters'),
   vendorType: z.enum(['MATERIAL', 'SUBCONTRACTOR', 'SERVICE', 'TRANSPORT', 'OTHER']),
+  suppliesNote: optional(120),
   contactPerson: optional(150),
   mobile: z
     .string()
@@ -63,7 +64,22 @@ export const vendorSchema = z.object({
     .min(0, 'At least 0')
     .max(365, 'At most 365'),
   active: z.boolean(),
-});
+})
+  /*
+    "Other" on its own tells the next person to read the register nothing he did not already
+    know, and the list of five will never fit the scaffolding hire, the surveyor and the man
+    with the water tanker. So the box beside it is required — and only then, because a note
+    sitting behind a kind that no longer shows it is a second answer nobody can see.
+  */
+  .superRefine((values, ctx) => {
+    if (values.vendorType === 'OTHER' && !values.suppliesNote?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['suppliesNote'],
+        message: 'Say what he supplies',
+      });
+    }
+  });
 
 export type VendorForm = z.infer<typeof vendorSchema>;
 
