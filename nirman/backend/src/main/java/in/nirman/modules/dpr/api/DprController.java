@@ -34,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 import java.time.LocalDate;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -141,10 +142,18 @@ public class DprController {
         return dprs.attachPhoto(id, request);
     }
 
+    /**
+     * @param sections which parts to print, repeatable. Absent means the whole form. Anything
+     *                 left out is named in a line at the foot of the page — see
+     *                 {@link DprPdfService} for why an option to omit is only safe alongside a
+     *                 statement that something was omitted.
+     */
     @GetMapping("/{id}/pdf")
     @Operation(summary = "The printed report, rendered from the frozen figures rather than from today's records")
-    public ResponseEntity<byte[]> pdf(@PathVariable UUID id) {
-        DprPdfService.Rendered rendered = pdf.render(id);
+    public ResponseEntity<byte[]> pdf(@PathVariable UUID id,
+                                      @RequestParam(required = false)
+                                      Set<DprPdfService.Section> sections) {
+        DprPdfService.Rendered rendered = pdf.render(id, sections);
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION,

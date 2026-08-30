@@ -849,6 +849,57 @@ class DprWorkflowIntegrationTest extends AbstractIntegrationTest {
     }
 
     /**
+     * One report is three documents. The department gets the work and the conditions; the
+     * muster roll carries names and wages and the day's cost is the firm's own business, and
+     * the only way to send a shortened copy used to be a pen through the printed page.
+     *
+     * <p>Asserted by size rather than by reading the PDF: openhtmltopdf compresses its content
+     * streams, so the text is not there to grep for. A copy with four sections dropped that is
+     * not smaller than the whole form is a {@code sections} parameter that did nothing.</p>
+     */
+    @Test
+    @DisplayName("a printed copy can leave sections out, and is shorter for it")
+    void theReportPrintsAsAnExtract() throws Exception {
+        String token = loginToken("uttam");
+        byte[] whole = mockMvc.perform(get("/api/v1/dprs/" + VERIFIED_DPR + "/pdf")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        byte[] extract = mockMvc.perform(get("/api/v1/dprs/" + VERIFIED_DPR + "/pdf")
+                        .param("sections", "WORK")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        assertThat(new String(extract, 0, 5)).isEqualTo("%PDF-");
+        assertThat(extract.length).isLessThan(whole.length);
+    }
+
+    /**
+     * An empty tick list is somebody who changed their mind, not a request for a letterhead
+     * over two signature lines — so it prints the whole form, exactly as saying nothing does.
+     */
+    @Test
+    @DisplayName("asking for no sections prints the whole report")
+    void noSectionsPrintsEverything() throws Exception {
+        String token = loginToken("uttam");
+        byte[] whole = mockMvc.perform(get("/api/v1/dprs/" + VERIFIED_DPR + "/pdf")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        byte[] empty = mockMvc.perform(get("/api/v1/dprs/" + VERIFIED_DPR + "/pdf")
+                        .param("sections", "")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        assertThat(new String(empty, 0, 5)).isEqualTo("%PDF-");
+        assertThat(empty.length).isEqualTo(whole.length);
+    }
+
+    /**
      * The lost day prints too, and it prints a different page: the cause stands above
      * everything, and the sections that would be a column of dashes are not drawn at all.
      */

@@ -12,10 +12,12 @@ import type {
   LabourCountLine,
   PageResponse,
   PlantRateInput,
+  PrintSection,
   Site,
   SupplierDayLine,
   UpdateDprInput,
 } from './types';
+import { PRINT_SECTIONS } from './types';
 
 export const dprKeys = {
   sites: ['sites'] as const,
@@ -203,14 +205,53 @@ export function useSetPlantRates() {
  * <p>Fetched through the api client rather than opened in a new tab, because the PDF route
  * needs the Authorization header — a bare link would arrive without it and answer 401.</p>
  */
-export async function downloadDprPdf(id: string, dprNumber: string): Promise<void> {
-  const response = await apiClient.get<Blob>(`/dprs/${id}/pdf`, { responseType: 'blob' });
+/**
+ * The printed form, whole or as an extract.
+ *
+ * <p>{@link sections} is what to include. Passing every one of them, or none at all, prints
+ * the whole report — an empty tick list is somebody who changed their mind, not a request for
+ * a sheet with nothing but a letterhead on it. Anything left out is named in a line at the
+ * foot of the page by the server, which is what makes offering the choice honest: a copy with
+ * no plant table and nothing saying so reads as a site that had no plant.</p>
+ */
+export async function downloadDprPdf(
+  id: string,
+  dprNumber: string,
+  sections?: PrintSection[],
+): Promise<void> {
+  const response = await apiClient.get<Blob>(`/dprs/${id}/pdf`, {
+    responseType: 'blob',
+    ...(sections && sections.length > 0 && sections.length < PRINT_SECTIONS.length
+      ? { params: { sections }, paramsSerializer: { indexes: null } }
+      : {}),
+  });
   const url = URL.createObjectURL(response.data);
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = `${dprNumber}.pdf`;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * A short-lived signed link to a stored file, asked for when a thumbnail is about to be drawn.
+ *
+ * <p>Not carried on the report's own photo rows: the server re-checks the caller's site access
+ * every time it signs one, and signing a link per photograph for a register nobody opens would
+ * be a check per picture that nobody looks at. Cached for half the link's own life — it dies
+ * after ten minutes and a dead one draws a broken image, so it is refetched well before that
+ * and not on every re-render.</p>
+ */
+export function useDprPhotoUrl(attachmentId: string | undefined) {
+  return useQuery({
+    queryKey: ['dpr', 'attachment-url', attachmentId ?? ''] as const,
+    queryFn: async () =>
+      (await apiClient.get<{ url: string; fileName: string }>(`/attachments/${attachmentId}/url`))
+        .data,
+    enabled: Boolean(attachmentId),
+    staleTime: 5 * 60_000,
+    gcTime: 5 * 60_000,
+  });
 }
 
 // ------------------------------------------------------------------ entering the day here

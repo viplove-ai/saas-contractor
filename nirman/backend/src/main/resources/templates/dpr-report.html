@@ -27,6 +27,10 @@
         .rollup th { background: #f6f6f6; }
         .rollup td.total { font-weight: bold; }
         .note { font-size: 8pt; color: #555; margin-top: 3px; }
+        /* Boxed and darker than an ordinary note: it is the one line on the page that says
+           the page is not the whole report, and a reader who skims past it is the failure
+           the option was allowed on condition of avoiding. */
+        .omitted { border: 0.4mm solid #333; color: #222; padding: 2mm; margin-top: 6mm; }
         .narrative td { height: 34px; }
         .sign { margin-top: 18px; }
         .sign td { border: none; padding-top: 26px; }
@@ -97,6 +101,7 @@
 -->
 <div th:if="${dpr.siteOperational()}">
 
+<div th:if="${showWORK}">
 <h2>Work done</h2>
 <table th:if="${!dpr.workItems().isEmpty()}">
     <tr>
@@ -120,7 +125,9 @@
     </tr>
 </table>
 <p class="empty" th:if="${dpr.workItems().isEmpty()}">No work items recorded.</p>
+</div>
 
+<div th:if="${showLABOUR}">
 <h2>Labour on site</h2>
 <table th:if="${!dpr.labour().isEmpty()}">
     <tr>
@@ -177,7 +184,9 @@
     </tr>
 </table>
 <p class="empty" th:if="${dpr.labour().isEmpty()}">No attendance recorded for this day.</p>
+</div>
 
+<div th:if="${showPLANT}">
 <h2>Plant and machinery</h2>
 <table th:if="${!dpr.machinery().isEmpty()}">
     <tr>
@@ -208,9 +217,11 @@
     </tr>
 </table>
 <p class="empty" th:if="${dpr.machinery().isEmpty()}">No plant recorded.</p>
+</div>
 
 </div>
 
+<div th:if="${showCOST}">
 <h2>What the day cost</h2>
 <!--
   Four rows, three of which add up, and one that deliberately does not join the total.
@@ -237,7 +248,9 @@
         </td>
     </tr>
 </table>
+</div>
 
+<div th:if="${showOBSERVATIONS}">
 <h2 th:if="${dpr.siteOperational()}">Observations</h2>
 <!--
   Two rows on a form that used to have seven. The five that went were a summary of work the
@@ -280,7 +293,9 @@
         <td th:text="${dpr.nextDayPlan()} ?: '—'">—</td>
     </tr>
 </table>
+</div>
 
+<div th:if="${showPHOTOS}">
 <h2>Photographs</h2>
 <table th:if="${!dpr.photos().isEmpty()}">
     <tr>
@@ -295,6 +310,7 @@
     </tr>
 </table>
 <p class="empty" th:if="${dpr.photos().isEmpty()}">No photographs attached.</p>
+</div>
 
 <table class="sign">
     <tr>
@@ -318,6 +334,19 @@
 <p class="note" th:if="${dpr.rejectionReason()} != null">
     Returned to the preparer:
     <span th:text="${dpr.rejectionReason()}">reason</span>
+</p>
+
+<!--
+  What this copy leaves out, named. The whole reason a reader may be given a shortened form at
+  all is that this line exists: a sheet with no plant table and nothing saying so reads as a
+  site that had no plant, and the department would be right to treat that as the report's
+  answer. Printed below the signatures, because it is a fact about the paper rather than about
+  the day.
+-->
+<p class="note omitted" th:if="${!omitted.isEmpty()}">
+    This copy is an extract. Left out:
+    <span th:text="${#strings.listJoin(omitted, ', ')}">Photographs</span>.
+    The full report is on file.
 </p>
 
 </body>

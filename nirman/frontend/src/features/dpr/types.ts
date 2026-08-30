@@ -349,6 +349,47 @@ export interface PlantRateInput {
   basis?: RateBasis | undefined;
 }
 
+/**
+ * The parts of the printed form a reader may be given or not given.
+ *
+ * <p>Mirrors {@code DprPdfService.Section}. The identity block, the conditions, a lost day's
+ * cause and the signatures are not on the list and never come off: a sheet that can lose its
+ * own date is not a document.</p>
+ *
+ * <p>The order here is the order they appear on the page, which is the order the tick list
+ * shows them in — a print dialog whose boxes run in a different order from the paper makes
+ * the reader check twice.</p>
+ */
+export const PRINT_SECTIONS = [
+  'WORK',
+  'LABOUR',
+  'PLANT',
+  'COST',
+  'OBSERVATIONS',
+  'PHOTOS',
+] as const;
+
+export type PrintSection = (typeof PRINT_SECTIONS)[number];
+
+/** What each one is called on the dialog, and what leaving it out actually costs the reader. */
+export const PRINT_SECTION_LABEL: Record<PrintSection, string> = {
+  WORK: 'Work done',
+  LABOUR: 'Labour on site',
+  PLANT: 'Plant and machinery',
+  COST: 'What the day cost',
+  OBSERVATIONS: 'Observations',
+  PHOTOS: 'Photographs',
+};
+
+export const PRINT_SECTION_HINT: Record<PrintSection, string> = {
+  WORK: 'The quantities claimed against the contract, and what was recorded but not claimed.',
+  LABOUR: 'The muster roll, with names and hours. Rarely wanted outside the firm.',
+  PLANT: 'What machinery stood on the site, its hours, and what it was charged at.',
+  COST: 'Labour, material and other spending for the day. The firm’s business, not the department’s.',
+  OBSERVATIONS: 'Instructions from the department and the plan for tomorrow.',
+  PHOTOS: 'The list of photographs and their captions. The pictures themselves stay in the app.',
+};
+
 export interface PhotoResponse {
   id: string;
   attachmentId: string;

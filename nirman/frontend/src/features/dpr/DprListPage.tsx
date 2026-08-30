@@ -29,6 +29,8 @@ import { useSelectedSite } from '../../shared/siteSelection';
 import { StatusChip, type RecordStatus } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
 import { DeleteRecordDialog } from '../../shared/DeleteRecordDialog';
+import { DprPhotos } from './DprPhotos';
+import { PrintDprDialog } from './PrintDprDialog';
 import {
   downloadDprPdf,
   useApproveDpr,
@@ -39,7 +41,7 @@ import {
   useSites,
 } from './api';
 import { causeLabel, isEditable, isWritable } from './types';
-import type { Dpr, DprWorkflow, WorkItemResponse } from './types';
+import type { Dpr, DprWorkflow, PrintSection, WorkItemResponse } from './types';
 
 /*
   Verified and approved are two different places to be, and the register has to say which. A
@@ -282,6 +284,8 @@ function ReportPanel({
   const deleteDpr = useDeleteDpr();
   const [rejecting, setRejecting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [remarks, setRemarks] = useState('');
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
@@ -293,12 +297,16 @@ function ReportPanel({
   const measured = data.workItems.filter((item) => item.measured);
   const described = data.workItems.filter((item) => !item.measured);
 
-  async function download() {
+  async function download(sections: PrintSection[]) {
     try {
       setDownloadError(null);
-      await downloadDprPdf(data.id, data.dprNumber);
+      setPreparing(true);
+      await downloadDprPdf(data.id, data.dprNumber, sections);
+      setPrinting(false);
     } catch (error) {
       setDownloadError(apiErrorDetail(error));
+    } finally {
+      setPreparing(false);
     }
   }
 
@@ -320,7 +328,13 @@ function ReportPanel({
 
       <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
         <StatusChip status={STATUS_CHIP[data.workflowStatus]} />
-        <Button size="small" startIcon={<DownloadIcon />} onClick={() => void download()}>
+        {/*
+          Opens the tick list rather than downloading straight away. One report is sent to the
+          department, to a client's man and into the firm's own file, and those are not the
+          same document — the alternative was printing the whole thing and putting a pen
+          through the wage rows.
+        */}
+        <Button size="small" startIcon={<DownloadIcon />} onClick={() => setPrinting(true)}>
           Print
         </Button>
         {isWritable(data.workflowStatus) && (
@@ -482,6 +496,20 @@ function ReportPanel({
         </Paper>
       )}
 
+      {/*
+        The photographs, and not a count of them. A report is refused at handover without one
+        because the picture is the only part of the document that is evidence rather than
+        assertion — and evidence nobody on the panel can look at is a row saying evidence
+        exists. Shown to whoever may read the report, on the same footing as the muster roll
+        and the day's cost above it.
+      */}
+      <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
+        <Typography fontWeight={600} gutterBottom>
+          Photographs
+        </Typography>
+        <DprPhotos photos={data.photos} />
+      </Paper>
+
       {decide.isError && <Alert severity="error">{apiErrorDetail(decide.error)}</Alert>}
 
       {/*
@@ -586,6 +614,14 @@ function ReportPanel({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <PrintDprDialog
+        open={printing}
+        dprNumber={data.dprNumber}
+        busy={preparing}
+        onPrint={(sections) => void download(sections)}
+        onClose={() => setPrinting(false)}
+      />
 
       <DeleteRecordDialog
         open={deleting}

@@ -39,6 +39,8 @@ import {
 import { CorrectMaterialNameDialog } from '../inventory/CorrectMaterialNameDialog';
 import { RaiseCorrectionDialog } from '../inventory/RaiseCorrectionDialog';
 import { MATERIAL_NOT_LISTED } from './types';
+import type { PhotoResponse } from './types';
+import { DprPhotos } from './DprPhotos';
 
 /**
  * The parts of the day a supervisor can enter <b>from the report itself</b>.
@@ -897,7 +899,15 @@ export function PhotoCard({
 }: {
   files: File[];
   onChange: (files: File[]) => void;
-  uploaded: number;
+  /**
+   * The ones already on the report, shown rather than counted.
+   *
+   * <p>A count is the one thing a photograph cannot say. "3 on the report" is equally true of
+   * three pictures of the same wall and of three thumbs over a lens, and a supervisor
+   * reopening a report he sent yesterday cannot tell from it whether to take another. So the
+   * pictures come back.</p>
+   */
+  uploaded: PhotoResponse[];
   /** The site the day belongs to, which is half of what a photograph has to be named after. */
   siteCode: string | undefined;
   reportDate: string;
@@ -922,11 +932,15 @@ export function PhotoCard({
     <Card
       title="Photographs"
       hint={
-        uploaded + files.length === 0
+        uploaded.length + files.length === 0
           ? 'At least one, before the day can be handed over. They go up when the report is saved.'
           : 'What the work looked like today. They go up when the report is saved.'
       }
-      right={uploaded > 0 ? <Chip size="small" label={`${uploaded} on the report`} /> : undefined}
+      right={
+        uploaded.length > 0
+          ? <Chip size="small" label={`${uploaded.length} on the report`} />
+          : undefined
+      }
     >
       <Button component="label" startIcon={<AddIcon />} sx={{ alignSelf: 'flex-start' }}>
         Add photographs
@@ -941,7 +955,7 @@ export function PhotoCard({
               onChange([
                 ...files,
                 ...picked.map((file, at) =>
-                  renamed(file, siteCode, reportDate, uploaded + files.length + at + 1),
+                  renamed(file, siteCode, reportDate, uploaded.length + files.length + at + 1),
                 ),
               ]);
             }
@@ -1003,6 +1017,21 @@ export function PhotoCard({
             </Stack>
           ))}
         </Stack>
+      )}
+
+      {/*
+        The ones already up, under the ones still on the phone and separated by a heading. The
+        card used to say "3 on the report" and show nothing, so a supervisor reopening
+        yesterday's report could not tell whether he had photographed the right wall without
+        going to look — which is the whole thing the picture was demanded for.
+      */}
+      {uploaded.length > 0 && (
+        <>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Already on the report
+          </Typography>
+          <DprPhotos photos={uploaded} />
+        </>
       )}
 
       <Dialog open={Boolean(preview)} onClose={() => setPreview(null)} fullWidth maxWidth="md">

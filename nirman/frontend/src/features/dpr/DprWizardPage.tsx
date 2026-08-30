@@ -1026,7 +1026,7 @@ export function DprWizardPage() {
           <PhotoCard
             files={photos}
             onChange={setPhotos}
-            uploaded={saved?.photos.length ?? 0}
+            uploaded={saved?.photos ?? []}
             siteCode={sites.data?.find((site) => site.id === siteId)?.code}
             reportDate={reportDate}
           />

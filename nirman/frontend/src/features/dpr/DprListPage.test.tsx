@@ -112,6 +112,9 @@ function mockGets(detail: Dpr = SUBMITTED, listed: Dpr[] = [SUBMITTED]) {
     if (url === '/sites') return Promise.resolve({ data: SITES });
     if (url === '/dprs') return Promise.resolve({ data: page(listed) });
     if (url === '/dprs/d1') return Promise.resolve({ data: detail });
+    if (url.startsWith('/attachments/')) {
+      return Promise.resolve({ data: { url: 'https://minio.test/signed', fileName: 'wall.jpg' } });
+    }
     return Promise.reject(new Error(`unexpected GET ${url}`));
   });
 }
@@ -134,6 +137,61 @@ describe('DprListPage', () => {
     permissions = ['dpr:draft', 'dpr:verify'];
     mockGets();
     post.mockResolvedValue({ data: { ...SUBMITTED, workflowStatus: 'VERIFIED' } });
+  });
+
+  /**
+   * The picture is the only part of a report that is evidence rather than assertion, and a
+   * count of pictures is not the picture. Everybody who may read the report may look at them.
+   */
+  it('shows the photographs on the report rather than counting them', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockGets({
+      ...SUBMITTED,
+      photos: [
+        {
+          id: 'ph-1',
+          attachmentId: 'att-1',
+          caption: 'North wall, third lift',
+          fileName: 'KSN-A-2025-06-10-1.jpg',
+          sizeBytes: 2048,
+          sortOrder: 0,
+        },
+      ],
+    });
+    renderPage();
+    await openReport(user, 'DPR-2025-9002');
+
+    expect(await screen.findByRole('img', { name: 'North wall, third lift' })).toHaveAttribute(
+      'src',
+      'https://minio.test/signed',
+    );
+  });
+
+  it('says a report carries no photographs rather than showing an empty row', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await openReport(user, 'DPR-2025-9002');
+
+    expect(await screen.findByText('No photographs on this report.')).toBeInTheDocument();
+  });
+
+  /**
+   * One report goes to the department, to a client's man and into the firm's own file, and
+   * those are not the same document — the muster roll carries names and wages.
+   */
+  it('asks what to put on the printed copy, and warns that an extract says so', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await openReport(user, 'DPR-2025-9002');
+
+    await user.click(await screen.findByRole('button', { name: 'Print' }));
+    expect(await screen.findByText('Print DPR-2025-9002')).toBeInTheDocument();
+
+    // Everything is ticked to begin with: the whole report is the normal thing to print.
+    expect(screen.queryByText(/name what was left out/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: /Labour on site/ }));
+    expect(await screen.findByText(/name what was left out/)).toBeInTheDocument();
   });
 
   it('lists reports with their status and day cost', async () => {

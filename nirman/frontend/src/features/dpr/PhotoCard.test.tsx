@@ -1,8 +1,19 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PhotoCard } from './DayEntry';
+import type { PhotoResponse } from './types';
+
+const get = vi.fn();
+
+vi.mock('../../shared/apiClient', async () => {
+  const actual = await vi.importActual<typeof import('../../shared/apiClient')>(
+    '../../shared/apiClient',
+  );
+  return { ...actual, apiClient: { get: (...args: unknown[]) => get(...args) } };
+});
 
 /**
  * The photographs on a daily report.
@@ -18,17 +29,32 @@ vi.mock('../auth/AuthContext', () => ({
 }));
 
 /** The card is controlled; this is the state the wizard holds around it. */
-function Harness({ uploaded = 0 }: { uploaded?: number }) {
+function Harness({ uploaded = [] }: { uploaded?: PhotoResponse[] }) {
   const [files, setFiles] = useState<File[]>([]);
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
-    <PhotoCard
-      files={files}
-      onChange={setFiles}
-      uploaded={uploaded}
-      siteCode="KSN-A"
-      reportDate="2026-08-12"
-    />
+    <QueryClientProvider client={queryClient}>
+      <PhotoCard
+        files={files}
+        onChange={setFiles}
+        uploaded={uploaded}
+        siteCode="KSN-A"
+        reportDate="2026-08-12"
+      />
+    </QueryClientProvider>
   );
+}
+
+/** One already on the report, as the server hands it back. */
+function onReport(id: string, caption?: string): PhotoResponse {
+  return {
+    id,
+    attachmentId: `att-${id}`,
+    ...(caption === undefined ? {} : { caption }),
+    fileName: `${id}.jpg`,
+    sizeBytes: 1024,
+    sortOrder: 0,
+  };
 }
 
 function photo(name: string): File {
@@ -40,6 +66,11 @@ describe('PhotoCard', () => {
     // jsdom has no object URLs, and the thumbnails are the whole point of the card.
     URL.createObjectURL = vi.fn(() => 'blob:photo');
     URL.revokeObjectURL = vi.fn();
+    get.mockImplementation((url: string) =>
+      url.startsWith('/attachments/')
+        ? Promise.resolve({ data: { url: 'https://minio.test/signed', fileName: 'up.jpg' } })
+        : Promise.reject(new Error(`unexpected GET ${url}`)),
+    );
   });
 
   it('renames a picked photograph after the site and the day', async () => {
@@ -54,7 +85,7 @@ describe('PhotoCard', () => {
   /** Four pictures a phone all calls image.jpg have to end up as four different names. */
   it('numbers them in order, past the ones already on the report', async () => {
     const user = userEvent.setup({ delay: null });
-    render(<Harness uploaded={2} />);
+    render(<Harness uploaded={[onReport('a'), onReport('b')]} />);
 
     await user.upload(screen.getByLabelText('Add photographs'), [
       photo('image.jpg'),
