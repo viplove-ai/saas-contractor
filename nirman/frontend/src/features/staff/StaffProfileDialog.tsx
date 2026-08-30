@@ -2,11 +2,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Alert,
   Button,
+  Checkbox,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
+  FormControlLabel,
   MenuItem,
   Stack,
   TextField,
@@ -53,6 +56,7 @@ export function StaffProfileDialog({ open, member, onClose }: Props) {
     register,
     handleSubmit,
     reset,
+    setValue,
     watch,
     formState: { errors, isSubmitting },
   } = useForm<StaffProfileForm>({
@@ -68,13 +72,20 @@ export function StaffProfileDialog({ open, member, onClose }: Props) {
   }, [open, member, reset]);
 
   const employmentType = watch('employmentType');
+  const leaving = watch('leaving');
 
-  const submit = handleSubmit(async (values) => {
+  const submit = handleSubmit(async ({ leaving: isLeaving, ...values }) => {
     setServerError(null);
     try {
       await save.mutateAsync({
         userId: member.userId,
         ...values,
+        // The tick is the statement, so what it says wins over whatever the two boxes hold,
+        // and it stays out of the request itself — the record's answer is the date. The
+        // server overwrites both fields on every save, which is what lets an unticked box
+        // put somebody who never actually left back on the headcount.
+        exitDate: isLeaving ? values.exitDate : '',
+        exitReason: isLeaving ? values.exitReason : '',
         probationDays: values.probationDays ? Number(values.probationDays) : undefined,
         probationMonthlySalary: toAmount(values.probationMonthlySalary),
         confirmedMonthlySalary: toAmount(values.confirmedMonthlySalary),
@@ -311,27 +322,60 @@ export function StaffProfileDialog({ open, member, onClose }: Props) {
           />
 
           <Section>Leaving</Section>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField
-              label="Last day"
-              type="date"
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              error={!!errors.exitDate}
-              helperText={
-                errors.exitDate?.message ??
-                'Leave blank while they are still here. Setting it takes them off the headcount.'
-              }
-              {...register('exitDate')}
-            />
-            <TextField
-              label="Reason"
-              fullWidth
-              error={!!errors.exitReason}
-              helperText={errors.exitReason?.message}
-              {...register('exitReason')}
-            />
-          </Stack>
+          {/*
+            Almost nobody using this dialog is recording a departure — they are filling in a
+            bank account or a telephone number for somebody who is still here. So the two
+            fields are behind a tick rather than sitting open with a date box beside them: an
+            empty date box on an open form is an invitation to put today in it, and today in
+            that box takes a man off the headcount. Unticking is a statement too, and it
+            clears both fields on the way past, so a date typed and thought better of does
+            not survive being hidden.
+          */}
+          <Controller
+            control={control}
+            name="leaving"
+            render={({ field }) => (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={field.value}
+                    onChange={(event) => {
+                      field.onChange(event.target.checked);
+                      if (!event.target.checked) {
+                        setValue('exitDate', '');
+                        setValue('exitReason', '');
+                      }
+                    }}
+                  />
+                }
+                label="They are leaving, or have left"
+              />
+            )}
+          />
+          <Collapse in={leaving}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ pt: 1 }}>
+              <TextField
+                label="Last day"
+                type="date"
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                error={!!errors.exitDate}
+                helperText={
+                  errors.exitDate?.message ?? 'This is what takes them off the headcount.'
+                }
+                {...register('exitDate')}
+              />
+              <TextField
+                label="Reason"
+                fullWidth
+                error={!!errors.exitReason}
+                helperText={errors.exitReason?.message}
+                {...register('exitReason')}
+              />
+            </Stack>
+          </Collapse>
+
+          <Section>Anything else</Section>
           <TextField
             label="Notes"
             multiline
@@ -385,6 +429,9 @@ function fromProfile(member: StaffProfile): StaffProfileForm {
     confirmedMonthlySalary: amountText(member.confirmedMonthlySalary),
     confirmedOn: member.confirmedOn ?? '',
     contractEndsOn: member.contractEndsOn ?? '',
+    // Ticked only for somebody the record already says has gone, so the section opens for
+    // the one person in a hundred it is about and stays shut for the rest.
+    leaving: Boolean(member.exitDate),
     exitDate: member.exitDate ?? '',
     exitReason: member.exitReason ?? '',
     notes: member.notes ?? '',

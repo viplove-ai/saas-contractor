@@ -77,6 +77,10 @@ export const staffProfileSchema = z
     confirmedMonthlySalary: optionalAmount,
     confirmedOn: optionalDate,
     contractEndsOn: optionalDate,
+    // Nobody is leaving until somebody says so. The box is what reveals the two fields
+    // below it, and unticking it is what clears them — a date left lying in the form
+    // because a section was open is how a man still on the site goes off the headcount.
+    leaving: z.boolean(),
     exitDate: optionalDate,
     exitReason: optionalText(500),
     notes: z.string().trim().optional(),
@@ -99,6 +103,15 @@ export const staffProfileSchema = z
         code: z.ZodIssueCode.custom,
         path: ['confirmedOn'],
         message: 'They cannot have been confirmed before they joined',
+      });
+    }
+    // Marked as leaving with no day is half a statement: the headcount, the payroll and
+    // the salary history all turn on the date and none of them can use "at some point".
+    if (form.leaving && !form.exitDate) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['exitDate'],
+        message: 'Which day was their last?',
       });
     }
     if (form.joinedOn && form.exitDate && form.exitDate < form.joinedOn) {

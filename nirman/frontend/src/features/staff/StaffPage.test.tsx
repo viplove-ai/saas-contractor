@@ -175,6 +175,73 @@ describe('StaffPage', () => {
     expect(body.aadhaarLast4).toBeUndefined();
   });
 
+  /**
+   * The two leaving fields are behind a tick, and the tick is off. Almost every visit to
+   * this dialog is about a telephone number, and an open date box is what gets today typed
+   * into it.
+   */
+  it('keeps the leaving fields shut until somebody says they are leaving', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('Deepak Joshi');
+
+    const row = within(screen.getByRole('table')).getByText('deepak').closest('tr')!;
+    await user.click(within(row).getByRole('button', { name: 'Record' }));
+    await screen.findByLabelText('Aadhaar — last 4 digits');
+
+    expect(screen.getByLabelText('Last day')).not.toBeVisible();
+
+    await user.click(screen.getByLabelText('They are leaving, or have left'));
+    const lastDay = screen.getByLabelText('Last day');
+    await waitFor(() => expect(lastDay).toBeVisible());
+    expect(lastDay).toHaveValue('');
+  });
+
+  it('will not mark somebody as leaving without saying which day', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('Deepak Joshi');
+
+    const row = within(screen.getByRole('table')).getByText('deepak').closest('tr')!;
+    await user.click(within(row).getByRole('button', { name: 'Record' }));
+    await screen.findByLabelText('Aadhaar — last 4 digits');
+
+    await user.click(screen.getByLabelText('They are leaving, or have left'));
+    await user.click(screen.getByRole('button', { name: 'Save the record' }));
+
+    expect(await screen.findByText('Which day was their last?')).toBeInTheDocument();
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  /** Unticking is a statement of its own: he is still here, and the date goes with it. */
+  it('clears a date already on file when the tick comes off', async () => {
+    const user = userEvent.setup({ delay: null });
+    get.mockImplementation((url: string) => {
+      if (url === '/staff')
+        return Promise.resolve({
+          data: [{ ...STAFF[0]!, exitDate: '2026-06-30', exitReason: 'Resigned' }, STAFF[1]!],
+        });
+      if (url === '/staff/dashboard') return Promise.resolve({ data: DASHBOARD });
+      return Promise.reject(new Error(`unexpected GET ${url}`));
+    });
+    renderPage();
+    await screen.findAllByText('Deepak Joshi');
+
+    const row = within(screen.getByRole('table')).getByText('deepak').closest('tr')!;
+    await user.click(within(row).getByRole('button', { name: 'Record' }));
+    const tick = await screen.findByLabelText('They are leaving, or have left');
+    expect(tick).toBeChecked();
+    expect(screen.getByLabelText('Last day')).toHaveValue('2026-06-30');
+
+    await user.click(tick);
+    await user.click(screen.getByRole('button', { name: 'Save the record' }));
+
+    await waitFor(() => expect(put).toHaveBeenCalledOnce());
+    const body = put.mock.calls[0]![1] as { exitDate?: string; exitReason?: string };
+    expect(body.exitDate).toBeUndefined();
+    expect(body.exitReason).toBeUndefined();
+  });
+
   it('will not take a whole Aadhaar number', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
