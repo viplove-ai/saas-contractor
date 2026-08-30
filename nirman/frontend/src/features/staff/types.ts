@@ -56,6 +56,18 @@ export interface StaffProfile {
   pfOnFullWages: boolean;
   noticePeriodDays?: number;
 
+  /**
+   * What the firm provides on top of the salary. Facilities, not money: the Code on Wages
+   * excludes the value of accommodation and a sum defraying special expenses from wages, so
+   * neither is a component of the structure and neither reaches a payslip.
+   */
+  accommodationProvided: boolean;
+  accommodationNote?: string;
+  fuelProvided: boolean;
+  /** A fixed monthly figure, or absent where fuel is met at actuals against bills. */
+  fuelMonthlyAmount?: number;
+  fuelNote?: string;
+
   employmentType: EmploymentType;
   joinedOn?: string;
   probationDays?: number;

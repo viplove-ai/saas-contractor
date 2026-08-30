@@ -1,6 +1,6 @@
 package in.nirman.modules.payroll;
 
-import in.nirman.modules.payroll.domain.StatutoryContributions;
+import in.nirman.common.StatutoryContributions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

@@ -171,6 +171,36 @@ public class StaffProfile extends BaseEntity {
     @Column(name = "notice_period_days")
     private Integer noticePeriodDays;
 
+    /*
+     * ------------------------------------------------------------------ what the firm provides
+     *
+     * Facilities, not money, and deliberately not components of the salary structure. The Code
+     * on Wages excludes from "wages" both the value of house accommodation and a sum paid to
+     * defray special expenses entailed by the nature of the employment — which is what fuel for
+     * running between two blocks is. Putting either in the packet would inflate the total the
+     * fifty-per-cent test runs against and quietly move the provident fund wage of every member
+     * who is given a room. Nothing here reaches a payslip.
+     */
+
+    @Column(name = "accommodation_provided", nullable = false)
+    private boolean accommodationProvided;
+
+    @Column(name = "accommodation_note", length = 200)
+    private String accommodationNote;
+
+    @Column(name = "fuel_provided", nullable = false)
+    private boolean fuelProvided;
+
+    /**
+     * A fixed monthly figure, or null where fuel is met at actuals against bills — which is
+     * the commoner arrangement, and is not the same statement as zero.
+     */
+    @Column(name = "fuel_monthly_amount", precision = 14, scale = 2)
+    private BigDecimal fuelMonthlyAmount;
+
+    @Column(name = "fuel_note", length = 200)
+    private String fuelNote;
+
     protected StaffProfile() {
     }
 
@@ -466,5 +496,45 @@ public class StaffProfile extends BaseEntity {
 
     public void setNoticePeriodDays(Integer noticePeriodDays) {
         this.noticePeriodDays = noticePeriodDays;
+    }
+
+    public boolean isAccommodationProvided() {
+        return accommodationProvided;
+    }
+
+    public void setAccommodationProvided(boolean accommodationProvided) {
+        this.accommodationProvided = accommodationProvided;
+    }
+
+    public String getAccommodationNote() {
+        return accommodationNote;
+    }
+
+    public void setAccommodationNote(String accommodationNote) {
+        this.accommodationNote = accommodationNote;
+    }
+
+    public boolean isFuelProvided() {
+        return fuelProvided;
+    }
+
+    public void setFuelProvided(boolean fuelProvided) {
+        this.fuelProvided = fuelProvided;
+    }
+
+    public BigDecimal getFuelMonthlyAmount() {
+        return fuelMonthlyAmount;
+    }
+
+    public void setFuelMonthlyAmount(BigDecimal fuelMonthlyAmount) {
+        this.fuelMonthlyAmount = fuelMonthlyAmount;
+    }
+
+    public String getFuelNote() {
+        return fuelNote;
+    }
+
+    public void setFuelNote(String fuelNote) {
+        this.fuelNote = fuelNote;
     }
 }

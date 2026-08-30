@@ -83,6 +83,11 @@ export const staffProfileSchema = z
     esiApplicable: z.boolean(),
     pfOnFullWages: z.boolean(),
     noticePeriodDays: z.string().trim().optional().or(z.literal('')),
+    accommodationProvided: z.boolean(),
+    accommodationNote: optionalText(200),
+    fuelProvided: z.boolean(),
+    fuelMonthlyAmount: optionalAmount,
+    fuelNote: optionalText(200),
 
     employmentType: z.enum(['PERMANENT', 'CONTRACTUAL', 'PROBATION']),
     joinedOn: optionalDate,

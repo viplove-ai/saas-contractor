@@ -135,6 +135,15 @@ public class StaffRecordService {
         profile.setEsiApplicable(request.esiApplicable());
         profile.setPfOnFullWages(request.pfOnFullWages());
         profile.setNoticePeriodDays(request.noticePeriodDays());
+        // The detail only survives the offer. Unticking the box clears what was said about it,
+        // the way the leaving section clears its date: a sentence about a room nobody is given
+        // is one somebody reads next year and believes.
+        profile.setAccommodationProvided(request.accommodationProvided());
+        profile.setAccommodationNote(request.accommodationProvided()
+                ? blankToNull(request.accommodationNote()) : null);
+        profile.setFuelProvided(request.fuelProvided());
+        profile.setFuelMonthlyAmount(request.fuelProvided() ? request.fuelMonthlyAmount() : null);
+        profile.setFuelNote(request.fuelProvided() ? blankToNull(request.fuelNote()) : null);
         profile.setEmploymentType(request.employmentType());
         profile.setJoinedOn(request.joinedOn());
         profile.setProbationDays(request.probationDays());
@@ -352,6 +361,7 @@ public class StaffRecordService {
                     null, null, null, null, null, null, null, null, null, null, null, null,
                     null,
                     null, null, null, null, false, false, false, null,
+                    false, null, false, null, null,
                     EmploymentType.PERMANENT, null, null, null, null, null, null, null,
                     false, currentSalary, null, null, null, null);
         }
@@ -365,6 +375,8 @@ public class StaffRecordService {
                 profile.getEmployeeNumber(), profile.getDesignation(), profile.getUan(),
                 profile.getEsicNumber(), profile.isPfApplicable(), profile.isEsiApplicable(),
                 profile.isPfOnFullWages(), profile.getNoticePeriodDays(),
+                profile.isAccommodationProvided(), profile.getAccommodationNote(),
+                profile.isFuelProvided(), profile.getFuelMonthlyAmount(), profile.getFuelNote(),
                 profile.getEmploymentType(), profile.getJoinedOn(), profile.getProbationDays(),
                 profile.getProbationMonthlySalary(), profile.getConfirmedMonthlySalary(),
                 profile.getConfirmedOn(), profile.getContractEndsOn(), profile.probationEndsOn(),

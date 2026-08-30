@@ -66,6 +66,18 @@ public final class StaffDtos {
             boolean esiApplicable,
             boolean pfOnFullWages,
             Integer noticePeriodDays,
+            /**
+             * What the firm provides on top of the salary. Facilities, not money: the Code on
+             * Wages excludes the value of accommodation and a sum defraying special expenses
+             * from wages, so neither is a component of the structure and neither reaches a
+             * payslip.
+             */
+            boolean accommodationProvided,
+            String accommodationNote,
+            boolean fuelProvided,
+            /** A fixed monthly figure, or null where fuel is met at actuals against bills. */
+            BigDecimal fuelMonthlyAmount,
+            String fuelNote,
 
             StaffProfile.EmploymentType employmentType,
             LocalDate joinedOn,
@@ -131,6 +143,11 @@ public final class StaffDtos {
             /** Contribute to the fund on the whole wage rather than on the statutory ceiling. */
             boolean pfOnFullWages,
             @Min(0) @Max(365) Integer noticePeriodDays,
+            boolean accommodationProvided,
+            @Size(max = 200) String accommodationNote,
+            boolean fuelProvided,
+            @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal fuelMonthlyAmount,
+            @Size(max = 200) String fuelNote,
 
             @NotNull StaffProfile.EmploymentType employmentType,
             LocalDate joinedOn,

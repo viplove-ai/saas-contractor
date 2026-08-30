@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Alert,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -44,6 +45,13 @@ export function OfferLetterDialog({ open, member, onClose }: Props) {
   const issue = useIssueOfferLetter();
   const [serverError, setServerError] = useState<string | null>(null);
   const [issued, setIssued] = useState(false);
+  /*
+    Either job locks both buttons and the Close beside them. They are two ways of rendering the
+    same letter, and a preview started while the issue is still in flight would hand him a
+    second PDF while the first was being filed — and closing the dialog under an issue in
+    flight loses the only place its refusal could have been shown.
+  */
+  const busy = preview.isPending || issue.isPending;
 
   const {
     register,
@@ -181,13 +189,35 @@ export function OfferLetterDialog({ open, member, onClose }: Props) {
           </Stack>
         </Stack>
       </DialogContent>
+      {/*
+        Both buttons say so while they work. Rendering the letter is a round trip that ends in
+        a PDF built on the server, and on a site connection it is several seconds — long enough
+        that a button which simply goes grey reads as a button that did nothing, and the next
+        thing that happens is a second tap. Disabled is what stops the second request; the
+        spinner and the changed word are what stop him wanting to make it.
+      */}
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose}>Close</Button>
-        <Button onClick={doPreview} disabled={preview.isPending}>
-          Preview
+        <Button onClick={onClose} disabled={busy}>
+          Close
         </Button>
-        <Button variant="contained" onClick={doIssue} disabled={issue.isPending}>
-          Issue and file on the record
+        <Button
+          onClick={doPreview}
+          disabled={busy}
+          startIcon={
+            preview.isPending ? <CircularProgress size={16} color="inherit" /> : undefined
+          }
+        >
+          {preview.isPending ? 'Preparing the letter…' : 'Preview'}
+        </Button>
+        <Button
+          variant="contained"
+          onClick={doIssue}
+          disabled={busy}
+          startIcon={
+            issue.isPending ? <CircularProgress size={16} color="inherit" /> : undefined
+          }
+        >
+          {issue.isPending ? 'Issuing and filing…' : 'Issue and file on the record'}
         </Button>
       </DialogActions>
     </Dialog>

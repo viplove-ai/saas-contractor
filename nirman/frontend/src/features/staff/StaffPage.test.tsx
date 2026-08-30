@@ -48,6 +48,8 @@ const STAFF: StaffProfile[] = [
     pfApplicable: true,
     esiApplicable: true,
     pfOnFullWages: false,
+    accommodationProvided: false,
+    fuelProvided: false,
     joinedOn: '2026-02-01',
     probationDays: 90,
     probationMonthlySalary: 18000,
@@ -70,6 +72,8 @@ const STAFF: StaffProfile[] = [
     pfApplicable: false,
     esiApplicable: false,
     pfOnFullWages: false,
+    accommodationProvided: false,
+    fuelProvided: false,
     probationOverdue: false,
   },
 ];
@@ -478,6 +482,79 @@ describe('StaffPage', () => {
 
     expect(await screen.findByText(/more than half the packet/)).toBeInTheDocument();
     expect(screen.getByText(/Writing a low basic does not/)).toBeInTheDocument();
+  });
+
+  /**
+   * The letter is built into a PDF on the server, which on a site connection is several
+   * seconds. A button that only goes grey reads as a button that did nothing, and the next
+   * thing that happens is a second tap.
+   */
+  it('says the letter is being prepared while it is', async () => {
+    const objectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:letter');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    let release: (value: unknown) => void = () => {};
+    post.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('Deepak Joshi');
+
+    const row = within(screen.getByRole('table')).getByText('deepak').closest('tr')!;
+    await user.click(within(row).getByRole('button', { name: 'Offer letter' }));
+    await screen.findByText(/The letter states what the record already says/);
+
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+
+    // The word changes and both buttons lock, and Close with them: closing under a request
+    // in flight loses the only place its refusal could have been shown.
+    const busy = await screen.findByRole('button', { name: /Preparing the letter/ });
+    expect(busy).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Issue and file/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
+
+    release({ data: new Blob(['%PDF-'], { type: 'application/pdf' }) });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Preview' })).toBeEnabled());
+    objectUrl.mockRestore();
+  });
+
+  /**
+   * A room and a tank of petrol are terms of the engagement. They are deliberately not
+   * components of the salary: the Code on Wages keeps the value of accommodation and a sum
+   * defraying special expenses out of wages, so putting either in the packet would move the
+   * provident fund wage of everybody who is given a bed.
+   */
+  it('sends what the firm provides, and no fuel figure where there is none', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('Deepak Joshi');
+
+    const row = within(screen.getByRole('table')).getByText('deepak').closest('tr')!;
+    await user.click(within(row).getByRole('button', { name: 'Record' }));
+    await screen.findByRole('dialog');
+
+    await user.click(screen.getByRole('checkbox', { name: 'Accommodation is provided' }));
+    await user.type(
+      screen.getByLabelText('Which accommodation'),
+      'shared room at the site guest house',
+    );
+    await user.click(screen.getByRole('button', { name: 'Save the record' }));
+
+    await waitFor(() => expect(put).toHaveBeenCalledOnce());
+    expect(put.mock.calls[0]![1]).toMatchObject({
+      accommodationProvided: true,
+      accommodationNote: 'shared room at the site guest house',
+      fuelProvided: false,
+    });
+    // Undefined rather than zero, and undefined is what JSON.stringify leaves off the wire —
+    // so the server stores null. Fuel at actuals is an arrangement and no fuel at all is not
+    // the statement "a fuel allowance of nothing"; a zero here would be both.
+    const sent = put.mock.calls[0]![1] as { fuelMonthlyAmount?: number };
+    expect(sent.fuelMonthlyAmount).toBeUndefined();
+    expect(JSON.parse(JSON.stringify(sent))).not.toHaveProperty('fuelMonthlyAmount');
   });
 
   it('shows the register without the buttons to somebody who may only read it', async () => {

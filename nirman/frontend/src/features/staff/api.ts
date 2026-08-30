@@ -67,6 +67,11 @@ export interface StaffProfileInput {
   esiApplicable: boolean;
   pfOnFullWages: boolean;
   noticePeriodDays?: number | undefined;
+  accommodationProvided: boolean;
+  accommodationNote?: string | undefined;
+  fuelProvided: boolean;
+  fuelMonthlyAmount?: number | undefined;
+  fuelNote?: string | undefined;
   employmentType: EmploymentType;
   joinedOn?: string | undefined;
   probationDays?: number | undefined;

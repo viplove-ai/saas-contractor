@@ -52,6 +52,12 @@ two revisions effective the same day are a 409. The response carries `statutoryW
 and dearness allowance, raised to half the packet where the allowances exceed that — which is
 what tells an office whether the split it wrote is doing what it thinks.
 
+The annexure prints the deductions it can compute — provident fund and state insurance, through
+the same `StatutoryContributions` the payroll uses — with **"Not applicable"** where a scheme does
+not reach the member, and states in a box that tax is extra and no take-home is given.
+Accommodation and fuel (V56) print as a clause of their own; they are facilities and never
+components of the salary, so neither reaches the structure or a payslip.
+
 `POST /staff/{userId}/offer-letter/preview` returns the rendered PDF and keeps nothing.
 `POST /staff/{userId}/offer-letter` renders it **again on the server** and files it on the
 record as a `staff_documents` row of type `OFFER_LETTER`, returning that row. Both take only

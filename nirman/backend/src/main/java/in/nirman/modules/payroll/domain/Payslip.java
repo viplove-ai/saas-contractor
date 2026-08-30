@@ -1,6 +1,7 @@
 package in.nirman.modules.payroll.domain;
 
 import in.nirman.common.BaseEntity;
+import in.nirman.common.StatutoryContributions;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;

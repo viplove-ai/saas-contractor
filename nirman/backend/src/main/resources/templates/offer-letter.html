@@ -35,8 +35,17 @@
         .refline td { border: none; padding: 0; }
         table { width: 100%; border-collapse: collapse; }
         p { margin: 3mm 0; text-align: justify; }
-        ol { margin: 2mm 0 2mm 5mm; padding-left: 4mm; }
-        li { margin-bottom: 2mm; }
+        /*
+          The numbered terms are a table and not an ordered list, and the reason is not layout. This
+          renders through openhtmltopdf, which writes list markers into the PDF as a text run of
+          their own, positioned apart from the lines they belong to — so the page looks right
+          and anybody who copies the letter out of it gets "1. 2. 3. …" in a column at the top
+          and eight unnumbered paragraphs below. An offer letter is pasted into an email often
+          enough that this matters. A number in a cell is part of the text where it belongs.
+        */
+        table.terms { margin: 2mm 0; }
+        table.terms td { border: none; padding: 0 0 2mm 0; vertical-align: top; }
+        table.terms td.n { width: 7mm; padding-right: 1mm; }
         table.pay { margin-top: 3mm; }
         table.pay th, table.pay td { border: 0.2mm solid #999; padding: 1.6mm 2.5mm;
                                      font-size: 10pt; }
@@ -44,6 +53,8 @@
         table.pay td.num { text-align: right; }
         table.pay tr.total td, table.pay tr.total th { font-weight: bold; background: #f6f6f6; }
         .note { font-size: 8.5pt; color: #555; margin-top: 3mm; line-height: 1.4; }
+        .warn { border: 0.4mm solid #333; padding: 2.5mm 3mm; margin-top: 3mm; font-size: 9pt; }
+        table.pay td.na { text-align: center; color: #666; font-style: italic; }
         .sign { margin-top: 14mm; }
         .sign td { border: none; vertical-align: bottom; font-size: 10pt; }
         .sign .line { border-top: 0.3mm solid #444; padding-top: 1.5mm; width: 60mm;
@@ -87,42 +98,42 @@
     on the terms set out below.
 </p>
 
-<ol>
-    <li>
+<table class="terms">
+    <tr><td class="n" th:text="${termNo.joining} + '.'">1.</td><td>
         <strong>Date of joining.</strong> You are required to join on
         <strong th:text="${joiningDate}">date</strong>. This offer is made on the basis of
         that date; if you are unable to join on it, please tell us before you accept.
-    </li>
+    </td></tr>
 
-    <li th:if="${placeOfPosting}">
+    <tr th:if="${placeOfPosting}"><td class="n" th:text="${termNo.posting} + '.'">1.</td><td>
         <strong>Place of posting.</strong> You will be posted at
         <span th:text="${placeOfPosting}">place</span>. As our work is carried on at project
         sites, you may be transferred to any other site or office of the firm as the work
         requires.
-    </li>
+    </td></tr>
 
-    <li th:if="${reportingTo}">
+    <tr th:if="${reportingTo}"><td class="n" th:text="${termNo.reporting} + '.'">1.</td><td>
         <strong>Reporting.</strong> You will report to
         <span th:text="${reportingTo}">person</span>.
-    </li>
+    </td></tr>
 
-    <li th:if="${employmentType.name() == 'PROBATION'}">
+    <tr th:if="${employmentType.name() == 'PROBATION'}"><td class="n" th:text="${termNo.probation} + '.'">1.</td><td>
         <strong>Probation.</strong> You will be on probation for
         <span th:text="${probationDays}">0</span> days from the date of joining,
         <span th:if="${probationEnds}">that is until
             <span th:text="${probationEnds}">date</span></span>. Your confirmation in service
         will be communicated to you in writing; until it is, you remain on probation.
-    </li>
+    </td></tr>
 
-    <li th:if="${employmentType.name() == 'CONTRACTUAL'}">
+    <tr th:if="${employmentType.name() == 'CONTRACTUAL'}"><td class="n" th:text="${termNo.term} + '.'">1.</td><td>
         <strong>Term.</strong> This is a fixed-term engagement
         <span th:if="${contractEndsOn}">expiring on
             <span th:text="${contractEndsOn}">date</span></span>. It carries the same wages,
         hours and social security entitlements as a permanent employee doing the same work, as
         required by law.
-    </li>
+    </td></tr>
 
-    <li>
+    <tr><td class="n" th:text="${termNo.remuneration} + '.'">1.</td><td>
         <strong>Remuneration.</strong> Your salary will be
         <strong th:text="'Rs. ' + ${#numbers.formatDecimal(structure.monthlyAmount, 1, 'COMMA', 2, 'POINT')}
                           + ' per month'">amount</strong>
@@ -130,9 +141,9 @@
         a year), made up as shown in the annexure to this letter. Salary is paid monthly and
         is subject to deduction of tax at source and of your own contributions to the
         statutory funds.
-    </li>
+    </td></tr>
 
-    <li>
+    <tr><td class="n" th:text="${termNo.statutory} + '.'">1.</td><td>
         <strong>Provident fund, insurance and gratuity.</strong>
         <span th:if="${pfApplicable}">You will be enrolled in the Employees' Provident Fund,
             to which you and the firm each contribute at the statutory rate.</span>
@@ -140,27 +151,45 @@
             scheme.</span>
         Gratuity is payable on the terms and at the rates the law provides. All three are
         computed on wages as defined by the Code on Wages, which is shown in the annexure.
-    </li>
+    </td></tr>
 
-    <li th:if="${noticePeriodDays}">
+    <tr th:if="${providesAnything}"><td class="n" th:text="${termNo.provides} + '.'">1.</td><td>
+        <strong>What the firm provides.</strong>
+        <!--
+          Each part on its own block rather than a run of inline spans. Several of these are
+          conditional, and openhtmltopdf writes inline runs into the PDF in layout order rather
+          than reading order — so a closing sentence after two optional spans came out of the
+          extractor wrapped around the middle of them. Block elements extract in the order they
+          are written, which is what a letter pasted into an email needs.
+        -->
+        <div th:if="${accommodationSentence}" th:text="${accommodationSentence}">room</div>
+        <div th:if="${fuelSentence}" th:text="${fuelSentence}">fuel</div>
+        <div>
+            These are facilities provided while you hold this posting and are not part of your
+            salary; they do not form part of wages for the provident fund, gratuity or bonus,
+            and they may change if your posting changes.
+        </div>
+    </td></tr>
+
+    <tr th:if="${noticePeriodDays}"><td class="n" th:text="${termNo.notice} + '.'">1.</td><td>
         <strong>Notice.</strong> After confirmation, either you or the firm may end this
         employment by giving <span th:text="${noticePeriodDays}">0</span> days' notice in
         writing, or salary in lieu of the notice period.
-    </li>
+    </td></tr>
 
-    <li>
+    <tr><td class="n" th:text="${termNo.documents} + '.'">1.</td><td>
         <strong>Documents.</strong> Please bring the originals and one copy each of your proof
         of identity, permanent account number, bank passbook or a cancelled cheque, and your
         educational and experience certificates on the day you join.
-    </li>
+    </td></tr>
 
-    <li>
+    <tr><td class="n" th:text="${termNo.general} + '.'">1.</td><td>
         <strong>General.</strong> You will be governed by the firm's rules as they stand and
         as they may be amended, and by the law applicable to your employment. This offer is
         made on the basis of the information you have given us, and is liable to be withdrawn
         if any of it is found to be incorrect.
-    </li>
-</ol>
+    </td></tr>
+</table>
 
 <p th:if="${respondBy}">
     Please confirm your acceptance by signing and returning the copy of this letter on or
@@ -248,6 +277,61 @@
         </tr>
     </table>
 
+    <h2>Monthly deductions from this salary</h2>
+    <table class="pay">
+        <tr>
+            <th style="width: 55%;">Deduction</th>
+            <th class="num" style="width: 22%;">Per month (Rs.)</th>
+            <th class="num" style="width: 23%;">Per year (Rs.)</th>
+        </tr>
+        <tr>
+            <td>Provident fund @ 12%<span style="color: #555;" th:if="${pfApplicable}"
+                th:text="' of wages of Rs. ' + ${#numbers.formatDecimal(statutory.pfWages(), 1, 'COMMA', 2, 'POINT')}"> of wages</span></td>
+            <td class="num" th:if="${pfApplicable}"
+                th:text="${#numbers.formatDecimal(statutory.pfEmployee(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td class="num" th:if="${pfApplicable}"
+                th:text="${#numbers.formatDecimal(statutory.pfEmployee() * 12, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <!--
+              Said out loud rather than left off. A scheme that does not reach this member is a
+              fact he is entitled to read on the day he is offered the job, and a row quietly
+              missing from the table is one the office never notices it forgot to tick.
+            -->
+            <td class="na" colspan="2" th:unless="${pfApplicable}">Not applicable</td>
+        </tr>
+        <tr>
+            <td>State insurance @ 0.75%<span style="color: #555;" th:if="${esiApplicable}"
+                th:text="' of Rs. ' + ${#numbers.formatDecimal(statutory.esiWages(), 1, 'COMMA', 2, 'POINT')}"> of gross</span></td>
+            <td class="num" th:if="${esiApplicable}"
+                th:text="${#numbers.formatDecimal(statutory.esiEmployee(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td class="num" th:if="${esiApplicable}"
+                th:text="${#numbers.formatDecimal(statutory.esiEmployee() * 12, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td class="na" colspan="2" th:unless="${esiApplicable}">Not applicable</td>
+        </tr>
+        <tr th:if="${professionalTax != 0}">
+            <td>Professional tax</td>
+            <td class="num" th:text="${#numbers.formatDecimal(professionalTax, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td class="num" th:text="${#numbers.formatDecimal(professionalTax * 12, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        </tr>
+        <tr class="total">
+            <th>Total deductions (before tax)</th>
+            <td class="num" th:text="${#numbers.formatDecimal(totalDeductions, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td class="num" th:text="${#numbers.formatDecimal(totalDeductions * 12, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        </tr>
+    </table>
+
+    <!--
+      Boxed, because it is the one line on this page that stops the total above being read as a
+      take-home. A candidate who works his own net out of a table that leaves the tax out has
+      been misled by arithmetic he did himself, which is no better than being misled directly.
+    -->
+    <div class="warn">
+        <strong>Tax is not included above.</strong> Tax deducted at source is in addition to
+        these deductions. It depends on the tax regime you elect and on the declarations and
+        proofs you produce, none of which are settled at the date of this letter, so no figure
+        for it — and therefore no take-home figure — is stated here. Every deduction actually
+        made will appear, itemised, on your monthly payslip.
+    </div>
+
     <div class="note">
         <p>
             <strong>Wages for statutory purposes:</strong>
@@ -258,13 +342,12 @@
             bonus are computed on this figure and not on the gross.
         </p>
         <p>
-            Deductions from your monthly salary will be your own contributions to the
-            provident fund and, where applicable, to the state insurance scheme, professional
-            tax as charged by the State, and tax deducted at source. Those figures depend on
-            the tax regime you elect and on the declarations you make, so they are not stated
-            here; they will appear, itemised, on your monthly payslip. The firm's own
-            contributions to the provident fund, the pension scheme and the insurance scheme
-            are paid over and above the salary shown and are not deducted from it.
+            The firm's own contributions are paid over and above the salary shown and are not
+            deducted from it<span th:if="${pfApplicable}">: a further
+            <strong th:text="'Rs. ' + ${#numbers.formatDecimal(statutory.pfEmployer() + statutory.epsEmployer(), 1, 'COMMA', 2, 'POINT')}">0.00</strong>
+            a month to the provident fund and pension scheme</span><span th:if="${esiApplicable}">,
+            and Rs. <span th:text="${#numbers.formatDecimal(statutory.esiEmployer(), 1, 'COMMA', 2, 'POINT')}">0.00</span>
+            to the insurance scheme</span>.
         </p>
     </div>
 </div>

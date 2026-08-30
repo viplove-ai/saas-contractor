@@ -79,6 +79,8 @@ export function StaffProfileDialog({ open, member, onClose }: Props) {
   */
   const employmentType = useWatch({ control, name: 'employmentType' });
   const leaving = useWatch({ control, name: 'leaving' });
+  const accommodationProvided = useWatch({ control, name: 'accommodationProvided' });
+  const fuelProvided = useWatch({ control, name: 'fuelProvided' });
 
   const submit = handleSubmit(async ({ leaving: isLeaving, ...values }) => {
     setServerError(null);
@@ -96,6 +98,12 @@ export function StaffProfileDialog({ open, member, onClose }: Props) {
         noticePeriodDays: values.noticePeriodDays
           ? Number(values.noticePeriodDays)
           : undefined,
+        // The detail goes with the offer. Unticking clears what was said about it, the way
+        // the leaving section clears its date — a sentence about a room nobody is given is
+        // one somebody reads next year and believes.
+        accommodationNote: values.accommodationProvided ? values.accommodationNote : '',
+        fuelMonthlyAmount: values.fuelProvided ? toAmount(values.fuelMonthlyAmount) : undefined,
+        fuelNote: values.fuelProvided ? values.fuelNote : '',
         probationMonthlySalary: toAmount(values.probationMonthlySalary),
         confirmedMonthlySalary: toAmount(values.confirmedMonthlySalary),
         version: member.version,
@@ -296,6 +304,68 @@ export function StaffProfileDialog({ open, member, onClose }: Props) {
             ceiling — a screen that recomputed it monthly would drop him out in July and leave
             the establishment short-paid until the period ended.
           */}
+          {/*
+            Facilities rather than money, and deliberately not components of the salary: the
+            Code on Wages keeps the value of a room and a sum defraying special expenses out of
+            wages, so putting either in the packet would inflate the total the fifty-per-cent
+            test runs against and move the fund wage of everybody who is given a bed.
+          */}
+          <Section>What the firm provides</Section>
+          <Controller
+            control={control}
+            name="accommodationProvided"
+            render={({ field }) => (
+              <FormControlLabel
+                control={<Checkbox {...field} checked={field.value} />}
+                label="Accommodation is provided"
+              />
+            )}
+          />
+          <Collapse in={accommodationProvided}>
+            <TextField
+              label="Which accommodation"
+              fullWidth
+              error={!!errors.accommodationNote}
+              helperText={
+                errors.accommodationNote?.message ??
+                'Prints on the offer letter — "shared room at the site guest house"'
+              }
+              {...register('accommodationNote')}
+            />
+          </Collapse>
+          <Controller
+            control={control}
+            name="fuelProvided"
+            render={({ field }) => (
+              <FormControlLabel
+                control={<Checkbox {...field} checked={field.value} />}
+                label="Fuel for their own vehicle is provided"
+              />
+            )}
+          />
+          <Collapse in={fuelProvided}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ pt: 1 }}>
+              <TextField
+                label="A month"
+                fullWidth
+                inputMode="decimal"
+                error={!!errors.fuelMonthlyAmount}
+                helperText={
+                  errors.fuelMonthlyAmount?.message ??
+                  'Leave it empty for reimbursement at actuals — not the same as zero'
+                }
+                {...register('fuelMonthlyAmount')}
+              />
+              <TextField
+                label="Anything to add"
+                fullWidth
+                error={!!errors.fuelNote}
+                helperText={errors.fuelNote?.message}
+                {...register('fuelNote')}
+              />
+            </Stack>
+          </Collapse>
+
           <Alert severity="info" sx={{ mt: -1 }}>
             Insurance coverage is decided for a whole contribution period (April–September,
             October–March) and does not stop mid-period because a raise crossed the ₹21,000
@@ -538,6 +608,11 @@ function fromProfile(member: StaffProfile): StaffProfileForm {
     pfOnFullWages: member.pfOnFullWages,
     noticePeriodDays:
       member.noticePeriodDays === undefined ? '' : String(member.noticePeriodDays),
+    accommodationProvided: member.accommodationProvided,
+    accommodationNote: member.accommodationNote ?? '',
+    fuelProvided: member.fuelProvided,
+    fuelMonthlyAmount: amountText(member.fuelMonthlyAmount),
+    fuelNote: member.fuelNote ?? '',
     employmentType: member.employmentType,
     joinedOn: member.joinedOn ?? '',
     probationDays: member.probationDays === undefined ? '' : String(member.probationDays),

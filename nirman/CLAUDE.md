@@ -520,6 +520,29 @@ if the tests pass:
   was offered the job and a smaller one on his first payslip has been told two things by the
   same employer. **No new permission** — `staff:write` is already this act of custody, the
   argument V51 made about the passbook and the account number.
+  **The annexure states the deductions it can compute, and no net.** "Subject to statutory
+  deductions" is the sentence every candidate reads as meaning nothing and then queries on his
+  first payslip, so the provident fund and the state insurance are printed — they are arithmetic
+  on the structure and depend on nothing he has yet decided, and they are computed through the
+  *same* `StatutoryContributions` the payroll uses, so the letter and the first payslip agree by
+  construction rather than by luck. A scheme that does not reach him prints **"Not applicable"**
+  rather than going missing: a row quietly absent is one the office never notices it forgot to
+  tick. The tax stays out and says why, in a box, because a candidate who works his own net out
+  of a table that omits it has been misled by arithmetic he did himself.
+  **Accommodation and fuel are facilities, not components** (V56). The Code on Wages excludes
+  the value of house accommodation and a sum defraying special expenses from wages, so putting
+  either in the packet would inflate the total the fifty-per-cent test runs against and move the
+  fund wage of everybody given a bed. They sit on the profile beside the notice period, a flag
+  with a sentence next to it, and nothing about them reaches a payslip. A null fuel figure means
+  reimbursement at actuals, which is an arrangement and not the same statement as zero.
+  **The letter's sentences are built in Java, and its clause numbers are too.** openhtmltopdf
+  writes each inline run into the PDF separately and an extractor reads them back in layout
+  order, so a sentence assembled from conditional spans comes out of a copy-paste with its
+  clauses interleaved — and an `<ol>`'s markers came out as a column of bare numbers at the top
+  of the page with the clauses unnumbered below. The terms are a table whose numbers are decided
+  in the service (SpEL will not call a mutating counter from the page, and a counter run over the
+  whole list would number a permanent member's letter 1, 2, 4, 5), and anything conditional is
+  one string by the time the template sees it.
 - **A wrong stock figure is reported, never edited.** `stock_transactions` is append-only, and
   an ADJUSTMENT is `inventory:adjust`, the office's, because a role that can move a balance can
   hide a loss. That left the one man who can see the shed unable to say anything about it. So

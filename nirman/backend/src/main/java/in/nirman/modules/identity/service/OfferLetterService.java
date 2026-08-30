@@ -2,6 +2,7 @@ package in.nirman.modules.identity.service;
 
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import in.nirman.common.BusinessException;
+import in.nirman.common.StatutoryContributions;
 import in.nirman.modules.audit.AuditService;
 import in.nirman.modules.identity.api.dto.StaffDtos.OfferLetterRequest;
 import in.nirman.modules.identity.api.dto.StaffDtos.StaffDocumentResponse;
@@ -55,11 +56,14 @@ import java.util.UUID;
  * job of custody, which is the argument V51 made about holding a bank account number and
  * holding the picture of the passbook it was copied from.</p>
  *
- * <p><b>It computes no deductions.</b> The letter says what he is paid and states that the
- * provident fund, the state insurance and gratuity apply as the statutes require; it does not
- * print a net figure. A net depends on a tax regime he has not yet elected and declarations he
- * has not yet made, and a candidate who was shown a take-home on the day he was offered the
- * job and a smaller one on his first payslip has been told two things by the same employer.</p>
+ * <p><b>It prints the deductions it can compute, and no net.</b> The provident fund and the
+ * state insurance are arithmetic on the structure — they depend on nothing the candidate has
+ * yet decided — so the annexure states them, because "subject to statutory deductions" is the
+ * sentence every candidate reads as meaning nothing and then queries on his first payslip. The
+ * tax is a different case and stays out: it depends on a regime he has not elected and
+ * declarations he has not made. That is also why there is no net figure. A take-home shown on
+ * the day of the offer and a smaller one on the first payslip is two statements from one
+ * employer, and the difference would be exactly the tax this letter cannot know.</p>
  */
 @Service
 @Transactional
@@ -68,6 +72,14 @@ public class OfferLetterService {
     private static final String ENTITY = "STAFF_DOCUMENT";
     private static final DateTimeFormatter LONG_DATE = DateTimeFormatter.ofPattern("d MMMM yyyy");
     private static final DateTimeFormatter FILE_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    /** Indian grouping, the way every other rupee figure in this system is written. */
+    private static final java.text.NumberFormat MONEY =
+            java.text.NumberFormat.getInstance(new java.util.Locale("en", "IN"));
+
+    static {
+        MONEY.setMinimumFractionDigits(2);
+        MONEY.setMaximumFractionDigits(2);
+    }
 
     private final UserRepository users;
     private final StaffProfileRepository profiles;
@@ -206,10 +218,104 @@ public class OfferLetterService {
         context.setVariable("pfApplicable", profile.isPfApplicable());
         context.setVariable("esiApplicable", profile.isEsiApplicable());
 
+        /*
+          The deductions, on a full month with nothing lost. Computed through the same class
+          the payroll uses, so the figure on the letter is the figure on his first payslip
+          rather than a second implementation that agrees with it by luck.
+        */
+        StatutoryContributions.Result statutory = StatutoryContributions.of(
+                structure.getBasic().add(orZero(structure.getDearnessAllowance())),
+                orZero(structure.getHra()).add(orZero(structure.getConveyance()))
+                        .add(orZero(structure.getOtherAllowance())),
+                BigDecimal.ZERO, structure.getMonthlyAmount(), BigDecimal.ONE,
+                profile.isPfApplicable(), profile.isEsiApplicable(), profile.isPfOnFullWages());
+        BigDecimal professionalTax = orZero(structure.getProfessionalTax());
+        context.setVariable("statutory", statutory);
+        context.setVariable("professionalTax", professionalTax);
+        context.setVariable("totalDeductions", statutory.pfEmployee()
+                .add(statutory.esiEmployee()).add(professionalTax));
+
+        // What the firm provides on top of the packet. Facilities rather than money, and
+        // deliberately not components of it — see StaffProfile on why the statute keeps them
+        // out of wages.
+        /*
+          Written here as whole sentences rather than assembled from spans in the template, and
+          not for tidiness. openhtmltopdf writes each inline run into the PDF separately and an
+          extractor reads them back in layout order, so a sentence built from three conditional
+          spans comes out of a copy-paste with its clauses interleaved — which is precisely how
+          somebody reads this letter when they forward it in an email. One string is one run.
+        */
+        context.setVariable("accommodationSentence", profile.isAccommodationProvided()
+                ? profile.getAccommodationNote() == null
+                        ? "Accommodation will be provided to you."
+                        : "Accommodation will be provided to you — "
+                                + profile.getAccommodationNote() + "."
+                : null);
+        context.setVariable("fuelSentence", fuelSentence(profile));
+        context.setVariable("providesAnything",
+                profile.isAccommodationProvided() || profile.isFuelProvided());
+
+        /*
+          The clause numbers, worked out here rather than counted in the template.
+
+          Several clauses are conditional — a probation clause only for somebody on probation,
+          a term clause only for a fixed engagement — so a counter running over the whole list
+          would number a permanent member's letter 1, 2, 4, 5. Deciding it in Java means the
+          conditions live in one place and the template only prints what it is given, which is
+          also the only arrangement Thymeleaf will allow: SpEL refuses to call a mutating
+          method on a context variable, so a counter incremented from the page cannot work.
+        */
+        java.util.Map<String, Integer> termNo = new java.util.HashMap<>();
+        int n = 1;
+        termNo.put("joining", n++);
+        if (blankToNull(request.placeOfPosting()) != null) {
+            termNo.put("posting", n++);
+        }
+        if (blankToNull(request.reportingTo()) != null) {
+            termNo.put("reporting", n++);
+        }
+        if (profile.getEmploymentType() == StaffProfile.EmploymentType.PROBATION) {
+            termNo.put("probation", n++);
+        }
+        if (profile.getEmploymentType() == StaffProfile.EmploymentType.CONTRACTUAL) {
+            termNo.put("term", n++);
+        }
+        termNo.put("remuneration", n++);
+        termNo.put("statutory", n++);
+        if (profile.isAccommodationProvided() || profile.isFuelProvided()) {
+            termNo.put("provides", n++);
+        }
+        if (profile.getNoticePeriodDays() != null) {
+            termNo.put("notice", n++);
+        }
+        termNo.put("documents", n++);
+        termNo.put("general", n);
+        context.setVariable("termNo", termNo);
+
         String html = templates.process("offer-letter", context);
         String fileName = "offer-letter-" + FILE_DATE.format(letterDate) + "-"
                 + safe(user.getFullName()) + ".pdf";
         return new Rendered(toPdf(html), fileName, reference, letterDate);
+    }
+
+    /**
+     * What the letter says about fuel, as one sentence.
+     *
+     * <p>A figure means a fixed monthly allowance; no figure means reimbursement at actuals,
+     * which is the commoner arrangement and is not the same statement as zero.</p>
+     */
+    private static String fuelSentence(StaffProfile profile) {
+        if (!profile.isFuelProvided()) {
+            return null;
+        }
+        String sentence = profile.getFuelMonthlyAmount() == null
+                ? "Fuel for the running of your motorcycle on the firm's work will be "
+                        + "reimbursed at actuals against bills."
+                : "A fuel allowance of Rs. "
+                        + MONEY.format(profile.getFuelMonthlyAmount())
+                        + " a month will be paid for the running of your motorcycle on the "
+                        + "firm's work.";
+        return profile.getFuelNote() == null ? sentence : sentence + " " + profile.getFuelNote();
     }
 
     /**
@@ -266,6 +372,10 @@ public class OfferLetterService {
 
     private static String safe(String name) {
         return name == null ? "candidate" : name.replaceAll("[^A-Za-z0-9]+", "-").toLowerCase();
+    }
+
+    private static BigDecimal orZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     private static String blankToNull(String value) {

@@ -1,10 +1,21 @@
-package in.nirman.modules.payroll.domain;
+package in.nirman.common;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
  * What the statutes take out of a month's pay, and what the employer pays on top of it.
+ *
+ * <p><b>In {@code common/} rather than in {@code payroll/}, and not because three modules use
+ * it.</b> Two do — payroll works a month out with it, and the offer letter states on its
+ * annexure what will come out of the packet it is offering. The obvious alternative, a
+ * {@code PayrollLookup} that identity asks, is the one thing that cannot be built here:
+ * payroll already depends on identity through {@link
+ * in.nirman.modules.identity.service.StaffPayrollLookup}, so pointing identity back at payroll
+ * would close exactly the module cycle the boundaries exist to prevent. And the content
+ * settles it independently — these are rates fixed by national law, identical for every
+ * organisation and owned by no module's business logic, which is what {@code common/} is
+ * for.</p>
  *
  * <p>Pure arithmetic — no Spring, no repository, no clock. Everything a payslip's provident
  * fund and insurance lines depend on is an argument to {@link #of}, which is what makes the
