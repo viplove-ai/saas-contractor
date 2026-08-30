@@ -140,10 +140,17 @@ describe('IssueMaterialPage', () => {
       if (url === '/inventory/issues') return Promise.resolve({ data: NO_ISSUES });
       return Promise.reject(new Error(`unexpected GET ${url}`));
     });
-    post.mockResolvedValue({
-      data: { id: 'i1', issueNumber: 'ISS-2025-0001', lines: [] },
-    });
+    post.mockImplementation((url: string) =>
+      url === '/attachments'
+        ? Promise.resolve({ data: { id: 'att-1' } })
+        : Promise.resolve({ data: { id: 'i1', issueNumber: 'ISS-2025-0001', lines: [] } }),
+    );
   });
+
+  /** Small enough that the compressor passes it straight through, which jsdom can do. */
+  function jpeg(name = 'going-out.jpg'): File {
+    return new File([new Uint8Array(64)], name, { type: 'image/jpeg' });
+  }
 
   it('offers only what the store actually holds, with the quantity alongside', async () => {
     const user = userEvent.setup({ delay: null });
@@ -191,10 +198,40 @@ describe('IssueMaterialPage', () => {
     await user.type(screen.getByRole('spinbutton', { name: /Quantity/ }), '20');
 
     // A complete line, and still nothing to charge it to: no work item and no purpose.
+    await user.upload(
+      screen.getByLabelText('Photograph the material going out'),
+      jpeg(),
+    );
     expect(screen.getByRole('button', { name: /Issue 1 material/ })).toBeDisabled();
 
     await user.type(screen.getByRole('textbox', { name: 'What is it for' }), 'Column shuttering');
-    expect(screen.getByRole('button', { name: /Issue 1 material/ })).toBeEnabled();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Issue 1 material/ })).toBeEnabled(),
+    );
+  });
+
+  /**
+   * What left the store is a fact about the store and there is no paper behind it, so the
+   * picture is the only thing that stops "6 bags of cement" being a figure somebody rounded
+   * on the way to the office.
+   */
+  it('will not record an issue without a picture of the material going out', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findByRole('combobox', { name: 'Material' });
+
+    await user.click(screen.getByRole('combobox', { name: 'Material' }));
+    await user.click(await screen.findByRole('option', { name: /Cement/ }));
+    await user.type(screen.getByRole('spinbutton', { name: /Quantity/ }), '20');
+    await user.type(screen.getByRole('textbox', { name: 'What is it for' }), 'Column shuttering');
+
+    expect(screen.getByRole('button', { name: /Issue 1 material/ })).toBeDisabled();
+    expect(screen.getByText(/Photograph the material going out before/)).toBeInTheDocument();
+
+    await user.upload(screen.getByLabelText('Photograph the material going out'), jpeg());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Issue 1 material/ })).toBeEnabled(),
+    );
   });
 
   it('refuses a quantity the store cannot cover, as it is typed', async () => {
@@ -220,14 +257,23 @@ describe('IssueMaterialPage', () => {
     await user.click(screen.getByRole('combobox', { name: 'Material' }));
     await user.click(await screen.findByRole('option', { name: /Cement/ }));
     await user.type(screen.getByRole('spinbutton', { name: /Quantity/ }), '20');
+    await user.upload(screen.getByLabelText('Photograph the material going out'), jpeg());
     await user.click(screen.getByRole('button', { name: /Issue 1 material/ }));
 
-    await waitFor(() => expect(post).toHaveBeenCalledOnce());
-    const [url, body] = post.mock.calls[0] as [
+    // The picture into storage first, then the slip that points at it.
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    expect(post.mock.calls[0]![0]).toBe('/attachments');
+    const [url, body] = post.mock.calls[1] as [
       string,
-      { id: string; boqItemId: string; lines: { unitId: string; quantity: number }[] },
+      {
+        id: string;
+        boqItemId: string;
+        materialPhotoId: string;
+        lines: { unitId: string; quantity: number }[];
+      },
     ];
     expect(url).toBe('/inventory/issues');
+    expect(body.materialPhotoId).toBe('att-1');
     expect(body.id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     );

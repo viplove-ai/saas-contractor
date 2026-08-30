@@ -177,13 +177,38 @@ function mockGets(receipts: PageResponse<Receipt> = NO_RECEIPTS) {
   });
 }
 
+/** Small enough that the compressor passes it straight through, which jsdom can do. */
+function jpeg(name: string): File {
+  return new File([new Uint8Array(64)], name, { type: 'image/jpeg' });
+}
+
+/**
+ * The two pictures a delivery cannot be booked without. Taken through the camera button,
+ * which is how they are taken at a gate.
+ */
+async function photograph(user: ReturnType<typeof userEvent.setup>) {
+  await user.upload(screen.getByLabelText('Photograph the material'), jpeg('load.jpg'));
+  await user.upload(screen.getByLabelText('Photograph the bill or challan'), jpeg('challan.jpg'));
+}
+
+/** The body of the one POST that went to this path. Two uploads now precede the receipt. */
+function bodyPostedTo(url: string): Record<string, unknown> {
+  const call = post.mock.calls.find((one) => one[0] === url);
+  expect(call, `no POST to ${url}`).toBeDefined();
+  return call![1] as Record<string, unknown>;
+}
+
 describe('ReceiveMaterialPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     permissions = ['inventory:receive', 'inventory:read'];
     mockGets();
     put.mockResolvedValue({ data: {} });
-    post.mockResolvedValue({ data: { id: 'g1', grnNumber: 'GRN-2025-0001', lines: [] } });
+    post.mockImplementation((url: string) =>
+      url === '/attachments'
+        ? Promise.resolve({ data: { id: `att-${post.mock.calls.length}` } })
+        : Promise.resolve({ data: { id: 'g1', grnNumber: 'GRN-2025-0001', lines: [] } }),
+    );
   });
 
   /**
@@ -242,13 +267,17 @@ describe('ReceiveMaterialPage', () => {
   it('lets the storekeeper name a material the catalogue does not have', async () => {
     const user = userEvent.setup({ delay: null });
     permissions = ['inventory:receive', 'inventory:read', 'masterdata:provisional'];
-    post.mockImplementation((url: string) =>
-      url === '/materials/field'
-        ? Promise.resolve({
-            data: { id: 'mat-new', code: 'MAT-2026-0001', name: 'Tile Adhesive', provisional: true },
-          })
-        : Promise.resolve({ data: { id: 'g1', grnNumber: 'GRN-2025-0002', lines: [] } }),
-    );
+    post.mockImplementation((url: string) => {
+      if (url === '/materials/field') {
+        return Promise.resolve({
+          data: { id: 'mat-new', code: 'MAT-2026-0001', name: 'Tile Adhesive', provisional: true },
+        });
+      }
+      if (url === '/attachments') {
+        return Promise.resolve({ data: { id: `att-${post.mock.calls.length}` } });
+      }
+      return Promise.resolve({ data: { id: 'g1', grnNumber: 'GRN-2025-0002', lines: [] } });
+    });
     renderPage();
     await screen.findByRole('combobox', { name: 'Material' });
 
@@ -259,14 +288,15 @@ describe('ReceiveMaterialPage', () => {
     await user.click(screen.getByRole('combobox', { name: 'Unit' }));
     await user.click(await screen.findByRole('option', { name: 'BAG' }));
     await user.type(screen.getByRole('spinbutton', { name: 'Quantity' }), '12');
+    await photograph(user);
     await user.click(screen.getByRole('button', { name: /Book 1 material/ }));
 
-    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(4));
     // Named first, because the receipt cannot be posted until the line has an id to carry.
     expect(post.mock.calls[0]![0]).toBe('/materials/field');
     expect(post.mock.calls[0]![1]).toEqual({ name: 'Tile Adhesive', baseUnitId: 'unit-bag' });
-    expect(post.mock.calls[1]![0]).toBe('/inventory/goods-receipts');
-    expect((post.mock.calls[1]![1] as { lines: unknown[] }).lines).toEqual([
+    // Then the two pictures, then the delivery that points at them.
+    expect(bodyPostedTo('/inventory/goods-receipts').lines).toEqual([
       { materialId: 'mat-new', unitId: 'unit-bag', quantity: 12 },
     ]);
   });
@@ -292,14 +322,19 @@ describe('ReceiveMaterialPage', () => {
     await user.click(await screen.findByRole('option', { name: 'Cement OPC 43 Grade' }));
     await user.type(screen.getByRole('spinbutton', { name: 'Quantity' }), '100');
     await user.type(screen.getByRole('textbox', { name: 'Challan number' }), 'SS/856');
+    await photograph(user);
     await user.click(screen.getByRole('button', { name: /Book 1 material/ }));
 
-    await waitFor(() => expect(post).toHaveBeenCalledOnce());
-    const [url, body] = post.mock.calls[0] as [
-      string,
-      { id: string; challanNumber: string; lines: unknown[] },
-    ];
-    expect(url).toBe('/inventory/goods-receipts');
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(3));
+    const body = bodyPostedTo('/inventory/goods-receipts') as unknown as {
+      id: string;
+      challanNumber: string;
+      lines: unknown[];
+      materialPhotoId: string;
+      invoicePhotoId: string;
+    };
+    // Two different pictures: the load and the paper are two different claims.
+    expect(body.materialPhotoId).not.toBe(body.invoicePhotoId);
     expect(body.id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     );
@@ -333,8 +368,39 @@ describe('ReceiveMaterialPage', () => {
     await user.click(screen.getByRole('combobox', { name: 'Material' }));
     await user.click(await screen.findByRole('option', { name: 'Cement OPC 43 Grade' }));
     await user.type(screen.getByRole('spinbutton', { name: 'Quantity' }), '100');
+    await photograph(user);
 
     expect(screen.getByRole('button', { name: /Book 1 material/ })).toBeEnabled();
+  });
+
+  /**
+   * The delivery is the one document where the thing and the paper are both in front of one
+   * man for five minutes and never again. So neither picture is optional, and the screen says
+   * which one it is still waiting for rather than leaving a dead button.
+   */
+  it('will not book a delivery without a picture of the load and of the paper', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findByRole('combobox', { name: 'Material' });
+
+    await user.click(screen.getByRole('combobox', { name: 'Material' }));
+    await user.click(await screen.findByRole('option', { name: 'Cement OPC 43 Grade' }));
+    await user.type(screen.getByRole('spinbutton', { name: 'Quantity' }), '100');
+
+    expect(screen.getByRole('button', { name: /Book 1 material/ })).toBeDisabled();
+    expect(screen.getByText(/Photograph the material and the bill/)).toBeInTheDocument();
+
+    await user.upload(screen.getByLabelText('Photograph the material'), jpeg('load.jpg'));
+    expect(screen.getByRole('button', { name: /Book 1 material/ })).toBeDisabled();
+    expect(await screen.findByText(/bill or challan is still missing/)).toBeInTheDocument();
+
+    await user.upload(
+      screen.getByLabelText('Photograph the bill or challan'),
+      jpeg('challan.jpg'),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Book 1 material/ })).toBeEnabled(),
+    );
   });
 
   /** Somebody who may price one is still held to filling the box that is in front of him. */
@@ -360,6 +426,7 @@ describe('ReceiveMaterialPage', () => {
     await user.click(screen.getByRole('combobox', { name: 'Material' }));
     await user.click(await screen.findByRole('option', { name: 'Cement OPC 43 Grade' }));
     await user.type(screen.getByRole('spinbutton', { name: 'Quantity' }), '10');
+    await photograph(user);
     await user.click(screen.getByRole('button', { name: /Book 1 material/ }));
 
     expect(

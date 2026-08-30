@@ -3,10 +3,13 @@ package in.nirman.modules.inventory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.nirman.AbstractIntegrationTest;
+import in.nirman.InMemoryStorageConfig;
+import in.nirman.MovementEvidence;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
@@ -32,6 +35,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * did not — a site losing eight per cent of its cement to breakage needs that as its own
  * number, not buried in a total.</p>
  */
+// V52 demands a photograph of every movement of stock; the bucket here is a map.
+@Import(InMemoryStorageConfig.class)
 class InventoryReportIntegrationTest extends AbstractIntegrationTest {
 
     private static final String PASSWORD = "Nirman@123";
@@ -232,11 +237,12 @@ class InventoryReportIntegrationTest extends AbstractIntegrationTest {
         MvcResult result = mockMvc.perform(post("/api/v1/inventory/goods-receipts")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+                        .content(MovementEvidence.onReceipt(mockMvc, objectMapper, token,
+"""
                                 {"id":"%s","storeId":"%s","receiptDate":"%s",
                                  "lines":[{"materialId":"%s","unitId":"%s","quantity":%s,"rate":%s}]}"""
                                 .formatted(UUID.randomUUID(), STORE_A, LocalDate.now(),
-                                        materialId, unitId, quantity, rate)))
+                                        materialId, unitId, quantity, rate))))
                 .andExpect(status().isCreated())
                 .andReturn();
         String grnId = objectMapper.readTree(result.getResponse().getContentAsString())
@@ -253,11 +259,12 @@ class InventoryReportIntegrationTest extends AbstractIntegrationTest {
         MvcResult result = mockMvc.perform(post("/api/v1/inventory/issues")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+                        .content(MovementEvidence.onIssue(mockMvc, objectMapper, token,
+"""
                                 {"id":"%s","storeId":"%s","issueDate":"%s","purpose":"Report test",
                                  "lines":[{"materialId":"%s","unitId":"%s","quantity":%s}]}"""
                                 .formatted(UUID.randomUUID(), STORE_A, LocalDate.now(),
-                                        materialId, unitId, quantity)))
+                                        materialId, unitId, quantity))))
                 .andExpect(status().isCreated())
                 .andReturn();
         String issueId = objectMapper.readTree(result.getResponse().getContentAsString())

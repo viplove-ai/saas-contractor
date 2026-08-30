@@ -3,10 +3,13 @@ package in.nirman.modules.inventory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.nirman.AbstractIntegrationTest;
+import in.nirman.InMemoryStorageConfig;
+import in.nirman.MovementEvidence;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
@@ -31,6 +34,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * seeded cement would be a test whose expected numbers depend on which other tests ran
  * first.</p>
  */
+// V52 demands a photograph of every movement of stock; the bucket here is a map.
+@Import(InMemoryStorageConfig.class)
 class StockLedgerIntegrationTest extends AbstractIntegrationTest {
 
     private static final String PASSWORD = "Nirman@123";
@@ -168,11 +173,12 @@ class StockLedgerIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(post("/api/v1/inventory/issues")
                         .header("Authorization", "Bearer " + uttam)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+                        .content(MovementEvidence.onIssue(mockMvc, objectMapper, uttam,
+"""
                                 {"id":"%s","storeId":"%s","issueDate":"%s","purpose":"Test",
                                  "lines":[{"materialId":"%s","unitId":"%s","quantity":40}]}"""
                                 .formatted(UUID.randomUUID(), STORE_A, LocalDate.now(),
-                                        material, bagUnit)))
+                                        material, bagUnit))))
                 .andExpect(status().isUnprocessableEntity());
 
         assertBalance(uttam, material, "10.0000", "400.0000", "4000.00");
@@ -296,11 +302,12 @@ class StockLedgerIntegrationTest extends AbstractIntegrationTest {
         MvcResult result = mockMvc.perform(post("/api/v1/inventory/goods-receipts")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+                        .content(MovementEvidence.onReceipt(mockMvc, objectMapper, token,
+"""
                                 {"id":"%s","storeId":"%s","receiptDate":"%s",
                                  "challanNumber":"CH-TEST","lines":[%s]}"""
                                 .formatted(clientId, STORE_A, LocalDate.now(),
-                                        line(materialId, unitId, quantity, rate))))
+                                        line(materialId, unitId, quantity, rate)))))
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString());
@@ -319,11 +326,12 @@ class StockLedgerIntegrationTest extends AbstractIntegrationTest {
         MvcResult result = mockMvc.perform(post("/api/v1/inventory/issues")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+                        .content(MovementEvidence.onIssue(mockMvc, objectMapper, token,
+"""
                                 {"id":"%s","storeId":"%s","issueDate":"%s","purpose":"Ledger test",
                                  "lines":[{"materialId":"%s","unitId":"%s","quantity":%s}]}"""
                                 .formatted(UUID.randomUUID(), STORE_A, LocalDate.now(),
-                                        materialId, unitId, quantity)))
+                                        materialId, unitId, quantity))))
                 .andExpect(status().isCreated())
                 .andReturn();
         String issueId = objectMapper.readTree(result.getResponse().getContentAsString())

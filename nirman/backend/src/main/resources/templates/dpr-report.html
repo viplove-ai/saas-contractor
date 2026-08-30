@@ -221,6 +221,56 @@
 
 </div>
 
+<div th:if="${showMATERIAL}">
+<h2>Material in and out</h2>
+<!--
+  The one table on this sheet that is not the report's frozen snapshot, and it says so in the
+  line under the heading. The store books a delivery when the lorry arrives, which is
+  regularly after the report has been verified — a load at half past nine at night against a
+  report signed at six. The store's ledger is the authority on what moved and the report never
+  was, so this prints the ledger's answer as it stands at the moment of download and stamps
+  that moment. The cost roll-up below stays frozen, because that is what the report claimed
+  when it was signed; where the two differ, the difference is a late delivery.
+-->
+<p class="note" th:if="${material != null}">
+    From the store's ledger as it stands at <span th:text="${materialTakenAt}">—</span>, not
+    from the report's frozen figures. A delivery booked after the report was signed appears
+    here and not in the day's cost below.
+</p>
+<table th:if="${material != null and !material.materials().isEmpty()}">
+    <tr>
+        <th>Material</th>
+        <th style="width: 16mm;">Unit</th>
+        <th class="num" style="width: 22mm;">Received</th>
+        <th class="num" style="width: 26mm;">Value</th>
+        <th class="num" style="width: 22mm;">Issued</th>
+        <th class="num" style="width: 26mm;">Value</th>
+    </tr>
+    <tr th:each="row : ${material.materials()}">
+        <td th:text="${row.materialName()} ?: ${row.materialCode()}">Material</td>
+        <td th:text="${row.baseUnitCode()} ?: '—'">—</td>
+        <td class="num" th:text="${row.receivedQty()} ?: '—'">—</td>
+        <td class="num" th:text="${row.receivedValue()} ?: '—'">—</td>
+        <td class="num" th:text="${row.consumedQty()} ?: '—'">—</td>
+        <td class="num" th:text="${row.consumedValue()} ?: '—'">—</td>
+    </tr>
+    <tr>
+        <th colspan="3">Total</th>
+        <td class="num total" th:text="${material.receivedValue()}">0</td>
+        <td class="num"></td>
+        <td class="num total" th:text="${material.consumedValue()}">0</td>
+    </tr>
+</table>
+<p class="empty" th:if="${material == null or material.materials().isEmpty()}">
+    No material moved in or out of this site's stores on this day.
+</p>
+<p class="note" th:if="${material != null and !material.materials().isEmpty()}">
+    <span th:text="${material.receiptCount()}">0</span> delivery/deliveries and
+    <span th:text="${material.issueCount()}">0</span> issue(s). Received material is
+    inventory, not cost — it is costed when it is issued to the work face.
+</p>
+</div>
+
 <div th:if="${showCOST}">
 <h2>What the day cost</h2>
 <!--

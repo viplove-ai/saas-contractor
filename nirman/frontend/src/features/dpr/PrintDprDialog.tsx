@@ -14,7 +14,7 @@ import { useState } from 'react';
 import { PRINT_SECTIONS, PRINT_SECTION_HINT, PRINT_SECTION_LABEL, type PrintSection } from './types';
 
 /**
- * What to put on the printed copy.
+ * What to put on the copy being downloaded.
  *
  * <p>One report goes to three different readers and they are not entitled to the same document.
  * The department wants the work and the conditions; the muster roll carries names and wages and
@@ -57,7 +57,7 @@ export function PrintDprDialog({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Print {dprNumber}</DialogTitle>
+      <DialogTitle>Download {dprNumber}</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" gutterBottom>
           The date, the site, the conditions and the signatures are on every copy. Everything
@@ -103,14 +103,14 @@ export function PrintDprDialog({
         */}
         {chosen.length === 0 && (
           <Alert severity="warning" sx={{ mt: 1 }}>
-            Nothing is ticked, so the whole report will be printed.
+            Nothing is ticked, so the whole report will be downloaded.
           </Alert>
         )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
         <Button variant="contained" disabled={busy} onClick={() => onPrint(chosen)}>
-          {busy ? 'Preparing…' : 'Print'}
+          {busy ? 'Preparing…' : 'Download'}
         </Button>
       </DialogActions>
     </Dialog>

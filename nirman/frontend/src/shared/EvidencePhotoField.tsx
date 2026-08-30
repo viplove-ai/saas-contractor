@@ -1,8 +1,8 @@
-import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
 import { Alert, Button, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { compressPhoto, PHOTO_MAX_EDGE_PX } from '../offline/uploads';
 import { PhotoThumb } from './PhotoThumb';
+import { PickFileButtons } from './PickFileButtons';
 
 /**
  * A photograph of the paper behind a figure — the bill that justifies an expense, the receipt
@@ -25,9 +25,11 @@ import { PhotoThumb } from './PhotoThumb';
  * costs a round trip, and caught by a supplier nine months later it costs an argument nobody
  * can settle.</p>
  *
- * <p>{@code capture="environment"} opens the rear camera directly on a phone and is ignored on
- * a desk browser, where the same control is a file picker — which is what an accountant with a
- * stack of bills or a folder of UPI screenshots wants anyway.</p>
+ * <p><b>Two ways in, not one.</b> The camera button opens the rear lens directly, which is
+ * right for the man holding the bill; the one beside it takes what is already on the device,
+ * which is the accountant with a folder of UPI screenshots and the vendor's emailed PDF. See
+ * {@link PickFileButtons} for why that is two controls rather than one picker without a
+ * {@code capture} attribute.</p>
  */
 export function EvidencePhotoField({
   file,
@@ -95,22 +97,12 @@ export function EvidencePhotoField({
   return (
     <Stack spacing={1}>
       <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
-        <Button
-          component="label"
-          variant="outlined"
-          startIcon={<PhotoCameraOutlinedIcon />}
-          disabled={busy}
-          sx={{ minHeight: 48 }}
-        >
-          {busy ? 'Shrinking…' : file ? changeLabel : label}
-          <input
-            type="file"
-            accept="image/*,application/pdf"
-            capture="environment"
-            hidden
-            onChange={(e) => void pick(e.target.files?.[0])}
-          />
-        </Button>
+        <PickFileButtons
+          label={busy ? 'Shrinking…' : file ? changeLabel : label}
+          accept="image/*,application/pdf"
+          busy={busy}
+          onPick={(files) => void pick(files[0])}
+        />
         {file && (
           <Button color="error" onClick={() => onPick(null)} sx={{ minHeight: 48 }}>
             Remove

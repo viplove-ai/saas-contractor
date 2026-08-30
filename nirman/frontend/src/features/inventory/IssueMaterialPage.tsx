@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import { useMemo, useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
+import { EvidencePhotoField } from '../../shared/EvidencePhotoField';
 import { formatAmount, formatQuantity } from '../../shared/formatters';
 import { ReferenceNotice } from '../../shared/ReferenceNotice';
 import { StatusChip } from '../../shared/StatusChip';
@@ -60,6 +61,12 @@ export function IssueMaterialPage() {
   const [purpose, setPurpose] = useState('');
   const [issuedToName, setIssuedToName] = useState('');
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
+  /*
+    One picture, not two. There is no third party on an issue and no paper to disagree with —
+    what left the store is a fact about the store, and the photograph is what stops "6 bags of
+    cement" being a figure somebody rounded on the way to the office.
+  */
+  const [materialPhoto, setMaterialPhoto] = useState<File | null>(null);
 
   const stock = useStock(storeId || undefined);
   const units = useUnits();
@@ -108,11 +115,16 @@ export function IssueMaterialPage() {
   const chargeable = Boolean(boqItemId) || purpose.trim().length > 0;
 
   const submit = () => {
+    if (!materialPhoto) {
+      return;
+    }
     create.mutate(
       {
         id: crypto.randomUUID(),
+        siteId,
         storeId,
         issueDate,
+        materialPhoto,
         boqItemId: boqItemId || undefined,
         purpose: purpose || undefined,
         issuedToName: issuedToName || undefined,
@@ -126,6 +138,7 @@ export function IssueMaterialPage() {
         onSuccess: () => {
           setLines([emptyLine()]);
           setPurpose('');
+          setMaterialPhoto(null);
         },
       },
     );
@@ -257,6 +270,22 @@ export function IssueMaterialPage() {
         Add material
       </Button>
 
+      {/*
+        Between the lines and the button, in the order the man works in: he takes the material
+        out, he photographs it going, he writes the slip. Above the button, so an issue cannot
+        be typed past it.
+      */}
+      <Divider sx={{ pt: 1 }} />
+      <Typography variant="h2" sx={{ fontSize: '1.1rem' }}>
+        Evidence
+      </Typography>
+      <EvidencePhotoField
+        file={materialPhoto}
+        onPick={setMaterialPhoto}
+        label="Photograph the material going out"
+        changeLabel="Change the photo"
+      />
+
       {create.isError && <Alert severity="error">{apiErrorDetail(create.error)}</Alert>}
       {create.isSuccess && (
         <Alert severity="success">
@@ -268,13 +297,24 @@ export function IssueMaterialPage() {
         <Button
           variant="contained"
           color="secondary"
-          disabled={!storeId || complete.length === 0 || !chargeable || create.isPending}
+          disabled={
+            !storeId ||
+            complete.length === 0 ||
+            !chargeable ||
+            !materialPhoto ||
+            create.isPending
+          }
           onClick={submit}
           sx={{ minHeight: 48 }}
         >
           {create.isPending ? 'Saving…' : `Issue ${complete.length} material(s)`}
         </Button>
       </Stack>
+      {!materialPhoto && complete.length > 0 && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
+          Photograph the material going out before recording the issue.
+        </Typography>
+      )}
 
       <Divider sx={{ pt: 2 }} />
 

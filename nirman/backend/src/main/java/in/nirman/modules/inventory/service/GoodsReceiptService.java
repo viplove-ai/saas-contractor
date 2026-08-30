@@ -77,6 +77,7 @@ public class GoodsReceiptService {
     private final PeriodLockGuard periodLockGuard;
     private final DocumentNumberService documentNumbers;
     private final InventoryResponses responses;
+    private final MaterialEvidencePolicy evidence;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
 
@@ -85,8 +86,8 @@ public class GoodsReceiptService {
                                SiteLookup sites, SiteAccessGuard siteAccessGuard,
                                PeriodLockGuard periodLockGuard,
                                DocumentNumberService documentNumbers,
-                               InventoryResponses responses, CurrentUserProvider currentUser,
-                               AuditService audit) {
+                               InventoryResponses responses, MaterialEvidencePolicy evidence,
+                               CurrentUserProvider currentUser, AuditService audit) {
         this.receipts = receipts;
         this.lines = lines;
         this.ledger = ledger;
@@ -96,6 +97,7 @@ public class GoodsReceiptService {
         this.periodLockGuard = periodLockGuard;
         this.documentNumbers = documentNumbers;
         this.responses = responses;
+        this.evidence = evidence;
         this.currentUser = currentUser;
         this.audit = audit;
     }
@@ -168,6 +170,14 @@ public class GoodsReceiptService {
 
         List<GoodsReceiptItem> saved = saveLines(receipt.getId(), request.lines());
         applyTotals(receipt, saved);
+        /*
+          The two pictures, after the header exists to hang them off and before the audit row
+          says a delivery was booked. Refused here rather than by a field annotation so the
+          answer names which one is missing: a storekeeper told "evidence required" does not
+          know which camera to point where. See MaterialEvidencePolicy.
+        */
+        evidence.attachToReceipt(receipt.getId(), request.materialPhotoId(),
+                request.invoicePhotoId());
 
         audit.record("GOODS_RECEIPT", receipt.getId(), "CREATE", null,
                 Map.of("grnNumber", number, "storeId", store.id().toString(),

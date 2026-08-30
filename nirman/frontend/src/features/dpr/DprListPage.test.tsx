@@ -179,15 +179,15 @@ describe('DprListPage', () => {
    * One report goes to the department, to a client's man and into the firm's own file, and
    * those are not the same document — the muster roll carries names and wages.
    */
-  it('asks what to put on the printed copy, and warns that an extract says so', async () => {
+  it('asks what to put on the downloaded copy, and warns that an extract says so', async () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
     await openReport(user, 'DPR-2025-9002');
 
-    await user.click(await screen.findByRole('button', { name: 'Print' }));
-    expect(await screen.findByText('Print DPR-2025-9002')).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Download' }));
+    expect(await screen.findByText('Download DPR-2025-9002')).toBeInTheDocument();
 
-    // Everything is ticked to begin with: the whole report is the normal thing to print.
+    // Everything is ticked to begin with: the whole report is the normal thing to take.
     expect(screen.queryByText(/name what was left out/)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('checkbox', { name: /Labour on site/ }));

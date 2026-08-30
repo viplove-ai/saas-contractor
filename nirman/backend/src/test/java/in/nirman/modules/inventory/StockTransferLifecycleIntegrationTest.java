@@ -3,10 +3,13 @@ package in.nirman.modules.inventory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.nirman.AbstractIntegrationTest;
+import in.nirman.InMemoryStorageConfig;
+import in.nirman.MovementEvidence;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
@@ -32,6 +35,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * material that is still on the road. So it leaves one store, belongs to nobody, and
  * arrives at the other.</p>
  */
+// V52 demands a photograph of every movement of stock; the bucket here is a map.
+@Import(InMemoryStorageConfig.class)
 class StockTransferLifecycleIntegrationTest extends AbstractIntegrationTest {
 
     private static final String PASSWORD = "Nirman@123";
@@ -93,11 +98,12 @@ class StockTransferLifecycleIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(post("/api/v1/inventory/issues")
                         .header("Authorization", "Bearer " + uttam)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+                        .content(MovementEvidence.onIssue(mockMvc, objectMapper, uttam,
+"""
                                 {"id":"%s","storeId":"%s","issueDate":"%s","purpose":"Too early",
                                  "lines":[{"materialId":"%s","unitId":"%s","quantity":10}]}"""
                                 .formatted(UUID.randomUUID(), STORE_B, LocalDate.now(),
-                                        material, bagUnit)))
+                                        material, bagUnit))))
                 .andExpect(status().isUnprocessableEntity());
 
         receive(uttam, transferId, null).andExpect(status().isOk())
@@ -240,11 +246,12 @@ class StockTransferLifecycleIntegrationTest extends AbstractIntegrationTest {
         MvcResult result = mockMvc.perform(post("/api/v1/inventory/goods-receipts")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+                        .content(MovementEvidence.onReceipt(mockMvc, objectMapper, token,
+"""
                                 {"id":"%s","storeId":"%s","receiptDate":"%s",
                                  "lines":[{"materialId":"%s","unitId":"%s","quantity":%s,"rate":%s}]}"""
                                 .formatted(UUID.randomUUID(), storeId, LocalDate.now(),
-                                        materialId, unitId, quantity, rate)))
+                                        materialId, unitId, quantity, rate))))
                 .andExpect(status().isCreated())
                 .andReturn();
         String grnId = objectMapper.readTree(result.getResponse().getContentAsString())

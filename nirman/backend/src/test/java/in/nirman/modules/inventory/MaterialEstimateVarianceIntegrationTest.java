@@ -3,10 +3,13 @@ package in.nirman.modules.inventory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.nirman.AbstractIntegrationTest;
+import in.nirman.InMemoryStorageConfig;
+import in.nirman.MovementEvidence;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
@@ -38,6 +41,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * estimate at all. Steel is estimated from a bar bending schedule covering the whole
  * structure, and is the clean comparison.</p>
  */
+// V52 demands a photograph of every movement of stock; the bucket here is a map.
+@Import(InMemoryStorageConfig.class)
 class MaterialEstimateVarianceIntegrationTest extends AbstractIntegrationTest {
 
     private static final String PASSWORD = "Nirman@123";
@@ -268,12 +273,13 @@ class MaterialEstimateVarianceIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(post("/api/v1/inventory/issues")
                         .header("Authorization", "Bearer " + uttam)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+                        .content(MovementEvidence.onIssue(mockMvc, objectMapper, uttam,
+"""
                                 {"id":"%s","storeId":"%s","issueDate":"%s",
                                  "boqItemId":"%s","purpose":"VARIANCE-TEST synthetic",
                                  "lines":[{"materialId":"%s","unitId":"%s","quantity":1}]}"""
                                 .formatted(UUID.randomUUID(), STORE_A, LocalDate.now(),
-                                        BOQ_SYNTHETIC, CEMENT, bagUnit)))
+                                        BOQ_SYNTHETIC, CEMENT, bagUnit))))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.detail").value(
                         org.hamcrest.Matchers.containsString("reconciliation placeholder")));
@@ -310,12 +316,13 @@ class MaterialEstimateVarianceIntegrationTest extends AbstractIntegrationTest {
         MvcResult result = mockMvc.perform(post("/api/v1/inventory/issues")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+                        .content(MovementEvidence.onIssue(mockMvc, objectMapper, token,
+"""
                                 {"id":"%s","storeId":"%s","issueDate":"%s",%s
                                  "purpose":"VARIANCE-TEST consumption",
                                  "lines":[{"materialId":"%s","unitId":"%s","quantity":%s}]}"""
                                 .formatted(UUID.randomUUID(), STORE_A, LocalDate.now(), boqClause,
-                                        materialId, unitId, quantity)))
+                                        materialId, unitId, quantity))))
                 .andExpect(status().isCreated())
                 .andReturn();
         String issueId = objectMapper.readTree(result.getResponse().getContentAsString())

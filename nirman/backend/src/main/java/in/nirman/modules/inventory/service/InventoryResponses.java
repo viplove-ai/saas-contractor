@@ -4,6 +4,7 @@ import in.nirman.modules.inventory.api.dto.InventoryDtos.CountLineResponse;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.CountResponse;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.IssueLineResponse;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.IssueResponse;
+import in.nirman.modules.inventory.api.dto.InventoryDtos.MovementPhoto;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.ReceiptLineResponse;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.ReceiptResponse;
 import in.nirman.modules.inventory.api.dto.InventoryDtos.TransferLineResponse;
@@ -16,7 +17,9 @@ import in.nirman.modules.inventory.domain.PhysicalStockCount;
 import in.nirman.modules.inventory.domain.PhysicalStockCountItem;
 import in.nirman.modules.inventory.domain.StockTransfer;
 import in.nirman.modules.inventory.domain.StockTransferItem;
+import in.nirman.modules.inventory.repository.GoodsReceiptAttachmentRepository;
 import in.nirman.modules.inventory.repository.GoodsReceiptItemRepository;
+import in.nirman.modules.inventory.repository.MaterialIssueAttachmentRepository;
 import in.nirman.modules.inventory.repository.MaterialIssueItemRepository;
 import in.nirman.modules.inventory.repository.PhysicalStockCountItemRepository;
 import in.nirman.modules.inventory.repository.StockTransferItemRepository;
@@ -50,6 +53,8 @@ public class InventoryResponses {
     private final MaterialIssueItemRepository issueLines;
     private final StockTransferItemRepository transferLines;
     private final PhysicalStockCountItemRepository countLines;
+    private final GoodsReceiptAttachmentRepository receiptPhotos;
+    private final MaterialIssueAttachmentRepository issuePhotos;
     private final MaterialLookup materials;
     private final SiteLookup sites;
 
@@ -57,11 +62,15 @@ public class InventoryResponses {
                               MaterialIssueItemRepository issueLines,
                               StockTransferItemRepository transferLines,
                               PhysicalStockCountItemRepository countLines,
+                              GoodsReceiptAttachmentRepository receiptPhotos,
+                              MaterialIssueAttachmentRepository issuePhotos,
                               MaterialLookup materials, SiteLookup sites) {
         this.receiptLines = receiptLines;
         this.issueLines = issueLines;
         this.transferLines = transferLines;
         this.countLines = countLines;
+        this.receiptPhotos = receiptPhotos;
+        this.issuePhotos = issuePhotos;
         this.materials = materials;
         this.sites = sites;
     }
@@ -88,7 +97,11 @@ public class InventoryResponses {
                 receipt.getChallanNumber(), receipt.getVehicleNumber(), receipt.getSubTotal(),
                 receipt.getGstAmount(), receipt.getTotalAmount(), receipt.getWorkflowStatus(),
                 receipt.getVerifiedAt(), receipt.getRejectionReason(), receipt.getRemarks(),
-                receipt.getVersion(), lines);
+                receipt.getVersion(), lines,
+                receiptPhotos.findByGoodsReceiptId(receipt.getId()).stream()
+                        .map(photo -> new MovementPhoto(photo.getAttachmentId(),
+                                photo.getDocType()))
+                        .toList());
     }
 
     public IssueResponse toIssueResponse(MaterialIssue issue) {
@@ -116,7 +129,11 @@ public class InventoryResponses {
                 issue.getIssuedToName(), issue.getIssuedToSupplierId(), issue.getBoqItemId(),
                 issue.getWorkLocation(), issue.getPurpose(), issue.getWorkflowStatus(),
                 issue.getApprovedAt(), issue.getRejectionReason(), totalValue,
-                issue.getVersion(), lines);
+                issue.getVersion(), lines,
+                issuePhotos.findByMaterialIssueId(issue.getId()).stream()
+                        .map(photo -> new MovementPhoto(photo.getAttachmentId(),
+                                photo.getDocType()))
+                        .toList());
     }
 
     public TransferResponse toTransferResponse(StockTransfer transfer) {

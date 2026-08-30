@@ -364,6 +364,7 @@ export const PRINT_SECTIONS = [
   'WORK',
   'LABOUR',
   'PLANT',
+  'MATERIAL',
   'COST',
   'OBSERVATIONS',
   'PHOTOS',
@@ -376,6 +377,7 @@ export const PRINT_SECTION_LABEL: Record<PrintSection, string> = {
   WORK: 'Work done',
   LABOUR: 'Labour on site',
   PLANT: 'Plant and machinery',
+  MATERIAL: 'Material in and out',
   COST: 'What the day cost',
   OBSERVATIONS: 'Observations',
   PHOTOS: 'Photographs',
@@ -385,6 +387,12 @@ export const PRINT_SECTION_HINT: Record<PrintSection, string> = {
   WORK: 'The quantities claimed against the contract, and what was recorded but not claimed.',
   LABOUR: 'The muster roll, with names and hours. Rarely wanted outside the firm.',
   PLANT: 'What machinery stood on the site, its hours, and what it was charged at.',
+  /*
+    The one section read from the store rather than from the report. A lorry booked in at
+    half past nine at night against a report verified at six appears here and nowhere else
+    on the sheet, and the table says which moment it was taken at.
+  */
+  MATERIAL: 'What the store received and issued that day, read from the ledger as it stands now.',
   COST: 'Labour, material and other spending for the day. The firm’s business, not the department’s.',
   OBSERVATIONS: 'Instructions from the department and the plan for tomorrow.',
   PHOTOS: 'The list of photographs and their captions. The pictures themselves stay in the app.',

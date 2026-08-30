@@ -52,13 +52,17 @@ describe('BillPhotoField', () => {
     );
   });
 
-  /** A vendor emails a PDF bill. There is nothing for an img to draw, so it keeps its name. */
+  /**
+   * A vendor emails a PDF bill. There is nothing for an img to draw, so it keeps its name —
+   * and it comes in off the device rather than off the camera, which is the whole reason the
+   * second button exists: no lens ever produced a PDF.
+   */
   it('names a PDF bill rather than pretending to draw it', async () => {
     const user = userEvent.setup({ delay: null });
     render(<Harness />);
 
     await user.upload(
-      screen.getByLabelText('Photograph the bill'),
+      screen.getByLabelText('From device'),
       new File([new Uint8Array(64)], 'SS-856.pdf', { type: 'application/pdf' }),
     );
 

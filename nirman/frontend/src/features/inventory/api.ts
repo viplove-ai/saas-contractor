@@ -145,12 +145,18 @@ export function useLedger(storeId: string | undefined, materialId: string | unde
 
 export interface ReceiptInput {
   id: string;
+  /** For the attachments: a file is scoped to the site, and the server re-checks it. */
+  siteId: string;
   storeId: string;
   receiptDate: string;
   vendorId?: string | undefined;
   invoiceNumber?: string | undefined;
   challanNumber?: string | undefined;
   vehicleNumber?: string | undefined;
+  /** What came off the lorry. Required: the load is gone by the time anybody asks. */
+  materialPhoto: File;
+  /** The invoice or challan that came with it — what the supplier says he sent. */
+  invoicePhoto: File;
   /** The rate is left out unless the caller holds inventory:price — the server refuses it. */
   lines: { materialId: string; unitId: string; quantity: number; rate?: number }[];
 }
@@ -158,16 +164,53 @@ export interface ReceiptInput {
 /**
  * Books a delivery. The id is generated on the device, which is what makes a re-send safe:
  * a receipt entered at the gate and synced three times is one receipt, not three.
+ *
+ * <p>Three calls on the wire and one act to the storekeeper: the two pictures into storage,
+ * then the delivery that points at them. In that order, because a receipt naming a file that
+ * does not exist is a broken thumbnail on the office's screen while a file nothing points at
+ * is only a stray upload — and because the server refuses the delivery without them, which is
+ * the rule the form is only being polite about.</p>
  */
 export function useCreateReceipt() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: ReceiptInput) =>
-      (await apiClient.post<Receipt>('/inventory/goods-receipts', input)).data,
+    mutationFn: async ({ materialPhoto, invoicePhoto, siteId, ...body }: ReceiptInput) => {
+      const materialPhotoId = await uploadMovementPhoto(materialPhoto, 'GOODS_RECEIPT', siteId);
+      const invoicePhotoId = await uploadMovementPhoto(invoicePhoto, 'GOODS_RECEIPT', siteId);
+      return (
+        await apiClient.post<Receipt>('/inventory/goods-receipts', {
+          ...body,
+          materialPhotoId,
+          invoicePhotoId,
+        })
+      ).data;
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: inventoryKeys.allReceipts });
     },
   });
+}
+
+/**
+ * One picture into storage, shrunk on the way.
+ *
+ * <p>A photograph of a load off a modern phone is four megabytes of somebody's morning on a
+ * site connection, and 1600 pixels on the long edge is enough to count bags. A PDF invoice
+ * passes through untouched — there is nothing to resize.</p>
+ */
+async function uploadMovementPhoto(
+  file: File,
+  ownerEntityType: 'GOODS_RECEIPT' | 'MATERIAL_ISSUE',
+  siteId: string,
+): Promise<string> {
+  const photo = await compressPhoto(file);
+  const form = new FormData();
+  form.append('file', photo.blob, photo.fileName);
+  const uploaded = await apiClient.post<{ id: string }>('/attachments', form, {
+    params: { ownerEntityType, kind: 'PHOTO', siteId },
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return uploaded.data.id;
 }
 
 /** Deliveries at a store in one workflow state — the engineer's sign-off queue. */
@@ -225,20 +268,28 @@ export function useVerifyReceipt() {
 
 export interface IssueInput {
   id: string;
+  /** For the attachment: a file is scoped to the site, and the server re-checks it. */
+  siteId: string;
   storeId: string;
   issueDate: string;
   boqItemId?: string | undefined;
   purpose?: string | undefined;
   issuedToName?: string | undefined;
   workLocation?: string | undefined;
+  /** What went out. One picture: there is no third party on an issue and no paper. */
+  materialPhoto: File;
   lines: { materialId: string; unitId: string; quantity: number; boqItemId?: string }[];
 }
 
 export function useCreateIssue() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: IssueInput) =>
-      (await apiClient.post<Issue>('/inventory/issues', input)).data,
+    mutationFn: async ({ materialPhoto, siteId, ...body }: IssueInput) => {
+      const materialPhotoId = await uploadMovementPhoto(materialPhoto, 'MATERIAL_ISSUE', siteId);
+      return (
+        await apiClient.post<Issue>('/inventory/issues', { ...body, materialPhotoId })
+      ).data;
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: inventoryKeys.allIssues });
     },

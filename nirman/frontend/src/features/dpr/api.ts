@@ -419,34 +419,13 @@ interface ExpenseCategory {
   parentId?: string;
 }
 
-/** Material that arrived at the store today. A real goods receipt, not a note on a report. */
-export function useReceiveMaterial() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: {
-      id: string;
-      storeId: string;
-      receiptDate: string;
-      lines: { materialId: string; unitId: string; quantity: number; rate: number }[];
-    }) => (await apiClient.post('/inventory/goods-receipts', input)).data,
-    onSuccess: () => invalidateDay(queryClient),
-  });
-}
-
-/** Material that went to the work face today. Consumption, which is what costs money. */
-export function useIssueMaterial() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: {
-      id: string;
-      storeId: string;
-      issueDate: string;
-      purpose?: string | undefined;
-      lines: { materialId: string; unitId: string; quantity: number }[];
-    }) => (await apiClient.post('/inventory/issues', input)).data,
-    onSuccess: () => invalidateDay(queryClient),
-  });
-}
+/*
+  The two hooks that booked a delivery and an issue from the daily report used to sit here.
+  They are gone with the card that called them: material is entered on /inventory/receive and
+  /inventory/issue, where the challan, the supplier and the two photographs belong. The report
+  is not poorer for it — its material half is read from the store's ledger when it is
+  downloaded, whenever the lorry actually turned up.
+*/
 
 export function useAddExpense() {
   const queryClient = useQueryClient();

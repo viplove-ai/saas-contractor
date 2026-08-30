@@ -335,7 +335,7 @@ function ReportPanel({
           through the wage rows.
         */}
         <Button size="small" startIcon={<DownloadIcon />} onClick={() => setPrinting(true)}>
-          Print
+          Download
         </Button>
         {isWritable(data.workflowStatus) && (
           <Button

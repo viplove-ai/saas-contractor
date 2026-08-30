@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import { useMemo, useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
+import { EvidencePhotoField } from '../../shared/EvidencePhotoField';
 import { formatAmount, formatQuantity } from '../../shared/formatters';
 import { ReferenceNotice } from '../../shared/ReferenceNotice';
 import { StatusChip } from '../../shared/StatusChip';
@@ -70,6 +71,15 @@ export function ReceiveMaterialPage() {
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
+  /*
+    The two pictures the delivery cannot be booked without, and the server means it. They
+    answer different questions and neither stands for the other: the load says what came off
+    the lorry, the paper says what the supplier claims he sent, and when those disagree the
+    disagreement is the point. Both are taken here because here is the only moment they can
+    be — the lorry tips and leaves, and the challan goes into a pocket.
+  */
+  const [materialPhoto, setMaterialPhoto] = useState<File | null>(null);
+  const [invoicePhoto, setInvoicePhoto] = useState<File | null>(null);
   const [namingError, setNamingError] = useState<string | null>(null);
 
   const materials = useMaterials();
@@ -164,6 +174,9 @@ export function ReceiveMaterialPage() {
    */
   const submit = async () => {
     setNamingError(null);
+    if (!materialPhoto || !invoicePhoto) {
+      return;
+    }
     let resolved: {
       materialId: string;
       unitId: string;
@@ -197,11 +210,14 @@ export function ReceiveMaterialPage() {
     create.mutate(
       {
         id: crypto.randomUUID(),
+        siteId,
         storeId,
         receiptDate,
         challanNumber: challanNumber || undefined,
         invoiceNumber: invoiceNumber || undefined,
         vehicleNumber: vehicleNumber || undefined,
+        materialPhoto,
+        invoicePhoto,
         lines: resolved,
       },
       {
@@ -210,6 +226,8 @@ export function ReceiveMaterialPage() {
           setChallanNumber('');
           setInvoiceNumber('');
           setVehicleNumber('');
+          setMaterialPhoto(null);
+          setInvoicePhoto(null);
         },
       },
     );
@@ -357,6 +375,34 @@ export function ReceiveMaterialPage() {
         )}
       </Stack>
 
+      {/*
+        The two pictures, between the lines and the button, because that is the order the man
+        works in: he counts what came off, he takes the paper out of his pocket, he books it.
+        Above the button rather than below it, so a delivery cannot be typed past them.
+      */}
+      <Divider sx={{ pt: 1 }} />
+      <Typography variant="h2" sx={{ fontSize: '1.1rem' }}>
+        Evidence
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
+        Both are needed. The load is gone by the time anybody asks about it, and what arrived
+        and what the supplier says he sent are two different claims.
+      </Typography>
+      <Stack spacing={2}>
+        <EvidencePhotoField
+          file={materialPhoto}
+          onPick={setMaterialPhoto}
+          label="Photograph the material"
+          changeLabel="Change the material photo"
+        />
+        <EvidencePhotoField
+          file={invoicePhoto}
+          onPick={setInvoicePhoto}
+          label="Photograph the bill or challan"
+          changeLabel="Change the bill photo"
+        />
+      </Stack>
+
       {namingError && <Alert severity="error">{namingError}</Alert>}
       {create.isError && <Alert severity="error">{apiErrorDetail(create.error)}</Alert>}
       {create.isSuccess && (
@@ -373,7 +419,12 @@ export function ReceiveMaterialPage() {
           variant="contained"
           color="secondary"
           disabled={
-            !storeId || complete.length === 0 || create.isPending || nameMaterial.isPending
+            !storeId ||
+            complete.length === 0 ||
+            !materialPhoto ||
+            !invoicePhoto ||
+            create.isPending ||
+            nameMaterial.isPending
           }
           onClick={() => void submit()}
           sx={{ minHeight: 48 }}
@@ -383,6 +434,19 @@ export function ReceiveMaterialPage() {
             : `Book ${complete.length} material(s)`}
         </Button>
       </Stack>
+      {/*
+        Said rather than left to be guessed. A button that cannot be pressed and does not say
+        why is a screen somebody reloads.
+      */}
+      {(!materialPhoto || !invoicePhoto) && complete.length > 0 && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
+          {!materialPhoto && !invoicePhoto
+            ? 'Photograph the material and the bill before booking it.'
+            : !materialPhoto
+              ? 'The photograph of the material is still missing.'
+              : 'The photograph of the bill or challan is still missing.'}
+        </Typography>
+      )}
 
       <Divider sx={{ pt: 2 }} />
 

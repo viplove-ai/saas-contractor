@@ -202,13 +202,44 @@ if the tests pass:
   supplier's ledger stops matching his bills), to anybody but the author or an administrator, and
   into a closed period or site. The allocation resets to the head's proposal, because an
   allocation is a decision about an amount and the amount is what is being changed.
+- **Material is entered where a delivery is a document, and it reaches the report anyway.** The
+  report's day step used to carry two short lists for receiving and issuing, on the argument that
+  the man writing the day up should not be sent to four other screens. That argument is right
+  about the muster and the bill book and wrong about these two: a delivery has a challan behind
+  it, a supplier, an invoice number, a rate the office puts on days later and the two photographs
+  V52 demands while the lorry is still at the gate, and a card built for a quick line got
+  deliveries typed from memory in the evening with no paper behind them. So `/inventory/receive`
+  and `/inventory/issue` own it and the wizard links to them. **The report loses nothing**,
+  because the printed material table is read from the store's ledger at the moment the PDF is
+  asked for rather than out of the frozen snapshot — a lorry booked in at half past nine at night
+  against a report verified at six prints on the copy downloaded next morning, and the line above
+  the table names the moment it was taken. That is the one section of the sheet that is not the
+  document's own frozen figures, and it says so on the page: the store's ledger is the authority
+  on what moved and the report never was. What stays frozen is the **cost** roll-up, which is
+  what the report claimed when it was signed; where the two differ the difference is a late
+  delivery, which is information rather than a fault.
+- **A movement of stock is photographed, and a delivery twice.** A delivery is the one document
+  where the thing and the paper are both in front of one man for five minutes and never again —
+  the lorry tips its load and leaves, the challan goes into a pocket — and the moving average, the
+  month's consumption, a supplier's account and an argument nine months later about whether forty
+  bags or thirty-two came off that vehicle all rest on what he typed in those five minutes. So
+  `MaterialEvidencePolicy` refuses a receipt without a picture of **the load** and one of **the
+  paper**, and refuses one photograph standing for both: they are two different claims, and when
+  they disagree the disagreement is the whole point. An issue takes **one** — there is no third
+  party and no paper, and the picture is what stops "6 bags of cement" being a figure somebody
+  rounded on the way to the office. The load must be an image (nothing but a camera can say what
+  arrived); the invoice may be a PDF, because that is how half of them arrive. Refused at
+  creation and nowhere else, because that is the only moment it can be satisfied. The rule lives
+  in a policy rather than a check constraint for the reason V40 moved the expense's rule out of
+  the database: what has to be true spans two tables. **No new permission** — photographing the
+  delivery is part of booking it.
 - **Rolled-up figures are derived, not stored.** Dashboard tiles and DPR prefill are computed
   per call through each module's read API. A cached total is a second version of the truth.
 - **Claiming work is its own act.** A quantity reaches the measurement book only when an
   engineer verifies the report, and only once.
 - **The daily report has two authors, and the split is enforced.** The supervisor records what
   the day *was* — whether the site worked, in what conditions, what plant stood on the site, and
-  through the entry cards the muster, material and bills still missing — and hands it over; the
+  through the entry cards the muster and the bills still missing — and hands it over; the
   engineer records what was *built* and signs. **The line runs where claiming does**: a quantity
   is a claim against the contract and a mixer's running hours are not, which is why plant is the
   supervisor's and sits on step one beside the weather rather than under the work.
@@ -706,6 +737,12 @@ editing the row clears the flag — that edit is the act of vetting it.
 member and typed off a closed list with a note beside it. **No new permission** — see the rule
 above. It adds no column to `staff_profiles` and no flag anywhere: a document is evidence for
 what the record already says, not a second place to say it.
+
+`V52` is the evidence behind a movement of stock: `goods_receipt_attachments` and
+`material_issue_attachments`, the shape `expense_attachments` (V40) and `payment_attachments`
+(V45) already had — the link only, with the file in `attachments` and a `doc_type` saying what
+the picture is of. **No new permission**; the requirement is enforced in `MaterialEvidencePolicy`
+and not by a check constraint. See the rule above.
 
 **A note on JPQL and optional parameters.** `(:param IS NULL OR column = :param)` expands to two
 placeholders, and Postgres cannot infer a type for the one standing alone in `? IS NULL` — it

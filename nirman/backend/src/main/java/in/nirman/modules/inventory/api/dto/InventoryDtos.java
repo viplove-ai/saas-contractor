@@ -61,7 +61,22 @@ public final class InventoryDtos {
             @Size(max = 60) String challanNumber,
             @Size(max = 25) String vehicleNumber,
             String remarks,
+            /**
+             * What came off the lorry. A picture, and the server means it: nothing but a
+             * camera can say what arrived, and the load is gone by the time anybody asks.
+             */
+            UUID materialPhotoId,
+            /**
+             * The invoice or challan that came with it — what the supplier claims he sent,
+             * which is a different claim from what arrived. May be a PDF: half the suppliers
+             * who send one at all send it that way.
+             */
+            UUID invoicePhotoId,
             @NotEmpty @Valid List<ReceiptLine> lines) {
+    }
+
+    /** One picture on a movement of stock, and what it is a picture of. */
+    public record MovementPhoto(UUID attachmentId, String docType) {
     }
 
     public record ReceiptLineResponse(
@@ -102,7 +117,9 @@ public final class InventoryDtos {
             String rejectionReason,
             String remarks,
             Long version,
-            List<ReceiptLineResponse> lines) {
+            List<ReceiptLineResponse> lines,
+            /** The load and the paper. Evidence nobody can look at is a row saying evidence exists. */
+            List<MovementPhoto> photos) {
     }
 
     /**
@@ -140,6 +157,8 @@ public final class InventoryDtos {
             @Size(max = 150) String issuedToName,
             UUID issuedToSupplierId,
             @Size(max = 150) String workLocation,
+            /** What went out. One picture; there is no third party on an issue and no paper. */
+            UUID materialPhotoId,
             @NotEmpty @Valid List<IssueLine> lines) {
     }
 
@@ -177,7 +196,9 @@ public final class InventoryDtos {
             String rejectionReason,
             BigDecimal totalValue,
             Long version,
-            List<IssueLineResponse> lines) {
+            List<IssueLineResponse> lines,
+            /** What went out, as a picture. */
+            List<MovementPhoto> photos) {
     }
 
     // ------------------------------------------------------------------ transfer

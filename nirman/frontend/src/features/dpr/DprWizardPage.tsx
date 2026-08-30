@@ -48,7 +48,6 @@ import {
 } from './api';
 import {
   ExpenseCard,
-  MaterialCard,
   OutsourcedLabourCard,
   PhotoCard,
 } from './DayEntry';
@@ -1001,9 +1000,16 @@ export function DprWizardPage() {
                     + ' now shows in the records above and in the month, not on that document.'}
               </Typography>
               <OutsourcedLabourCard siteId={siteId} date={reportDate} onSaved={refreshDay} />
-              <MaterialCard siteId={siteId} date={reportDate} mode="RECEIVED" onSaved={refreshDay} />
-              <MaterialCard siteId={siteId} date={reportDate} mode="USED" onSaved={refreshDay} />
               <ExpenseCard siteId={siteId} date={reportDate} onSaved={refreshDay} />
+              {/*
+                Material is not a box on this page any more, and the two screens it belongs on
+                are one tap away. A delivery carries a challan, a supplier, an invoice number, a
+                rate the office puts on afterwards and two photographs taken while the lorry is
+                still at the gate; a card built for a quick line got deliveries typed from memory
+                in the evening with nothing behind them. Links rather than silence, because the
+                man reading this step is the man who has the delivery to enter.
+              */}
+              <MaterialElsewhere />
             </>
           )}
 
@@ -1835,5 +1841,43 @@ function Figure({ label, value }: { label: string; value: string }) {
       </Typography>
       <Typography fontWeight={600}>{value}</Typography>
     </Box>
+  );
+}
+
+/**
+ * Where material goes now.
+ *
+ * <p>The day step used to carry two short lists for receiving and issuing, and they were the
+ * wrong shape for what they were recording. A delivery has a challan behind it, a supplier, an
+ * invoice number, a rate the office puts on days later, and two photographs somebody has to
+ * take while the lorry is still at the gate; a card built for a quick line got deliveries typed
+ * from memory in the evening with no paper behind them.</p>
+ *
+ * <p>Links rather than silence. The man reading this step is the man who has the delivery to
+ * enter, and a step that simply stopped offering it would read as a step that no longer wanted
+ * to know. Nothing is lost from the report: the material half of the day is read from the
+ * store's ledger when the report is downloaded, so a lorry booked in at ten at night against a
+ * report verified at six still prints on it.</p>
+ */
+function MaterialElsewhere() {
+  return (
+    <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
+      <Stack spacing={1}>
+        <Typography fontWeight={600}>Material</Typography>
+        <Typography variant="body2" color="text.secondary">
+          Deliveries and issues are entered on their own screens, where the challan, the supplier
+          and the photographs belong. What the store records for this day is read back onto the
+          report when it is downloaded, whenever it was entered.
+        </Typography>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Button component={Link} to="/inventory/receive" size="small" variant="outlined">
+            Receive material
+          </Button>
+          <Button component={Link} to="/inventory/issue" size="small" variant="outlined">
+            Issue material
+          </Button>
+        </Stack>
+      </Stack>
+    </Paper>
   );
 }

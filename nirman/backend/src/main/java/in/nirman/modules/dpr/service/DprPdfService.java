@@ -4,6 +4,7 @@ import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import in.nirman.common.BusinessException;
 import in.nirman.modules.dpr.api.dto.DprDtos.DprResponse;
 import in.nirman.modules.dpr.domain.DailyProgressReport;
+import in.nirman.modules.inventory.service.InventoryLookup;
 import in.nirman.modules.project.repository.ProjectRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,6 +12,7 @@ import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
 import java.io.ByteArrayOutputStream;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.EnumSet;
@@ -24,7 +26,8 @@ import java.util.UUID;
  * <p>The PDF is why the DPR stores a frozen snapshot at all. It is the artefact that leaves the
  * system — printed, signed, sent to the department — and a document whose figures move after it
  * was issued is not a document. So this renders {@link DprResponse} exactly as the API returns
- * it, from the frozen columns, and computes nothing of its own.</p>
+ * it, from the frozen columns, and computes nothing of its own — with the one deliberate
+ * exception described below, which names itself on the page.</p>
  *
  * <p>HTML through Thymeleaf, then openhtmltopdf, rather than a drawing API: a DPR is a form with
  * tables and a signature block, its layout will be argued over by people who are not
@@ -36,6 +39,17 @@ import java.util.UUID;
  * and turn a one-page form into a slow multi-megabyte download over a site connection — and the
  * captions are what a reader of the printed form actually needs. The images stay one signed URL
  * away in the app.</p>
+ *
+ * <p><b>One section is derived rather than frozen, and it says so on the page.</b> The material
+ * table is read from the store's ledger when the PDF is asked for, not from the report's snapshot.
+ * A lorry turns up at half past nine at night and the report was verified at six; the store books
+ * the delivery whenever it arrives, and a document printed the next morning that showed no
+ * material because the snapshot was taken first would be wrong about the day in the one place a
+ * reader can check it against another register. The store's ledger is the authority on what moved
+ * — the report never was — so the table carries the ledger's answer and the line above it names
+ * the moment it was taken. What stays frozen is the <em>cost</em> roll-up, because that is the
+ * figure the report claimed when it was signed, and the two are allowed to differ: the difference
+ * is a late delivery, which is information rather than a fault.</p>
  *
  * <p><b>Not every reader gets every section.</b> The same report goes to the department, to a
  * client's representative and into the firm's own file, and those are three different documents
@@ -57,13 +71,15 @@ public class DprPdfService {
     private final DprService dprs;
     private final DprResponses responses;
     private final ProjectRepository projects;
+    private final InventoryLookup inventory;
     private final SpringTemplateEngine templates;
 
     public DprPdfService(DprService dprs, DprResponses responses, ProjectRepository projects,
-                         SpringTemplateEngine templates) {
+                         InventoryLookup inventory, SpringTemplateEngine templates) {
         this.dprs = dprs;
         this.responses = responses;
         this.projects = projects;
+        this.inventory = inventory;
         this.templates = templates;
     }
 
@@ -80,6 +96,7 @@ public class DprPdfService {
         WORK("Work done"),
         LABOUR("Labour on site"),
         PLANT("Plant and machinery"),
+        MATERIAL("Material in and out"),
         COST("What the day cost"),
         OBSERVATIONS("Observations"),
         PHOTOS("Photographs");
@@ -127,6 +144,17 @@ public class DprPdfService {
                 .map(Section::label)
                 .toList();
         context.setVariable("omitted", omitted);
+        /*
+          The store's ledger, read now rather than out of the snapshot — see the class comment.
+          Only when the section is being printed: this is a second query per download, and a
+          covering sheet with no material table has no use for it.
+        */
+        if (printing.contains(Section.MATERIAL)) {
+            context.setVariable("material",
+                    inventory.day(report.getSiteId(), report.getReportDate()));
+            context.setVariable("materialTakenAt",
+                    STAMP.format(Instant.now().atZone(ZoneId.systemDefault())));
+        }
         context.setVariable("projectName", projects.findById(report.getProjectId())
                 .map(project -> project.getName()).orElse("—"));
         context.setVariable("reportDate", dto.reportDate().format(DATE));

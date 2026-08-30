@@ -3,10 +3,13 @@ package in.nirman.modules.dpr;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.nirman.AbstractIntegrationTest;
+import in.nirman.InMemoryStorageConfig;
+import in.nirman.MovementEvidence;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -39,12 +42,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * different report, not an empty one</b>: it carries a cause and no work at all, and it is
  * signed like any other.</p>
  */
+// The material section reads the store's ledger, and booking a delivery needs its two
+// photographs — so the bucket has to exist. Here it is a map. See InMemoryStorageConfig.
+@Import(InMemoryStorageConfig.class)
 class DprWorkflowIntegrationTest extends AbstractIntegrationTest {
 
     private static final String PASSWORD = "Nirman@123";
     private static final String SITE_A = "31000000-0000-0000-0000-000000000001";
     private static final String SITE_B = "31000000-0000-0000-0000-000000000002";
     private static final String BOQ_BRICKWORK = "70000000-0000-0000-0000-000000000003";
+    private static final String STORE_A = "32000000-0000-0000-0000-000000000001";
+    /** The day the 9 June report is about. */
+    private static final String REPORT_DAY = "2025-06-09";
 
     /** The 9 June report V903 seeds already verified, with its brickwork claimed. */
     private static final String VERIFIED_DPR = "82000000-0000-0000-0000-000000000001";
@@ -874,6 +883,76 @@ class DprWorkflowIntegrationTest extends AbstractIntegrationTest {
 
         assertThat(new String(extract, 0, 5)).isEqualTo("%PDF-");
         assertThat(extract.length).isLessThan(whole.length);
+    }
+
+    /**
+     * The one table on the sheet that is not the report's frozen snapshot.
+     *
+     * <p>A lorry turns up at half past nine at night and the report was verified at six. The
+     * store books the delivery when it arrives; the report's figures froze at the handover and
+     * are not going to move. A download taken the next morning that showed no material would be
+     * wrong about the day in the one place a reader can check it against another register — so
+     * the material table is read from the store's ledger at the moment the PDF is asked for,
+     * and the line above it says which moment that was.</p>
+     *
+     * <p>Asserted by size, like the extract test above and for the same reason: openhtmltopdf
+     * compresses its content streams, so the rows are not there to grep for. A sheet that is no
+     * bigger after a delivery has been booked and verified against its day is a table that was
+     * read out of the snapshot.</p>
+     */
+    @Test
+    @DisplayName("a delivery booked after the report was signed still prints on it")
+    void theMaterialTableIsReadFromTheStoreWhenTheReportIsDownloaded() throws Exception {
+        String office = loginToken("uttam");
+        byte[] before = materialSheet(office);
+
+        String storekeeper = loginToken("vivek");
+        String material = jdbc.queryForObject(
+                "SELECT id::text FROM materials WHERE deleted_at IS NULL ORDER BY code LIMIT 1",
+                String.class);
+        String unit = jdbc.queryForObject(
+                "SELECT base_unit_id::text FROM materials WHERE id = ?::uuid",
+                String.class, material);
+
+        // Booked without a rate, because the storekeeper does not price a delivery.
+        String body = MovementEvidence.onReceipt(mockMvc, objectMapper, storekeeper, """
+                {"id":"%s","storeId":"%s","receiptDate":"%s",
+                 "lines":[{"materialId":"%s","unitId":"%s","quantity":40}]}"""
+                .formatted(UUID.randomUUID(), STORE_A, REPORT_DAY, material, unit));
+        MvcResult booked = mockMvc.perform(post("/api/v1/inventory/goods-receipts")
+                        .header("Authorization", "Bearer " + storekeeper)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andReturn();
+        JsonNode receipt = objectMapper.readTree(booked.getResponse().getContentAsString());
+        String grnId = receipt.get("id").asText();
+        // The office prices it against the invoice, and verification refuses an unpriced line.
+        mockMvc.perform(put("/api/v1/inventory/goods-receipts/" + grnId + "/prices")
+                        .header("Authorization", "Bearer " + office)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lines\":[{\"lineId\":\"%s\",\"rate\":410}]}"
+                                .formatted(receipt.get("lines").get(0).get("id").asText())))
+                .andExpect(status().isOk());
+        // Verifying is what moves the stock, and the ledger is what the table is read from.
+        mockMvc.perform(post("/api/v1/inventory/goods-receipts/" + grnId + "/verify")
+                        .header("Authorization", "Bearer " + office)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"VERIFY\"}"))
+                .andExpect(status().isOk());
+
+        assertThat(materialSheet(office).length)
+                .as("the delivery arrived after the signature and still has to print")
+                .isGreaterThan(before.length);
+    }
+
+    /** The report as a material sheet alone, which is the section this is about. */
+    private byte[] materialSheet(String token) throws Exception {
+        return mockMvc.perform(get("/api/v1/dprs/" + VERIFIED_DPR + "/pdf")
+                        .param("sections", "MATERIAL")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
     }
 
     /**

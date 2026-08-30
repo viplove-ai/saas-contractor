@@ -68,6 +68,7 @@ public class MaterialIssueService {
     private final PeriodLockGuard periodLockGuard;
     private final DocumentNumberService documentNumbers;
     private final InventoryResponses responses;
+    private final MaterialEvidencePolicy evidence;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
 
@@ -76,6 +77,7 @@ public class MaterialIssueService {
                                 SiteLookup sites, BoqLookup boqItems,
                                 SiteAccessGuard siteAccessGuard, PeriodLockGuard periodLockGuard,
                                 DocumentNumberService documentNumbers, InventoryResponses responses,
+                                MaterialEvidencePolicy evidence,
                                 CurrentUserProvider currentUser, AuditService audit) {
         this.issues = issues;
         this.lines = lines;
@@ -87,6 +89,7 @@ public class MaterialIssueService {
         this.periodLockGuard = periodLockGuard;
         this.documentNumbers = documentNumbers;
         this.responses = responses;
+        this.evidence = evidence;
         this.currentUser = currentUser;
         this.audit = audit;
     }
@@ -155,6 +158,8 @@ public class MaterialIssueService {
         issues.save(issue);
 
         List<MaterialIssueItem> saved = saveLines(issue, request.lines(), store);
+        // The picture, after the header exists to hang it off. See MaterialEvidencePolicy.
+        evidence.attachToIssue(issue.getId(), request.materialPhotoId());
 
         audit.record("MATERIAL_ISSUE", issue.getId(), "CREATE", null,
                 Map.of("issueNumber", number, "storeId", store.id().toString(),

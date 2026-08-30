@@ -3,9 +3,12 @@ package in.nirman.modules.masterdata;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.nirman.AbstractIntegrationTest;
+import in.nirman.InMemoryStorageConfig;
+import in.nirman.MovementEvidence;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -35,6 +38,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * shed. So the same name comes back as the same material, and what a supervisor may do here
  * stops well short of what the office may do to the master.</p>
  */
+// V52 demands a photograph of every movement of stock; the bucket here is a map.
+@Import(InMemoryStorageConfig.class)
 class FieldMaterialIntegrationTest extends AbstractIntegrationTest {
 
     private static final String PASSWORD = "Nirman@123";
@@ -107,12 +112,13 @@ class FieldMaterialIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(post("/api/v1/inventory/goods-receipts")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+                        .content(MovementEvidence.onReceipt(mockMvc, objectMapper, token,
+"""
                                 {"id":"%s","storeId":"%s","receiptDate":"%s",
                                  "challanNumber":"CH-FIELD-1",
                                  "lines":[{"materialId":"%s","unitId":"%s","quantity":10}]}"""
                                 .formatted(UUID.randomUUID(), STORE_A, LocalDate.now(),
-                                        materialId, bag)))
+                                        materialId, bag))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.lines[0].materialName").value("Tile Adhesive 20kg"));
     }

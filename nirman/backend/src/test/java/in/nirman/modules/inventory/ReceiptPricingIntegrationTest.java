@@ -3,10 +3,13 @@ package in.nirman.modules.inventory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.nirman.AbstractIntegrationTest;
+import in.nirman.InMemoryStorageConfig;
+import in.nirman.MovementEvidence;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
@@ -33,6 +36,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * verification refuses a line that still has none: verifying is the moment stock moves, and
  * stock cannot be carried at no value.</p>
  */
+// V52 demands a photograph of every movement of stock; the bucket here is a map.
+@Import(InMemoryStorageConfig.class)
 class ReceiptPricingIntegrationTest extends AbstractIntegrationTest {
 
     private static final String PASSWORD = "Nirman@123";
@@ -69,7 +74,9 @@ class ReceiptPricingIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(post("/api/v1/inventory/goods-receipts")
                         .header("Authorization", "Bearer " + login("vivek"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(receiptBody(material, unitId(office, "BAG"), "20", "400")))
+                        .content(MovementEvidence.onReceipt(mockMvc, objectMapper,
+                                login("vivek"),
+                                receiptBody(material, unitId(office, "BAG"), "20", "400"))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.detail").value(containsString("set by the office")));
     }
@@ -222,7 +229,8 @@ class ReceiptPricingIntegrationTest extends AbstractIntegrationTest {
         MvcResult result = mockMvc.perform(post("/api/v1/inventory/goods-receipts")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(receiptBody(materialId, unitId, quantity, rate)))
+                        .content(MovementEvidence.onReceipt(mockMvc, objectMapper, token,
+receiptBody(materialId, unitId, quantity, rate))))
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString());

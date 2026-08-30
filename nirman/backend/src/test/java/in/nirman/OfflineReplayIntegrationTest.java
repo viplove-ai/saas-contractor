@@ -6,6 +6,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
@@ -37,6 +38,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * draft, not a retry. Silently accepting it would mark a man present twice, and the fact
  * that both requests came from the same supervisor's phone is not evidence of anything.</p>
  */
+// V52 demands a photograph of every movement of stock; the bucket here is a map.
+@Import(InMemoryStorageConfig.class)
 class OfflineReplayIntegrationTest extends AbstractIntegrationTest {
 
     private static final String PASSWORD = "Nirman@123";
@@ -126,14 +129,19 @@ class OfflineReplayIntegrationTest extends AbstractIntegrationTest {
                 {"id":"%s","storeId":"%s","receiptDate":"%s","challanNumber":"CH-PHASE7",
                  "lines":[{"materialId":"%s","unitId":"%s","quantity":40}]}"""
                 .formatted(id, STORE_A, LocalDate.now(), materialId, unitId);
+        // The same body both times, photographs and all: a replay is the same document again,
+        // not a second one that happens to look like it.
+        String withPhotos = MovementEvidence.onReceipt(mockMvc, objectMapper, storekeeper, body);
 
         mockMvc.perform(post("/api/v1/inventory/goods-receipts")
                         .header("Authorization", "Bearer " + storekeeper)
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(withPhotos))
                 .andExpect(status().isCreated());
         mockMvc.perform(post("/api/v1/inventory/goods-receipts")
                         .header("Authorization", "Bearer " + storekeeper)
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(withPhotos))
                 .andExpect(status().isCreated());
 
         Integer receipts = jdbc.queryForObject(

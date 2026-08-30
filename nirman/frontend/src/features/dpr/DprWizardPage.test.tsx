@@ -419,9 +419,8 @@ describe('DprWizardPage', () => {
     expect(screen.queryByRole('button', { name: 'Start fresh' })).not.toBeInTheDocument();
     // What the day was is frozen: it is the supervisor's statement about a day he stood on.
     expect(screen.getByRole('button', { name: 'No work today' })).toBeDisabled();
-    // And the day's records go with it. Entering a receipt or a bill on his behalf is the
-    // same act as typing his weather, one register further along.
-    expect(screen.queryByText('Material that came in')).not.toBeInTheDocument();
+    // And the day's records go with it. Entering a bill on his behalf is the same act as
+    // typing his weather, one register further along.
     expect(screen.queryByText('Money spent today')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Next' }));
@@ -472,12 +471,12 @@ describe('DprWizardPage', () => {
   });
 
   /**
-   * The same rule one register along. The entry cards write to the muster, the store and the
-   * bill book — never to the report — so the report's frozen figures are no reason to shut
-   * them. The lorry that arrived at half past six is a goods receipt whether the document has
-   * gone or not, and the screen says plainly that it will not appear on the sent report.
+   * The same rule one register along. The entry cards write to the muster and the bill book —
+   * never to the report — so the report's frozen figures are no reason to shut them. The bill
+   * paid at half past six is an expense whether the document has gone or not, and the screen
+   * says plainly that it will not appear on the sent report.
    */
-  it('keeps the muster, the store and the bill book open to him after the handover', async () => {
+  it('keeps the muster and the bill book open to him after the handover', async () => {
     mockGets(
       prefill({ reportExists: true, existingDprId: 'dpr-existing' }),
       existingDraft('SUBMITTED'),
@@ -485,9 +484,33 @@ describe('DprWizardPage', () => {
     renderPage();
 
     expect(await screen.findByText(/its figures stay as they were sent/)).toBeInTheDocument();
-    expect(screen.getByText('Material that came in')).toBeInTheDocument();
-    expect(screen.getByText('Material used today')).toBeInTheDocument();
     expect(screen.getByText('Money spent today')).toBeInTheDocument();
+  });
+
+  /**
+   * Material left this screen. A delivery carries a challan, a supplier, an invoice number, a
+   * rate the office adds days later and two photographs taken at the gate; the card built for
+   * a quick line got deliveries typed from memory in the evening. The step points at the two
+   * screens instead of going quiet, because the man reading it is the man with the delivery.
+   */
+  it('sends material to its own screens rather than taking it here', async () => {
+    mockGets(
+      prefill({ reportExists: true, existingDprId: 'dpr-existing' }),
+      existingDraft('SUBMITTED'),
+    );
+    renderPage();
+
+    expect(await screen.findByText(/its figures stay as they were sent/)).toBeInTheDocument();
+    expect(screen.queryByText('Material that came in')).not.toBeInTheDocument();
+    expect(screen.queryByText('Material used today')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Receive material' })).toHaveAttribute(
+      'href',
+      '/inventory/receive',
+    );
+    expect(screen.getByRole('link', { name: 'Issue material' })).toHaveAttribute(
+      'href',
+      '/inventory/issue',
+    );
   });
 
   // ---------------------------------------------------------------- the day it did not work
