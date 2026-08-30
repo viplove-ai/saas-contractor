@@ -247,6 +247,33 @@ describe('EquipmentPanel', () => {
     expect(put.mock.calls[0]![1]).toEqual({ attachmentId: 'att-9' });
   });
 
+  /*
+    The other way to a picture, and the reason it had to exist: the entry form itself says a
+    machine written down at the gate and photographed on Thursday is the ordinary case, and by
+    Thursday the photograph is on the phone rather than in front of the lens. The camera keeps
+    its own button — going straight to the rear lens is the point of it — so the gallery is a
+    second control beside it rather than a chooser in front of both.
+  */
+  it('takes a picture already on the phone, not only one taken now', async () => {
+    post.mockResolvedValue({ data: { id: 'att-9' } });
+    put.mockResolvedValue({ data: { ...SITE_ENTRY, photoAttachmentId: 'att-9' } });
+    const user = userEvent.setup({ delay: null });
+    renderPanel();
+    const register = await findRegister();
+
+    const camera = register.getByLabelText('Photograph it');
+    const gallery = register.getByLabelText('From device');
+    expect(camera).toHaveAttribute('capture', 'environment');
+    expect(gallery).not.toHaveAttribute('capture');
+
+    await user.upload(gallery, jpeg());
+
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    expect(post.mock.calls[0]![0]).toBe('/attachments');
+    await waitFor(() => expect(put).toHaveBeenCalledOnce());
+    expect(put.mock.calls[0]![0]).toBe('/inventory/equipment/eq-1/photo');
+  });
+
   /** A picture on the entry is what the office is reading the register for. */
   it('shows the picture on the row once there is one', async () => {
     renderPanel([{ ...SITE_ENTRY, photoAttachmentId: 'att-9' }]);

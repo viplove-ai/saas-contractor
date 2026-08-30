@@ -1,5 +1,7 @@
 import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
-import { Button, Skeleton, Typography } from '@mui/material';
+import PhotoLibraryOutlinedIcon from '@mui/icons-material/PhotoLibraryOutlined';
+import { Button, Skeleton, Stack, Typography } from '@mui/material';
+import type { ReactNode } from 'react';
 import { PhotoThumb } from '../../shared/PhotoThumb';
 import { useAttachmentUrl } from './api';
 
@@ -39,11 +41,24 @@ export function MachinePhoto({
 }
 
 /**
- * Taking the photograph, as a button that opens the camera.
+ * Putting a picture on a machine's entry: the camera, and the pictures already on the phone.
  *
- * <p>{@code capture="environment"} goes straight to the rear camera on a phone, which is the
- * whole point — the man is standing in front of the machine — and is ignored on a desk
- * browser, where the same control picks a file.</p>
+ * <p>It was the camera alone, and {@code capture="environment"} is what made that so — it
+ * goes straight to the rear lens, which is right when the man is standing in front of the
+ * machine and wrong every other time. A machine written down in the rain at the gate and
+ * photographed on Thursday is the ordinary case the entry form already says it expects, and
+ * a Thursday photograph is on the phone by then, not in front of the lens. Somebody sent the
+ * picture on WhatsApp; the hire company's own photograph came by email; the yard was
+ * photographed on the way past and the entry typed that evening. All of those were reachable
+ * on a daily report — its picker carries no {@code capture} and so offers the gallery — and
+ * none of them was reachable here.</p>
+ *
+ * <p>So there are two controls rather than one cleverer one. A single picker without
+ * {@code capture} would offer the phone's chooser and reach both, but it costs the man in
+ * front of the machine the tap that mattered: he now picks "Camera" off a sheet every time,
+ * to do the commonest thing on the screen. Two buttons keep that tap and add the other
+ * route beside it. On a desk browser {@code capture} is ignored and both open the same file
+ * picker, which is what an office attaching the hire company's photograph wanted anyway.</p>
  */
 export function PickPhotoButton({
   label,
@@ -55,18 +70,51 @@ export function PickPhotoButton({
   onPick: (file: File) => void;
 }) {
   return (
+    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+      <PhotoInput
+        label={busy ? 'Sending…' : label}
+        icon={<PhotoCameraOutlinedIcon />}
+        camera
+        busy={busy}
+        onPick={onPick}
+      />
+      <PhotoInput
+        label="From device"
+        icon={<PhotoLibraryOutlinedIcon />}
+        busy={busy}
+        onPick={onPick}
+      />
+    </Stack>
+  );
+}
+
+/** One of the two routes to a file. The camera one asks for the rear lens; the other does not. */
+function PhotoInput({
+  label,
+  icon,
+  camera = false,
+  busy,
+  onPick,
+}: {
+  label: string;
+  icon: ReactNode;
+  camera?: boolean;
+  busy: boolean;
+  onPick: (file: File) => void;
+}) {
+  return (
     <Button
       component="label"
       size="small"
-      startIcon={<PhotoCameraOutlinedIcon />}
+      startIcon={icon}
       disabled={busy}
       sx={{ minHeight: 40 }}
     >
-      {busy ? 'Sending…' : label}
+      {label}
       <input
         type="file"
         accept="image/*"
-        capture="environment"
+        {...(camera ? { capture: 'environment' as const } : {})}
         hidden
         onChange={(event) => {
           const picked = event.target.files?.[0];
