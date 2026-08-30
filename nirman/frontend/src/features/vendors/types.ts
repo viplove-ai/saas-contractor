@@ -29,6 +29,11 @@ export interface Vendor {
   /** What he was owed the day the organisation started using this system. Typed once. */
   openingBalance?: number;
   active: boolean;
+  /**
+   * Named from the field — what he is called, what he supplies and how to reach him — with
+   * none of the office's numbers on him yet. Cleared the moment the office edits the row.
+   */
+  provisional: boolean;
   version: number;
 }
 

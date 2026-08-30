@@ -39,7 +39,16 @@ export function VendorsPage() {
   const [formOpen, setFormOpen] = useState(false);
 
   const vendors = useVendors(q, type);
-  const canWrite = hasPermission('vendor:write');
+  /*
+    Two ways to be allowed to write on this register and they are not the same act. The
+    office (vendor:write) sets the tax numbers, the bank account and the credit period; the
+    field (masterdata:provisional:supplier) says what the firm is called, what it supplies
+    and how to reach it. Both open the same dialog, which shows each of them its own half —
+    see VendorFormDialog. The account, which is money, stays behind the money permission,
+    so the supervisor's rows lead nowhere he may not go.
+  */
+  const canWrite =
+    hasPermission('vendor:write') || hasPermission('masterdata:provisional:supplier');
   const canSeeMoney = hasPermission('vendor:balance:manage');
 
   const openNew = () => {
@@ -139,6 +148,7 @@ export function VendorsPage() {
                     </Typography>
                   </Box>
                   {!vendor.active && <Chip size="small" label="Inactive" />}
+                  {vendor.provisional && <Chip size="small" label="Details pending" />}
                 </Stack>
                 <Typography variant="body2" color="text.secondary">
                   {contactLine(vendor)}
@@ -187,9 +197,17 @@ export function VendorsPage() {
               <TableRow>
                 <TableCell>Supplier</TableCell>
                 <TableCell>Kind</TableCell>
-                <TableCell>Contact</TableCell>
-                <TableCell>GSTIN</TableCell>
-                <TableCell align="right">Credit</TableCell>
+                {/*
+                  The person and the number, in two columns, where the GSTIN and the credit
+                  period used to be. Both of those are read once a year by one person; the
+                  question this register is actually opened with is "who do I ring about the
+                  lorry", and it was answered by a column that ran the two together and by
+                  two columns nobody was reading. The GSTIN and the terms are still on his
+                  row — they are in the edit dialog and on his account — and this is the
+                  list, which is for finding him.
+                */}
+                <TableCell>Contact person</TableCell>
+                <TableCell>Phone</TableCell>
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -201,16 +219,16 @@ export function VendorsPage() {
                     <Typography variant="body2" color="text.secondary">
                       {vendor.code}
                       {!vendor.active && ' · inactive'}
+                      {/* Named from the field: he can be used, and the office still owes him
+                          a GSTIN before his tax can be claimed back. */}
+                      {vendor.provisional && ' · details pending'}
                     </Typography>
                   </TableCell>
                   <TableCell>{VENDOR_TYPE_LABEL[vendor.vendorType]}</TableCell>
-                  <TableCell>{contactLine(vendor)}</TableCell>
                   {/* An em dash, not a blank: "nobody has entered it" is worth reading as
                       a gap rather than as an empty cell somebody might take for none. */}
-                  <TableCell>{vendor.gstin || '—'}</TableCell>
-                  <TableCell align="right">
-                    {vendor.creditDays === 0 ? 'On delivery' : `${vendor.creditDays} days`}
-                  </TableCell>
+                  <TableCell>{vendor.contactPerson || '—'}</TableCell>
+                  <TableCell>{vendor.mobile || '—'}</TableCell>
                   <TableCell align="right">
                     <Stack direction="row" spacing={1} justifyContent="flex-end">
                       {canSeeMoney && (
@@ -235,7 +253,7 @@ export function VendorsPage() {
               ))}
               {vendors.data.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6}>
+                  <TableCell colSpan={5}>
                     <Typography color="text.secondary">
                       No suppliers on the register yet.
                     </Typography>

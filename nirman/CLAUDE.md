@@ -380,6 +380,18 @@ if the tests pass:
   the office reads the new name; an office caller does not re-open it. Without that half,
   "celment" sits on every picker until somebody notices and the man who typed it routes round
   his own mistake by naming a second row — the split balance reached from the inside.
+  **A supplier is the third of them** (`POST /vendors/field`, V50), and the one where the line
+  is sharpest: `vendor:write` is the accountant's, because he holds the GSTIN, the bank account
+  and the credit period and a mistake in any of them is money sent to the wrong place. But the
+  supervisor names a supplier on a delivery, on a day's outsourced labour and on a bill he has
+  just paid out of his float, and "he is not in the list" was a telephone call to the office. So
+  the field may say what the firm is called, what it supplies and how to reach it — and none of
+  what values it, not even the active flag: what he onboards arrives **active**, because a
+  supplier being named is a supplier being used, and taking one off the register is the office's
+  act. The register shows him the phone number and hides the account, which is behind
+  `vendor:balance:manage` and always was. The duplicate check bites harder here than on a
+  material: two rows for one firm split his *account* in half, and neither half is what he thinks
+  he is owed.
 - **A wrong stock figure is reported, never edited.** `stock_transactions` is append-only, and
   an ADJUSTMENT is `inventory:adjust`, the office's, because a role that can move a balance can
   hide a loss. That left the one man who can see the shed unable to say anything about it. So
@@ -661,6 +673,13 @@ the deposit rule above.
 two checks that were each stopping a true fact being written: the ceiling on
 `site_advances.adjusted_amount`, so a float may be overdrawn, and the status list, which gains
 `OVERSPENT`. **No new permission** — see the float rule above.
+
+`V50` is the supplier named at the gate. It adds `vendors.provisional` and mints **one
+permission**, `masterdata:provisional:supplier`, granted to the same three roles V15 and V24
+named. It is not folded into `vendor:write` for the reason V15 was not folded into
+`masterdata:write`: somebody who may name the firm whose lorry is at the gate has not thereby
+been given its bank account. `PUT /vendors/{id}/field` is the correcting half, and the office
+editing the row clears the flag — that edit is the act of vetting it.
 
 **A note on JPQL and optional parameters.** `(:param IS NULL OR column = :param)` expands to two
 placeholders, and Postgres cannot infer a type for the one standing alone in `? IS NULL` — it

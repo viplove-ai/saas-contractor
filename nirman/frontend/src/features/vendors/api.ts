@@ -79,6 +79,49 @@ export function useUpdateVendor() {
   });
 }
 
+/**
+ * What the field may say about a supplier: who he is, what he supplies, how to reach him.
+ *
+ * <p>Deliberately not a subset of {@link VendorInput} taken at the call site — the point of
+ * the field endpoints is that the tax numbers, the bank account and the credit period are
+ * not reachable from them at all, and a type that merely omits them says so.</p>
+ */
+export interface FieldVendorInput {
+  name: string;
+  vendorType: VendorType;
+  contactPerson?: string | undefined;
+  mobile?: string | undefined;
+  email?: string | undefined;
+  address?: string | undefined;
+}
+
+/** Naming the firm whose lorry is at the gate. The row comes back marked provisional. */
+export function useNameVendor() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: FieldVendorInput) =>
+      (await apiClient.post<Vendor>('/vendors/field', blankToUndefined(input))).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: vendorKeys.all });
+    },
+  });
+}
+
+/** The same fields a day later. Nothing carrying a number, and not the active flag. */
+export function useCorrectFieldVendor() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      ...body
+    }: FieldVendorInput & { id: string; version: number }) =>
+      (await apiClient.put<Vendor>(`/vendors/${id}/field`, blankToUndefined(body))).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: vendorKeys.all });
+    },
+  });
+}
+
 export function useVendorAccount(vendorId: string | undefined) {
   return useQuery({
     queryKey: vendorKeys.account(vendorId ?? ''),

@@ -113,9 +113,18 @@ const GROUPS: Group[] = [
       // A site arrives with its own store, so this tile is for the second one and the
       // third — not a step anybody has to take before the site can be used.
       { title: 'Stores', to: '/stores', permission: 'site:write' },
-      // Behind vendor:write rather than masterdata:write: onboarding a dealer is the
-      // accountant's work, and he deliberately does not hold the master-data permission.
-      { title: 'Suppliers', to: '/vendors', permission: 'vendor:write' },
+      /*
+        Behind vendor:write rather than masterdata:write: onboarding a dealer is the
+        accountant's work, and he deliberately does not hold the master-data permission.
+        The field holds the other half of it (V50) — naming the firm whose lorry is at the
+        gate — and reaches the same register, which shows him the contact details and none
+        of the money.
+      */
+      {
+        title: 'Suppliers',
+        to: '/vendors',
+        anyPermission: ['vendor:write', 'masterdata:provisional:supplier'],
+      },
     ],
   },
   {

@@ -52,6 +52,7 @@ const VENDORS: Vendor[] = [
     gstin: '05AABCU9603R1ZM',
     creditDays: 30,
     active: true,
+    provisional: false,
     version: 0,
   },
 ];
@@ -184,14 +185,20 @@ describe('VendorsPage', () => {
     put.mockResolvedValue({ data: {} });
   });
 
-  it('lists a supplier with the details somebody has to be able to reach', async () => {
+  /**
+   * The person and the number, in their own columns, and neither the GSTIN nor the credit
+   * period. Both of those are read once a year by one person; the question the register is
+   * actually opened with is who to ring about the lorry.
+   */
+  it('lists a supplier by who answers the phone and on what number', async () => {
     renderRegister();
     await screen.findAllByText('Kausani Steel Traders');
 
     const row = within(screen.getByRole('table')).getByText('KSN-STEEL').closest('tr')!;
-    expect(within(row).getByText('Harish Bisht · 9812345678')).toBeInTheDocument();
-    expect(within(row).getByText('05AABCU9603R1ZM')).toBeInTheDocument();
-    expect(within(row).getByText('30 days')).toBeInTheDocument();
+    expect(within(row).getByText('Harish Bisht')).toBeInTheDocument();
+    expect(within(row).getByText('9812345678')).toBeInTheDocument();
+    expect(within(row).queryByText('05AABCU9603R1ZM')).not.toBeInTheDocument();
+    expect(within(row).queryByText('30 days')).not.toBeInTheDocument();
   });
 
   /**
@@ -221,6 +228,59 @@ describe('VendorsPage', () => {
     expect(body.code).toBeUndefined();
     // An empty box is "not given", not a blank GSTIN stored as a GSTIN.
     expect(body.gstin).toBeUndefined();
+  });
+
+  /**
+   * The supervisor's half of the same screen (V50).
+   *
+   * <p>He may say what the firm is called, what it supplies and how to reach it, and none of
+   * what values it — so the tax, bank and terms section is not on his form and his save goes
+   * to the field endpoint, which cannot reach those columns at all. The account is money and
+   * stays behind the money permission, so his rows lead nowhere he may not go.</p>
+   */
+  it('lets the field name a supplier without the office half of the form', async () => {
+    const user = userEvent.setup({ delay: null });
+    permissions = ['masterdata:provisional:supplier'];
+    renderRegister();
+    await screen.findAllByText('Kausani Steel Traders');
+
+    const row = within(screen.getByRole('table')).getByText('KSN-STEEL').closest('tr')!;
+    expect(within(row).queryByRole('link', { name: 'Account' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Onboard a supplier' }));
+    await user.type(await screen.findByLabelText('Firm’s name'), 'Kosi Sand Suppliers');
+    expect(screen.queryByLabelText('GSTIN (optional)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Credit days')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Onboard supplier' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    const [url, body] = post.mock.calls[0] as [string, Record<string, unknown>];
+    expect(url).toBe('/vendors/field');
+    expect(body.name).toBe('Kosi Sand Suppliers');
+    // Not sent as blanks either: naming a thing and valuing it are two different acts.
+    expect(body).not.toHaveProperty('creditDays');
+    expect(body).not.toHaveProperty('active');
+  });
+
+  /** The same fields a day later, through the twin endpoint. Nothing carrying a number. */
+  it('lets the field correct what it said about a supplier', async () => {
+    const user = userEvent.setup({ delay: null });
+    permissions = ['masterdata:provisional:supplier'];
+    renderRegister();
+    await screen.findAllByText('Kausani Steel Traders');
+
+    const row = within(screen.getByRole('table')).getByText('KSN-STEEL').closest('tr')!;
+    await user.click(within(row).getByRole('button', { name: 'Edit' }));
+    const contact = await screen.findByLabelText('Contact person (optional)');
+    await user.clear(contact);
+    await user.type(contact, 'Naveen Bisht');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(put).toHaveBeenCalledOnce());
+    const [url, body] = put.mock.calls[0] as [string, Record<string, unknown>];
+    expect(url).toBe('/vendors/v1/field');
+    expect(body.contactPerson).toBe('Naveen Bisht');
+    expect(body).not.toHaveProperty('gstin');
   });
 
   it('refuses a half-typed GSTIN before the round trip', async () => {

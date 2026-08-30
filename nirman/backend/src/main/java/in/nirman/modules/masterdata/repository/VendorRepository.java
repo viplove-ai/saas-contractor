@@ -29,6 +29,22 @@ public interface VendorRepository extends JpaRepository<Vendor, UUID> {
             UUID orgId, Vendor.Type vendorType);
 
     /**
+     * Every live supplier carrying this name, case- and space-insensitively.
+     *
+     * <p>The duplicate check behind naming one from the field, and it is the whole reason
+     * that endpoint is not {@code createVendor} with fewer fields: two rows for one firm
+     * split his account in half, and neither half is what he thinks he is owed. Oldest
+     * first, so an established row wins over one somebody typed twice.</p>
+     */
+    @Query("""
+            SELECT v FROM Vendor v
+            WHERE v.orgId = :orgId AND v.deletedAt IS NULL
+              AND lower(trim(v.name)) = lower(trim(:name))
+            ORDER BY v.createdAt ASC
+            """)
+    List<Vendor> findByName(@Param("orgId") UUID orgId, @Param("name") String name);
+
+    /**
      * {@code CAST(:q AS string)} because an optional filter bound as a bare null gives
      * PostgreSQL no type to infer, and the statement fails exactly when the caller filters
      * by nothing — which is how every screen opens.

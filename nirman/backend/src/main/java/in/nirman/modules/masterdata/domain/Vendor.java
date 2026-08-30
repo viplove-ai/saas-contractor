@@ -64,6 +64,14 @@ public class Vendor extends BaseEntity {
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
+    /**
+     * Named from the field with contact details only — no tax numbers, no bank account, no
+     * credit terms — and nobody in the office has looked at him yet. See V50: it is the same
+     * flag {@code materials.provisional} carries, for the same reason.
+     */
+    @Column(name = "provisional", nullable = false)
+    private boolean provisional;
+
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
@@ -187,6 +195,14 @@ public class Vendor extends BaseEntity {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public boolean isProvisional() {
+        return provisional;
+    }
+
+    public void setProvisional(boolean provisional) {
+        this.provisional = provisional;
     }
 
     public Instant getDeletedAt() {

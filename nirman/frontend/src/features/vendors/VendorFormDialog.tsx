@@ -17,7 +17,13 @@ import {
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { apiErrorDetail } from '../../shared/apiClient';
-import { useCreateVendor, useUpdateVendor } from './api';
+import { useAuth } from '../auth/AuthContext';
+import {
+  useCorrectFieldVendor,
+  useCreateVendor,
+  useNameVendor,
+  useUpdateVendor,
+} from './api';
 import { vendorSchema, type VendorForm } from './schema';
 import { VENDOR_TYPE_LABEL, type Vendor, type VendorType } from './types';
 
@@ -41,11 +47,24 @@ const TYPES = Object.keys(VENDOR_TYPE_LABEL) as VendorType[];
  *
  * <p>The code cannot be changed afterwards. Every delivery and every bill he has ever sent
  * hangs off this row, and a renamed code is a supplier whose history nobody can follow.</p>
+ *
+ * <p><b>The field gets a shorter version of the same form.</b> Somebody holding only
+ * {@code masterdata:provisional:supplier} — the supervisor watching the lorry unload — sees
+ * the firm, what it supplies and how to reach it, and none of the tax, bank and terms
+ * section: that is the office's, and it is the whole of the difference between naming a
+ * thing and valuing it. He gets no active switch either, and what he onboards arrives
+ * active, because a supplier being named is a supplier being used. His save goes to the
+ * field endpoints, which cannot reach those fields at all — the form hiding them is the
+ * courtesy; the server refusing them is the rule.</p>
  */
 export function VendorFormDialog({ open, vendor, onClose }: Props) {
   const editing = vendor !== null;
+  const { hasPermission } = useAuth();
+  const office = hasPermission('vendor:write');
   const createVendor = useCreateVendor();
   const updateVendor = useUpdateVendor();
+  const nameVendor = useNameVendor();
+  const correctVendor = useCorrectFieldVendor();
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
@@ -88,11 +107,22 @@ export function VendorFormDialog({ open, vendor, onClose }: Props) {
 
   const submit = handleSubmit(async (values) => {
     setServerError(null);
+    // What the field may say about him, and the only thing sent when the field is saying it.
+    const field = {
+      name: values.name,
+      vendorType: values.vendorType,
+      contactPerson: values.contactPerson,
+      mobile: values.mobile,
+      email: values.email,
+      address: values.address,
+    };
     try {
       if (vendor) {
-        await updateVendor.mutateAsync({ ...values, id: vendor.id, version: vendor.version });
+        await (office
+          ? updateVendor.mutateAsync({ ...values, id: vendor.id, version: vendor.version })
+          : correctVendor.mutateAsync({ ...field, id: vendor.id, version: vendor.version }));
       } else {
-        await createVendor.mutateAsync(values);
+        await (office ? createVendor.mutateAsync(values) : nameVendor.mutateAsync(field));
       }
       onClose();
     } catch (error) {
@@ -176,74 +206,90 @@ export function VendorFormDialog({ open, vendor, onClose }: Props) {
             {...register('address')}
           />
 
-          <Divider textAlign="left">
-            <Typography variant="overline" color="text.secondary">
-              Tax, bank and terms
-            </Typography>
-          </Divider>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField
-              label="GSTIN (optional)"
-              fullWidth
-              inputProps={{ style: { textTransform: 'uppercase' } }}
-              error={!!errors.gstin}
-              helperText={errors.gstin?.message ?? 'Needed before his tax can be claimed back.'}
-              {...register('gstin')}
-            />
-            <TextField
-              label="PAN (optional)"
-              fullWidth
-              inputProps={{ style: { textTransform: 'uppercase' } }}
-              error={!!errors.pan}
-              helperText={errors.pan?.message}
-              {...register('pan')}
-            />
-          </Stack>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField
-              label="Bank account (optional)"
-              fullWidth
-              error={!!errors.bankAccountNo}
-              helperText={errors.bankAccountNo?.message}
-              {...register('bankAccountNo')}
-            />
-            <TextField
-              label="IFSC (optional)"
-              fullWidth
-              inputProps={{ style: { textTransform: 'uppercase' } }}
-              error={!!errors.bankIfsc}
-              helperText={errors.bankIfsc?.message}
-              {...register('bankIfsc')}
-            />
-          </Stack>
-          <TextField
-            label="Credit days"
-            type="number"
-            inputProps={{ min: 0, max: 365, step: 1 }}
-            error={!!errors.creditDays}
-            helperText={
-              errors.creditDays?.message ?? 'From his bill to when it is due. 0 is cash on delivery.'
-            }
-            {...register('creditDays')}
-          />
+          {/*
+            Tax, bank and terms — the office's half, and shown to the office alone. A GSTIN
+            typed at a gate is one that money is later paid against, and a credit period
+            guessed there is one a supplier's ledger is later argued from.
+          */}
+          {office && (
+            <>
+              <Divider textAlign="left">
+                <Typography variant="overline" color="text.secondary">
+                  Tax, bank and terms
+                </Typography>
+              </Divider>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                <TextField
+                  label="GSTIN (optional)"
+                  fullWidth
+                  inputProps={{ style: { textTransform: 'uppercase' } }}
+                  error={!!errors.gstin}
+                  helperText={errors.gstin?.message ?? 'Needed before his tax can be claimed back.'}
+                  {...register('gstin')}
+                />
+                <TextField
+                  label="PAN (optional)"
+                  fullWidth
+                  inputProps={{ style: { textTransform: 'uppercase' } }}
+                  error={!!errors.pan}
+                  helperText={errors.pan?.message}
+                  {...register('pan')}
+                />
+              </Stack>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                <TextField
+                  label="Bank account (optional)"
+                  fullWidth
+                  error={!!errors.bankAccountNo}
+                  helperText={errors.bankAccountNo?.message}
+                  {...register('bankAccountNo')}
+                />
+                <TextField
+                  label="IFSC (optional)"
+                  fullWidth
+                  inputProps={{ style: { textTransform: 'uppercase' } }}
+                  error={!!errors.bankIfsc}
+                  helperText={errors.bankIfsc?.message}
+                  {...register('bankIfsc')}
+                />
+              </Stack>
+              <TextField
+                label="Credit days"
+                type="number"
+                inputProps={{ min: 0, max: 365, step: 1 }}
+                error={!!errors.creditDays}
+                helperText={
+                  errors.creditDays?.message ?? 'From his bill to when it is due. 0 is cash on delivery.'
+                }
+                {...register('creditDays')}
+              />
 
-          {editing && (
-            <Controller
-              control={control}
-              name="active"
-              render={({ field }) => (
-                <FormControlLabel
-                  control={
-                    <Switch checked={field.value} onChange={(_, next) => field.onChange(next)} />
-                  }
-                  label={
-                    field.value
-                      ? 'Active — can be named on deliveries and paid'
-                      : 'Inactive — no new deliveries or payments; his history stays'
-                  }
+              {editing && (
+                <Controller
+                  control={control}
+                  name="active"
+                  render={({ field }) => (
+                    <FormControlLabel
+                      control={
+                        <Switch checked={field.value} onChange={(_, next) => field.onChange(next)} />
+                      }
+                      label={
+                        field.value
+                          ? 'Active — can be named on deliveries and paid'
+                          : 'Inactive — no new deliveries or payments; his history stays'
+                      }
+                    />
+                  )}
                 />
               )}
-            />
+            </>
+          )}
+
+          {!office && (
+            <Typography variant="body2" color="text.secondary">
+              His tax numbers, bank details and credit terms are the office's to fill in. He
+              can be named on deliveries and on a day's labour as soon as this is saved.
+            </Typography>
           )}
         </Stack>
       </DialogContent>

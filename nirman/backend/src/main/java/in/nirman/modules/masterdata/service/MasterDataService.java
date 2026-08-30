@@ -8,12 +8,14 @@ import in.nirman.modules.audit.AuditService;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.AddFieldMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.ConversionResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CorrectFieldMaterialRequest;
+import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CorrectFieldVendorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateVendorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.ExpenseCategoryResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.MaterialCategoryResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.MaterialResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.NameExpenseCategoryRequest;
+import in.nirman.modules.masterdata.api.dto.MasterDataDtos.NameVendorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveConversionRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveExpenseCategoryRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveMaterialCategoryRequest;
@@ -204,6 +206,10 @@ public class MasterDataService {
     public VendorResponse updateVendor(UUID id, UpdateVendorRequest request) {
         Vendor vendor = requireVendor(id);
         requireVersion(vendor.getVersion(), request.version(), "Vendor", id);
+        // Editing the row is the act of vetting it: the office has now looked at the firm the
+        // field named and said what its numbers are. Leaving the flag on would keep it for
+        // ever on a list of rows to complete that somebody has already completed.
+        vendor.setProvisional(false);
         vendor.setName(request.name());
         vendor.setVendorType(request.vendorType());
         vendor.setContactPerson(request.contactPerson());
@@ -219,6 +225,97 @@ public class MasterDataService {
         audit.record("VENDOR", vendor.getId(), "UPDATE", null,
                 Map.of("name", vendor.getName(), "active", vendor.isActive()), null);
         return mapper.toResponse(vendor);
+    }
+
+    /**
+     * A supplier named at the gate, because the lorry does not wait for the office either.
+     *
+     * <p>{@code vendor:write} is the accountant's and stays his: he holds the GSTIN, the bank
+     * details and the credit terms, and a mistake in any of them is money sent to the wrong
+     * account. But the supervisor cannot get through a day without naming a supplier — on a
+     * delivery, on a day's outsourced labour, on a bill he has just paid out of his float —
+     * and "he is not in the list" used to be a telephone call to the office.</p>
+     *
+     * <p>So he may say what the firm is called, what it supplies and how to reach it, and
+     * nothing else. The row is marked {@code provisional} so the office can see it was named
+     * rather than decided, and it arrives <b>active</b>: a supplier being named is a supplier
+     * being used, and there is nothing to switch off yet.</p>
+     *
+     * <p>An existing supplier of the same name is <b>returned rather than duplicated</b>, the
+     * same check {@link #addFieldMaterial} makes and for a sharper reason: two rows for one
+     * firm split his account in half, and neither half is what he thinks he is owed.</p>
+     */
+    @PreAuthorize("hasAuthority('masterdata:provisional:supplier')")
+    public VendorResponse nameVendor(NameVendorRequest request) {
+        String name = cleanVendorName(request.name());
+        List<Vendor> existing = vendors.findByName(orgId(), name);
+        if (!existing.isEmpty()) {
+            return mapper.toResponse(existing.get(0));
+        }
+
+        Vendor vendor = new Vendor(orgId(), generateVendorCode(request.vendorType(), name), name,
+                request.vendorType());
+        vendor.setContactPerson(request.contactPerson());
+        vendor.setMobile(request.mobile());
+        vendor.setEmail(request.email());
+        vendor.setAddress(request.address());
+        vendor.setProvisional(true);
+        vendors.save(vendor);
+        recordCreate("VENDOR", vendor.getId(), vendor.getCode());
+        return mapper.toResponse(vendor);
+    }
+
+    /**
+     * What the field said about a supplier, corrected by the field.
+     *
+     * <p>{@link #nameVendor} let him name the firm so the lorry at the gate was not sent away.
+     * Without this half he could not say he had named it wrong — and the way round his own
+     * mistake is to name a second row, which is exactly the split account the naming rule
+     * exists to prevent.</p>
+     *
+     * <p>The same fields, and not one more: nothing carrying a number is reachable from here,
+     * and neither is the active flag. <b>The correction is not quiet</b> — it marks the row
+     * {@code provisional} again, the way {@link #correctFieldMaterial} does, because the
+     * office's vetting was of details that have since changed. An office caller, anybody
+     * holding {@code vendor:write}, does not re-open it.</p>
+     */
+    @PreAuthorize("hasAnyAuthority('masterdata:provisional:supplier', 'vendor:write')")
+    public VendorResponse correctFieldVendor(UUID id, CorrectFieldVendorRequest request) {
+        Vendor vendor = requireVendor(id);
+        requireVersion(vendor.getVersion(), request.version(), "Vendor", id);
+
+        String name = cleanVendorName(request.name());
+        boolean taken = vendors.findByName(orgId(), name).stream()
+                .anyMatch(other -> !other.getId().equals(id));
+        if (taken) {
+            throw BusinessException.conflict("vendor.name-taken",
+                    "The register already holds a supplier called " + name
+                            + ". Use that one — two rows for one firm split his account in "
+                            + "half, and neither half is what he thinks he is owed.");
+        }
+
+        String was = vendor.getName();
+        vendor.setName(name);
+        vendor.setVendorType(request.vendorType());
+        vendor.setContactPerson(request.contactPerson());
+        vendor.setMobile(request.mobile());
+        vendor.setEmail(request.email());
+        vendor.setAddress(request.address());
+        if (!currentUser.hasPermission("vendor:write")) {
+            vendor.setProvisional(true);
+        }
+        audit.record("VENDOR", vendor.getId(), "FIELD_CORRECTION", null,
+                Map.of("name", name, "was", was, "provisional", vendor.isProvisional()), null);
+        return mapper.toResponse(vendor);
+    }
+
+    private String cleanVendorName(String raw) {
+        String name = raw.trim().replaceAll("\\s+", " ");
+        if (name.isEmpty()) {
+            throw new BusinessException("vendor.name-required",
+                    "A supplier needs a name to be booked against.");
+        }
+        return name;
     }
 
     // ------------------------------------------------------------------ materials

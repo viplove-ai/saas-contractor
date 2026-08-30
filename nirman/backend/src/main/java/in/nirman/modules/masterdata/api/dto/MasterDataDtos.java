@@ -60,11 +60,16 @@ public final class MasterDataDtos {
 
     // ------------------------------------------------------------------ vendors
 
+    /**
+     * @param provisional the row was named from the field — what he is called, what he
+     *                    supplies and how to reach him — and the office has not put its own
+     *                    numbers on it yet: no GSTIN, no bank account, no credit period.
+     */
     public record VendorResponse(
             UUID id, String code, String name, Vendor.Type vendorType, String contactPerson,
             String mobile, String email, String address, String gstin, String pan,
             String bankAccountNo, String bankIfsc, int creditDays, BigDecimal openingBalance,
-            boolean active, Long version) {
+            boolean active, boolean provisional, Long version) {
     }
 
     /**
@@ -104,6 +109,40 @@ public final class MasterDataDtos {
             @Size(max = 15) String bankIfsc,
             @Min(0) @Max(365) int creditDays,
             boolean active,
+            @NotNull Long version) {
+    }
+
+    /**
+     * A supplier named at the gate, with only what the man watching the lorry unload knows.
+     *
+     * <p>His name, what he supplies and how to reach him. No GSTIN, no PAN, no bank account
+     * and no credit period, on purpose: those are the office's, and a tax number guessed at a
+     * gate is one that money is later paid against. No active flag either — a supplier being
+     * named is a supplier being used, and taking one off the register is the office's act.</p>
+     */
+    public record NameVendorRequest(
+            @NotBlank @Size(max = 200) String name,
+            @NotNull Vendor.Type vendorType,
+            @Size(max = 150) String contactPerson,
+            @Size(max = 20) String mobile,
+            @Email @Size(max = 150) String email,
+            String address) {
+    }
+
+    /**
+     * The same act a day later: what the field said about a supplier, corrected by the field.
+     *
+     * <p>The same fields it could name him with and not one more. A firm changes the man who
+     * answers the phone and the number he answers on far more often than it changes its
+     * GSTIN, and the person who finds that out is the one standing in front of him.</p>
+     */
+    public record CorrectFieldVendorRequest(
+            @NotBlank @Size(max = 200) String name,
+            @NotNull Vendor.Type vendorType,
+            @Size(max = 150) String contactPerson,
+            @Size(max = 20) String mobile,
+            @Email @Size(max = 150) String email,
+            String address,
             @NotNull Long version) {
     }
 

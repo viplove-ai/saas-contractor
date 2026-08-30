@@ -4,12 +4,14 @@ import in.nirman.common.PageResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.AddFieldMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.ConversionResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CorrectFieldMaterialRequest;
+import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CorrectFieldVendorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateMaterialRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.CreateVendorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.ExpenseCategoryResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.MaterialCategoryResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.MaterialResponse;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.NameExpenseCategoryRequest;
+import in.nirman.modules.masterdata.api.dto.MasterDataDtos.NameVendorRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveConversionRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveExpenseCategoryRequest;
 import in.nirman.modules.masterdata.api.dto.MasterDataDtos.SaveMaterialCategoryRequest;
@@ -128,6 +130,30 @@ public class MasterDataController {
     public VendorResponse updateVendor(@PathVariable UUID id,
                                        @Valid @RequestBody UpdateVendorRequest request) {
         return service.updateVendor(id, request);
+    }
+
+    @PostMapping("/vendors/field")
+    @Operation(summary = "Name a supplier from the field",
+            description = "For the man the lorry is standing in front of, not the office: "
+                    + "what the firm is called, what it supplies and how to reach it. No tax "
+                    + "numbers, no bank account, no credit terms. The row is marked "
+                    + "provisional and arrives active. A supplier already carrying the same "
+                    + "name is returned rather than duplicated, because two rows for one firm "
+                    + "split his account in half.")
+    public ResponseEntity<VendorResponse> nameVendor(@Valid @RequestBody NameVendorRequest req) {
+        VendorResponse created = service.nameVendor(req);
+        return ResponseEntity.created(URI.create("/api/v1/vendors/" + created.id())).body(created);
+    }
+
+    @PutMapping("/vendors/{id}/field")
+    @Operation(summary = "Correct what the field said about a supplier",
+            description = "The twin of naming one: the same permission and the same fields. "
+                    + "Marks the row provisional again so the office reads the new details, "
+                    + "unless the caller is the office. Nothing that carries a number is "
+                    + "reachable here, and neither is the active flag.")
+    public VendorResponse correctFieldVendor(
+            @PathVariable UUID id, @Valid @RequestBody CorrectFieldVendorRequest request) {
+        return service.correctFieldVendor(id, request);
     }
 
     // ------------------------------------------------------------------ labour suppliers
