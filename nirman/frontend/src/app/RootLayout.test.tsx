@@ -89,7 +89,7 @@ describe('RootLayout', () => {
   it('takes the masthead mark back to Today', () => {
     renderAt('/attendance/verify');
 
-    expect(screen.getByRole('link', { name: 'Nirman' })).toHaveAttribute('href', '/today');
+    expect(screen.getByRole('link', { name: 'Shivadri' })).toHaveAttribute('href', '/today');
   });
 
   it('shows no account link to a visitor who is not signed in', () => {

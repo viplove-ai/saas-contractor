@@ -289,9 +289,9 @@ export function Wordmark({ compact = false }: { compact?: boolean }) {
       */}
       <Box
         component="img"
-        src="/brand/icon-512-v2.png"
+        src="/brand/icon-512.png"
         /* Decorative beside the name; the only label in the compact rail, so named there. */
-        alt={compact ? 'Nirman' : ''}
+        alt={compact ? 'Shivadri' : ''}
         sx={{
           width: compact ? 34 : 38,
           height: compact ? 34 : 38,
@@ -302,7 +302,7 @@ export function Wordmark({ compact = false }: { compact?: boolean }) {
       {!compact && (
         <Box>
           <Typography sx={{ fontFamily: '"Kalam", cursive', fontWeight: 700, fontSize: '0.95rem', lineHeight: 1.1 }}>
-            Nirman
+            Shivadri
           </Typography>
           <Typography variant="overline" sx={{ color: tokens.annotation, fontSize: '0.6rem' }}>
             SITE LEDGER

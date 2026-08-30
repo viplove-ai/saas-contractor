@@ -107,7 +107,7 @@ export function LoginPage() {
               <Box
                 component="img"
                 src="/brand/logo-lockup.png"
-                alt="Nirman Constructions"
+                alt="Shivadri Projects"
                 sx={{ width: 240, height: 'auto', display: 'block', alignSelf: 'center' }}
               />
               <Box>
@@ -191,6 +191,11 @@ export function LoginPage() {
 
             <Typography variant="body2" sx={{ textAlign: 'center', color: tokens.muted }}>
               Forgot your password? Ask your site admin to reset it.
+            </Typography>
+
+            {/* The one place on the screen the legal entity is named; the brand does the rest. */}
+            <Typography variant="caption" sx={{ textAlign: 'center', color: tokens.muted }}>
+              © 2026 Shivadri Projects LLP
             </Typography>
           </Stack>
         </form>

@@ -164,7 +164,7 @@ export function InstallPrompt() {
         }
       >
         <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-          Install Nirman on this phone
+          Install Shivadri on this phone
         </Typography>
         {installEvent ? (
           <Typography variant="body2">

@@ -2,6 +2,7 @@
   "name": "nirman-frontend",
   "private": true,
   "version": "0.1.0",
+  "author": "Shivadri Projects LLP",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",

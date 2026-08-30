@@ -59,11 +59,11 @@ afterEach(() => {
 describe('InstallPrompt', () => {
   it('offers the install once the browser says the app is installable', async () => {
     render(<InstallPrompt />);
-    expect(screen.queryByText(/install nirman/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/install shivadri/i)).not.toBeInTheDocument();
 
     fireInstallable();
 
-    expect(await screen.findByText(/install nirman on this phone/i)).toBeInTheDocument();
+    expect(await screen.findByText(/install shivadri on this phone/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Install' })).toBeInTheDocument();
   });
 
@@ -75,7 +75,7 @@ describe('InstallPrompt', () => {
     await user.click(await screen.findByRole('button', { name: 'Install' }));
 
     expect(event.prompt).toHaveBeenCalledOnce();
-    await waitFor(() => expect(screen.queryByText(/install nirman/i)).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(/install shivadri/i)).not.toBeInTheDocument());
   });
 
   it('does not ask again after the offer is dismissed', async () => {
@@ -88,7 +88,7 @@ describe('InstallPrompt', () => {
     render(<InstallPrompt />);
     fireInstallable();
 
-    await waitFor(() => expect(screen.queryByText(/install nirman/i)).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(/install shivadri/i)).not.toBeInTheDocument());
   });
 
   it('stays quiet when the app already runs from the home screen', async () => {
@@ -97,13 +97,13 @@ describe('InstallPrompt', () => {
 
     fireInstallable();
 
-    await waitFor(() => expect(screen.queryByText(/install nirman/i)).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(/install shivadri/i)).not.toBeInTheDocument());
   });
 
   it('shows the Add to Home Screen steps on iOS, where there is no install event', async () => {
     setUserAgent(IPHONE_UA);
     render(<InstallPrompt />);
-    expect(screen.queryByText(/install nirman/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/install shivadri/i)).not.toBeInTheDocument();
 
     act(() => vi.advanceTimersByTime(4000));
 
