@@ -99,6 +99,20 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   /** Picked before the machine exists, so it can only be sent once the row has an id. */
   const [newPhoto, setNewPhoto] = useState<File | null>(null);
+  /**
+   * The id of the entry being typed, minted when the form opens rather than when Save is
+   * pressed.
+   *
+   * <p>This is the whole of the duplicate-entry fix, and the reason it belongs here is the
+   * reason {@code BaseEntity} generates ids on the client at all: the id identifies the
+   * <em>draft</em>, so the same draft sent twice is one row. Minting it inside the save
+   * handler made it identify the <em>press</em> instead — two taps produced two ids, and the
+   * server's replay guard, which recognises a repeat by its id, could not see that it was
+   * looking at the same machine twice. The disabled prop on the button is no defence: it only
+   * takes effect after a re-render, and two taps of an impatient thumb on a slow site
+   * connection both get into the handler first.</p>
+   */
+  const [draftId, setDraftId] = useState<string>(() => crypto.randomUUID());
   const [actionError, setActionError] = useState<string | null>(null);
 
   const canAdd = hasPermission('equipment:create');
@@ -143,6 +157,9 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
     setEditing(null);
     setDraft(emptyDraft());
     setNewPhoto(null);
+    // A new draft is a new act and gets its own id. The one before it belonged to the entry
+    // that was saved or abandoned, and reusing it would have the server replay that row.
+    setDraftId(crypto.randomUUID());
     setActionError(null);
     setOpen(true);
   };
@@ -185,7 +202,7 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
     try {
       const saved = editing
         ? await update.mutateAsync({ ...input, id: editing.id, version: editing.version })
-        : await add.mutateAsync({ ...input, id: crypto.randomUUID() });
+        : await add.mutateAsync({ ...input, id: draftId });
       /*
         The photograph second, and only once the row exists. The other order would put a file
         in storage with nothing to belong to if the entry were then refused — and a machine

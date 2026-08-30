@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { EquipmentPanel } from './EquipmentPanel';
@@ -112,6 +112,40 @@ describe('EquipmentPanel', () => {
     expect(body.name).toBe('Needle vibrator');
     // Generated on the device, so an entry sent three times from a yard is one machine.
     expect(body.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-/i);
+  });
+
+  /**
+   * The duplicate-entry bug, pinned.
+   *
+   * <p>A supervisor on a slow site connection taps Add twice, because nothing has visibly
+   * happened yet. The disabled prop is no defence: it only bites after a re-render, and both
+   * taps get into the handler before that. What decides whether he gets one machine or two is
+   * whether the id identifies the <em>draft</em> or the <em>press</em> — the server recognises
+   * a repeat by its id and replays it, so the same id twice is one row and two ids is two.</p>
+   *
+   * <p>fireEvent rather than userEvent on purpose: userEvent awaits between clicks, which lets
+   * React re-render and disable the button, and would test the guard that already worked
+   * instead of the one that did not.</p>
+   */
+  it('sends one machine, not two, when the Add button is tapped twice', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPanel();
+    await findRegister();
+
+    await user.click(screen.getByRole('button', { name: 'Add equipment' }));
+    await user.type(screen.getByRole('textbox', { name: 'What is it' }), 'Plate compactor');
+
+    const addIt = screen.getByRole('button', { name: 'Add it' });
+    fireEvent.click(addIt);
+    fireEvent.click(addIt);
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    const ids = post.mock.calls
+      .filter(([url]) => url === '/inventory/equipment')
+      .map(([, body]) => (body as { id: string }).id);
+    // Whatever reaches the wire, it is one machine: every send carries the same id, so the
+    // server's replay guard answers the second with the row the first created.
+    expect(new Set(ids).size).toBe(1);
   });
 
   /**
