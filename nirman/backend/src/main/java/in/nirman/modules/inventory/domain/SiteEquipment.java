@@ -81,16 +81,12 @@ public class SiteEquipment extends BaseEntity {
     @Column(name = "remarks")
     private String remarks;
 
-    /**
-     * The picture of the machine, or null.
-     *
-     * <p>Null is ordinary rather than a gap to be chased: the mixer is entered at the gate in
-     * the rain and photographed on Thursday, and an entry refused for want of a photograph is
-     * an entry nobody makes. One picture and not a gallery — the register is asked "which
-     * machine is this", and a day's several photographs are the DPR's business.</p>
+    /*
+     * The pictures are their own rows now — see SiteEquipmentPhoto and V55. One column held
+     * one photograph, and one is the wrong number: a supervisor photographed the plate, then
+     * photographed the damage, and the second silently replaced the first with nothing on the
+     * screen to say anything had been lost.
      */
-    @Column(name = "photo_attachment_id")
-    private UUID photoAttachmentId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
@@ -244,14 +240,6 @@ public class SiteEquipment extends BaseEntity {
 
     public void setRemarks(String remarks) {
         this.remarks = remarks;
-    }
-
-    public UUID getPhotoAttachmentId() {
-        return photoAttachmentId;
-    }
-
-    public void setPhotoAttachmentId(UUID photoAttachmentId) {
-        this.photoAttachmentId = photoAttachmentId;
     }
 
     public Status getStatus() {

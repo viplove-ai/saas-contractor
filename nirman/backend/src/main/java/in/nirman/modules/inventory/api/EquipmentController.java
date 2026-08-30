@@ -3,7 +3,7 @@ package in.nirman.modules.inventory.api;
 import in.nirman.modules.inventory.api.dto.EquipmentDtos.CreateEquipmentRequest;
 import in.nirman.modules.inventory.api.dto.EquipmentDtos.DecideEquipmentRequest;
 import in.nirman.modules.inventory.api.dto.EquipmentDtos.EquipmentResponse;
-import in.nirman.modules.inventory.api.dto.EquipmentDtos.SetEquipmentPhotoRequest;
+import in.nirman.modules.inventory.api.dto.EquipmentDtos.AddEquipmentPhotosRequest;
 import in.nirman.modules.inventory.api.dto.EquipmentDtos.UpdateEquipmentRequest;
 import in.nirman.modules.inventory.domain.SiteEquipment;
 import in.nirman.modules.inventory.service.SiteEquipmentService;
@@ -87,16 +87,28 @@ public class EquipmentController {
         return equipment.update(id, request);
     }
 
-    @PutMapping("/{id}/photo")
-    @Operation(summary = "Put the picture of the machine on the entry, or take it off",
-            description = "Upload the file to /attachments first, then send its id here. The "
-                    + "office on any row; the man who entered the machine on his own — the "
-                    + "photograph usually arrives on a later day than the entry. Replacing an "
-                    + "existing picture from the field re-opens the row for acceptance; adding "
-                    + "the first one does not. A null attachmentId removes it.")
-    public EquipmentResponse setPhoto(@PathVariable UUID id,
-                                      @Valid @RequestBody SetEquipmentPhotoRequest request) {
-        return equipment.setPhoto(id, request.attachmentId());
+    @PostMapping("/{id}/photos")
+    @Operation(summary = "Add pictures of the machine to its entry",
+            description = "Upload the files to /attachments first, then send their ids here. "
+                    + "A list, because somebody standing at the machine photographs the plate "
+                    + "and the damage in one go. The office on any row; anybody posted to the "
+                    + "site on any row standing at it — the photograph usually arrives on a "
+                    + "later day than the entry. Adding to a row that already carries pictures "
+                    + "re-opens it for acceptance; adding the first ones does not, because "
+                    + "nothing the office read has changed.")
+    public EquipmentResponse addPhotos(@PathVariable UUID id,
+                                       @Valid @RequestBody AddEquipmentPhotosRequest request) {
+        return equipment.addPhotos(id, request.attachmentIds());
+    }
+
+    @DeleteMapping("/{id}/photos/{photoId}")
+    @Operation(summary = "Take one picture off the machine, and the file with it",
+            description = "Named by the photograph's own row rather than by the file behind "
+                    + "it, so nobody can unpick a file from a machine it never belonged to. "
+                    + "Removing from the field always re-opens a decided row: taking evidence "
+                    + "away from an entry the office accepted always changes what it agreed to.")
+    public EquipmentResponse removePhoto(@PathVariable UUID id, @PathVariable UUID photoId) {
+        return equipment.removePhoto(id, photoId);
     }
 
     @DeleteMapping("/{id}")

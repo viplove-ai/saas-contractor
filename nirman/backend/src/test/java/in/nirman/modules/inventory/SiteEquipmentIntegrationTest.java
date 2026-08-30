@@ -12,6 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -303,7 +304,7 @@ class SiteEquipmentIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
-    // ------------------------------------------------------------------ the photograph
+    // ------------------------------------------------------------------ the photographs
 
     /**
      * The half the register turns on. "Concrete mixer, no number on it", typed from a yard
@@ -318,16 +319,12 @@ class SiteEquipmentIntegrationTest extends AbstractIntegrationTest {
         String id = UUID.randomUUID().toString();
         JsonNode entered = enter(supervisor, body(UUID.fromString(id), "Plate Compactor", null));
         // Entered without one, which is the ordinary case and never a reason to refuse it.
-        // Absent rather than null: the response body omits what has no value.
-        assertThat(entered.has("photoAttachmentId")).isFalse();
+        assertThat(entered.get("photos")).isEmpty();
 
         String attachmentId = uploadPhoto(supervisor, "mixer.jpg");
-        mockMvc.perform(put("/api/v1/inventory/equipment/" + id + "/photo")
-                        .header("Authorization", "Bearer " + supervisor)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"attachmentId\":\"%s\"}".formatted(attachmentId)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.photoAttachmentId").value(attachmentId))
+        addPhotos(supervisor, id, attachmentId)
+                .andExpect(jsonPath("$.photos.length()").value(1))
+                .andExpect(jsonPath("$.photos[0].attachmentId").value(attachmentId))
                 // The entry itself is untouched: a photograph is not a decision about it.
                 .andExpect(jsonPath("$.status").value("PENDING"));
 
@@ -338,13 +335,39 @@ class SiteEquipmentIntegrationTest extends AbstractIntegrationTest {
     }
 
     /**
-     * The photograph usually arrives on a later day than the entry, and the office may well
-     * have accepted the line of text in between. So the man who entered the machine may still
-     * photograph it — but replacing a picture the office has already read is a new claim, and
-     * it goes back in the queue like any other.
+     * The reason one column was the wrong number. The plate identifies the machine and the
+     * cracked jaw is why anybody is looking at it, and they are not in the same frame — so the
+     * second picture used to replace the first with nothing on the screen to say so.
      */
     @Test
-    @DisplayName("the site may photograph an accepted entry, and replacing the picture re-opens it")
+    @DisplayName("a machine carries as many pictures as it takes, oldest first")
+    void aMachineCarriesSeveralPictures() throws Exception {
+        String supervisor = loginToken("vivek");
+        String id = UUID.randomUUID().toString();
+        enter(supervisor, body(UUID.fromString(id), "Rock Breaker", null));
+
+        String plate = uploadPhoto(supervisor, "plate.jpg");
+        String damage = uploadPhoto(supervisor, "jaw.jpg");
+        // Both in one request: somebody standing at the machine takes them in one go, and
+        // sending them one at a time is where half of them are lost on a site connection.
+        addPhotos(supervisor, id, plate, damage)
+                .andExpect(jsonPath("$.photos.length()").value(2))
+                .andExpect(jsonPath("$.photos[0].attachmentId").value(plate))
+                .andExpect(jsonPath("$.photos[1].attachmentId").value(damage));
+
+        // A third, later. Nothing replaces anything.
+        addPhotos(supervisor, id, uploadPhoto(supervisor, "hoses.jpg"))
+                .andExpect(jsonPath("$.photos.length()").value(3));
+    }
+
+    /**
+     * The photograph usually arrives on a later day than the entry, and the office may well
+     * have accepted the line of text in between. So the man who entered the machine may still
+     * photograph it — but adding to a row that already carries pictures is a new claim about
+     * what the office already read, and it goes back in the queue like any other.
+     */
+    @Test
+    @DisplayName("the site may photograph an accepted entry; a further picture re-opens it")
     void theSiteMayPhotographADecidedEntry() throws Exception {
         String supervisor = loginToken("vivek");
         String office = loginToken("viplove");
@@ -358,63 +381,66 @@ class SiteEquipmentIntegrationTest extends AbstractIntegrationTest {
 
         // The first picture on a row that had none: nothing the office read has changed, so
         // the acceptance stands. Punishing him for finally photographing it teaches him not to.
-        mockMvc.perform(put("/api/v1/inventory/equipment/" + id + "/photo")
-                        .header("Authorization", "Bearer " + supervisor)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"attachmentId\":\"%s\"}"
-                                .formatted(uploadPhoto(supervisor, "late.jpg"))))
-                .andExpect(status().isOk())
+        addPhotos(supervisor, id, uploadPhoto(supervisor, "late.jpg"))
                 .andExpect(jsonPath("$.status").value("ACCEPTED"));
 
-        // A different picture in place of that one is a different claim about the machine.
-        mockMvc.perform(put("/api/v1/inventory/equipment/" + id + "/photo")
-                        .header("Authorization", "Bearer " + supervisor)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"attachmentId\":\"%s\"}"
-                                .formatted(uploadPhoto(supervisor, "second.jpg"))))
-                .andExpect(status().isOk())
+        // A second one is a further claim about a machine the office has already agreed to.
+        addPhotos(supervisor, id, uploadPhoto(supervisor, "second.jpg"))
                 .andExpect(jsonPath("$.status").value("PENDING"));
 
         // The office may, on the same row, at any time — and its own picture is a decision
         // rather than a claim, so the row does not go back to itself.
-        String theirs = uploadPhoto(office, "office.jpg");
-        mockMvc.perform(put("/api/v1/inventory/equipment/" + id + "/photo")
-                        .header("Authorization", "Bearer " + office)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"attachmentId\":\"%s\"}".formatted(theirs)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.photoAttachmentId").value(theirs))
+        addPhotos(office, id, uploadPhoto(office, "office.jpg"))
+                .andExpect(jsonPath("$.photos.length()").value(3))
                 .andExpect(jsonPath("$.status").value("PENDING"));
     }
 
     /**
-     * The camera follows the correction: any machine at a site he is posted to.
-     *
-     * <p>The office's row already carried a picture, so this one replaces what the office
-     * agreed to — a new claim, and it goes back to the queue like any other.</p>
+     * Taking evidence away from an entry the office accepted always changes what it agreed to,
+     * so removal has no equivalent of the "first picture" exemption above.
      */
     @Test
-    @DisplayName("the site photographs an entry it did not make, and re-opens it")
-    void theSitePhotographsAnothersEntry() throws Exception {
+    @DisplayName("a picture comes off by its own id, and takes its file with it")
+    void aPictureComesOffAndTakesItsFile() throws Exception {
         String supervisor = loginToken("vivek");
-        String office = loginToken("viplove");
         String id = UUID.randomUUID().toString();
-        enter(office, body(UUID.fromString(id), "Office Mixer", null));
+        enter(supervisor, body(UUID.fromString(id), "Rephotographed Mixer", null));
+        String keep = uploadPhoto(supervisor, "keep.jpg");
+        String thumb = uploadPhoto(supervisor, "thumb-over-lens.jpg");
+        JsonNode withBoth = objectMapper.readTree(addPhotos(supervisor, id, keep, thumb)
+                .andReturn().getResponse().getContentAsString());
+        String badPhotoId = withBoth.get("photos").get(1).get("id").asText();
 
-        mockMvc.perform(put("/api/v1/inventory/equipment/" + id + "/photo")
-                        .header("Authorization", "Bearer " + office)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"attachmentId\":\"%s\"}"
-                                .formatted(uploadPhoto(office, "as-received.jpg"))))
-                .andExpect(status().isOk());
-
-        mockMvc.perform(put("/api/v1/inventory/equipment/" + id + "/photo")
-                        .header("Authorization", "Bearer " + supervisor)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"attachmentId\":\"%s\"}"
-                                .formatted(uploadPhoto(supervisor, "as-it-stands.jpg"))))
+        mockMvc.perform(delete("/api/v1/inventory/equipment/" + id + "/photos/" + badPhotoId)
+                        .header("Authorization", "Bearer " + supervisor))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("PENDING"));
+                .andExpect(jsonPath("$.photos.length()").value(1))
+                .andExpect(jsonPath("$.photos[0].attachmentId").value(keep));
+
+        // The file went with it: no further signed link can be minted for a picture nobody
+        // meant to keep, which is the rule V51 drew for a staff document.
+        mockMvc.perform(get("/api/v1/attachments/" + thumb + "/url")
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isNotFound());
+    }
+
+    /** A photograph belongs to a machine, and cannot be unpicked from one it never joined. */
+    @Test
+    @DisplayName("a picture cannot be removed through a machine it does not belong to")
+    void aPictureBelongsToItsOwnMachine() throws Exception {
+        String office = loginToken("viplove");
+        String mine = UUID.randomUUID().toString();
+        String theirs = UUID.randomUUID().toString();
+        enter(office, body(UUID.fromString(mine), "Mine Mixer", null));
+        enter(office, body(UUID.fromString(theirs), "Their Mixer", null));
+        JsonNode withPhoto = objectMapper.readTree(
+                addPhotos(office, mine, uploadPhoto(office, "mine.jpg"))
+                        .andReturn().getResponse().getContentAsString());
+        String photoId = withPhoto.get("photos").get(0).get("id").asText();
+
+        mockMvc.perform(delete("/api/v1/inventory/equipment/" + theirs + "/photos/" + photoId)
+                        .header("Authorization", "Bearer " + office))
+                .andExpect(status().isNotFound());
     }
 
     /** A machine is identified by a picture of it. A PDF identifies nothing. */
@@ -436,40 +462,33 @@ class SiteEquipmentIntegrationTest extends AbstractIntegrationTest {
         String attachmentId = objectMapper.readTree(uploaded.getResponse().getContentAsString())
                 .get("id").asText();
 
-        mockMvc.perform(put("/api/v1/inventory/equipment/" + id + "/photo")
-                        .header("Authorization", "Bearer " + office)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"attachmentId\":\"%s\"}".formatted(attachmentId)))
+        addPhotosRaw(office, id, attachmentId)
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.detail")
                         .value(org.hamcrest.Matchers.containsString("is not one")));
     }
 
-    /** Taking it off is the same act as replacing it, and needs no second endpoint. */
-    @Test
-    @DisplayName("a null attachment takes the picture off the entry")
-    void theOfficeTakesThePictureOff() throws Exception {
-        String office = loginToken("viplove");
-        String id = UUID.randomUUID().toString();
-        enter(office, body(UUID.fromString(id), "Rephotographed Mixer", null));
-        mockMvc.perform(put("/api/v1/inventory/equipment/" + id + "/photo")
-                        .header("Authorization", "Bearer " + office)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"attachmentId\":\"%s\"}"
-                                .formatted(uploadPhoto(office, "first.jpg"))))
-                .andExpect(status().isOk());
-
-        mockMvc.perform(put("/api/v1/inventory/equipment/" + id + "/photo")
-                        .header("Authorization", "Bearer " + office)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"attachmentId\":null}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.photoAttachmentId").doesNotExist());
-    }
-
     // ------------------------------------------------------------------ helpers
 
     /** A picture in the bucket, waiting for a record to claim it. */
+    /** Adds pictures and asserts the call succeeded, returning the actions for chaining. */
+    private ResultActions addPhotos(String token, String equipmentId, String... attachmentIds)
+            throws Exception {
+        return addPhotosRaw(token, equipmentId, attachmentIds).andExpect(status().isOk());
+    }
+
+    /** The same call without the success expectation, for the refusals. */
+    private ResultActions addPhotosRaw(String token, String equipmentId, String... attachmentIds)
+            throws Exception {
+        String ids = java.util.Arrays.stream(attachmentIds)
+                .map(id -> "\"" + id + "\"")
+                .collect(java.util.stream.Collectors.joining(","));
+        return mockMvc.perform(post("/api/v1/inventory/equipment/" + equipmentId + "/photos")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"attachmentIds\":[" + ids + "]}"));
+    }
+
     private String uploadPhoto(String token, String fileName) throws Exception {
         MvcResult result = mockMvc.perform(multipart("/api/v1/attachments")
                         .file(new MockMultipartFile("file", fileName, "image/jpeg",

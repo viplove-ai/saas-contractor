@@ -421,6 +421,21 @@ if the tests pass:
   PENDING and clears the decision with it, so nothing reaches the register unread — which is
   what makes widening it safe. The office's own correction does not re-open, for the same
   reason its own entry arrives accepted.
+  **A machine is photographed as many times as it takes.** `site_equipment` held one
+  `photo_attachment_id`, and one is the wrong number: a mixer is identified by its plate, its
+  condition is argued about from the state of its drum, and the crack in a breaker's jaw is not
+  in the same frame as the asset code on its side — while the office is being asked to agree to
+  all three at once. What one column actually produced was a supervisor photographing the plate,
+  then the damage, and the second silently replacing the first with nothing on the screen to say
+  anything had been lost. `site_equipment_photos` (V55) is the same shape V52, V45 and V40
+  already have: the link only, the file in `attachments`, and no `doc_type` — a delivery needs
+  one because the load and the paper are two claims that can *disagree*, and pictures of a
+  machine are all the same claim. Each file is claimed to **its own photo row** rather than to
+  the machine, so removing one picture discards exactly one file. The re-opening rule keeps its
+  shape with one asymmetry: adding to a row that already carries pictures re-opens it, adding
+  the first ones does not (nothing the office read has changed), and **removing always does** —
+  taking evidence away from an entry the office accepted always changes what it agreed to.
+  **No new permission**; photographing a machine is part of entering and correcting one.
 - **The field may name a thing, never value it.** A material off a challan
   (`POST /materials/field`) and an expense head off a bill (`POST /expense-categories/field`)
   both create real rows marked `provisional`, both refuse everything that carries a number or
@@ -825,6 +840,12 @@ address and a next of kin and stopped being right when the record became the thi
 computed from, because an accountant who has to ask for every bank account keeps his own copy in
 a spreadsheet. And it widens `ck_staff_document_type` with `OFFER_LETTER`. No rate, ceiling or
 percentage is stored anywhere — see the salary rule above.
+
+`V55` gives the machine its pictures: `site_equipment_photos`, the existing single photographs
+carried across into it, and `site_equipment.photo_attachment_id` dropped afterwards — kept as
+"the first picture" it would have been a second version of the truth, the one that stops matching
+the day somebody deletes that picture, which is why V19 dropped the two site staffing columns
+rather than keeping them as a summary of the list that replaced them. **No new permission.**
 
 **A note on JPQL and optional parameters.** `(:param IS NULL OR column = :param)` expands to two
 placeholders, and Postgres cannot infer a type for the one standing alone in `? IS NULL` — it

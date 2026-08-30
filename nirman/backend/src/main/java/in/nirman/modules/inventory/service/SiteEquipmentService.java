@@ -5,9 +5,12 @@ import in.nirman.modules.attachment.service.AttachmentLookup;
 import in.nirman.modules.audit.AuditService;
 import in.nirman.modules.inventory.api.dto.EquipmentDtos.CreateEquipmentRequest;
 import in.nirman.modules.inventory.api.dto.EquipmentDtos.DecideEquipmentRequest;
+import in.nirman.modules.inventory.api.dto.EquipmentDtos.EquipmentPhotoResponse;
 import in.nirman.modules.inventory.api.dto.EquipmentDtos.EquipmentResponse;
 import in.nirman.modules.inventory.api.dto.EquipmentDtos.UpdateEquipmentRequest;
 import in.nirman.modules.inventory.domain.SiteEquipment;
+import in.nirman.modules.inventory.domain.SiteEquipmentPhoto;
+import in.nirman.modules.inventory.repository.SiteEquipmentPhotoRepository;
 import in.nirman.modules.inventory.repository.SiteEquipmentRepository;
 import in.nirman.modules.masterdata.service.VendorLookup;
 import in.nirman.modules.project.service.SiteLookup;
@@ -52,6 +55,7 @@ import java.util.stream.Collectors;
 public class SiteEquipmentService {
 
     private final SiteEquipmentRepository equipment;
+    private final SiteEquipmentPhotoRepository photos;
     private final SiteLookup sites;
     private final VendorLookup vendors;
     private final AttachmentLookup attachments;
@@ -59,11 +63,13 @@ public class SiteEquipmentService {
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
 
-    public SiteEquipmentService(SiteEquipmentRepository equipment, SiteLookup sites,
+    public SiteEquipmentService(SiteEquipmentRepository equipment,
+                                SiteEquipmentPhotoRepository photos, SiteLookup sites,
                                 VendorLookup vendors, AttachmentLookup attachments,
                                 SiteAccessGuard siteAccessGuard,
                                 CurrentUserProvider currentUser, AuditService audit) {
         this.equipment = equipment;
+        this.photos = photos;
         this.sites = sites;
         this.vendors = vendors;
         this.attachments = attachments;
@@ -257,34 +263,79 @@ public class SiteEquipmentService {
      * refused because somebody in the office fixed a spelling while he was in the yard.</p>
      */
     @PreAuthorize("hasAnyAuthority('equipment:create', 'equipment:write')")
-    public EquipmentResponse setPhoto(UUID id, UUID attachmentId) {
+    public EquipmentResponse addPhotos(UUID id, List<UUID> attachmentIds) {
         SiteEquipment machine = require(id);
         siteAccessGuard.assertCanAccess(machine.getSiteId());
         boolean office = amendsAsOffice();
-        boolean replacesAPicture = machine.getPhotoAttachmentId() != null;
+        // Whether the row already carried evidence decides whether this is completing the
+        // entry or changing it. Read before anything is added, or the first picture of a
+        // batch would make the second one look like a correction.
+        boolean alreadyPhotographed = photos.countByEquipmentId(id) > 0;
 
-        if (attachmentId == null) {
-            machine.setPhotoAttachmentId(null);
-        } else {
+        for (UUID attachmentId : attachmentIds) {
+            if (photos.existsByAttachmentId(attachmentId)) {
+                continue;   // the same file offered twice is one picture, not a duplicate row
+            }
             AttachmentLookup.FileInfo file = attachments.require(attachmentId);
             if (!file.image()) {
                 throw new BusinessException("equipment.photo-not-an-image",
                         "A machine is identified by a picture of it. " + file.fileName()
                                 + " is not one.");
             }
-            // Claimed, so that nothing can delete the file out from under the register: an
-            // unclaimed upload is a draft anybody who made it may still discard.
-            attachments.claimFor(attachmentId, machine.getId());
-            machine.setPhotoAttachmentId(attachmentId);
+            SiteEquipmentPhoto photo = new SiteEquipmentPhoto(orgId(), id, attachmentId);
+            photos.save(photo);
+            // Claimed to the photograph's own row rather than to the machine, so that removing
+            // one picture can discard exactly one file. Claiming them all to the machine would
+            // make the second photograph look, to the attachment module, like a second record
+            // trying to take the first one's file.
+            attachments.claimFor(attachmentId, photo.getId());
         }
 
-        if (!office && replacesAPicture) {
+        if (!office && alreadyPhotographed) {
             machine.reopen();
+            equipment.save(machine);
         }
 
-        audit.record("SITE_EQUIPMENT", id, attachmentId == null ? "PHOTO_REMOVE" : "PHOTO", null,
-                Map.of("name", machine.getName(),
-                        "photoAttachmentId", String.valueOf(attachmentId),
+        audit.record("SITE_EQUIPMENT", id, "PHOTO", null,
+                Map.of("name", machine.getName(), "added", attachmentIds.size(),
+                        "status", machine.getStatus().name()), null);
+        return toResponses(List.of(machine)).get(0);
+    }
+
+    /**
+     * Taking one picture off a machine.
+     *
+     * <p>Named by the photograph's own row and not by the file behind it: a caller holding an
+     * attachment id could otherwise ask us to unpick a file from a machine it never belonged
+     * to.</p>
+     *
+     * <p>The file goes with the row, the way a staff document's does (V51). A photograph is
+     * not a figure anything was computed from, and the ordinary reason to remove one is that
+     * it is a thumb over the lens or the wrong machine — keeping somebody's mis-shot because
+     * the register cannot bear to lose a row is the worse of the two failures.</p>
+     *
+     * <p>Removing always re-opens a decided row for a field caller, with no equivalent of the
+     * "first picture" exemption above. Adding evidence to an entry the office has not yet read
+     * changes nothing it agreed to; taking evidence away from one it has always does.</p>
+     */
+    @PreAuthorize("hasAnyAuthority('equipment:create', 'equipment:write')")
+    public EquipmentResponse removePhoto(UUID id, UUID photoId) {
+        SiteEquipment machine = require(id);
+        siteAccessGuard.assertCanAccess(machine.getSiteId());
+        SiteEquipmentPhoto photo = photos.findByIdAndOrgId(photoId, orgId())
+                .filter(row -> row.getEquipmentId().equals(id))
+                .orElseThrow(() -> BusinessException.notFound("Equipment photo", photoId));
+
+        photos.delete(photo);
+        attachments.discardFor(photo.getAttachmentId(), photo.getId());
+
+        if (!amendsAsOffice()) {
+            machine.reopen();
+            equipment.save(machine);
+        }
+
+        audit.record("SITE_EQUIPMENT", id, "PHOTO_REMOVE", null,
+                Map.of("name", machine.getName(), "photoId", photoId.toString(),
                         "status", machine.getStatus().name()), null);
         return toResponses(List.of(machine)).get(0);
     }
@@ -376,6 +427,18 @@ public class SiteEquipmentService {
                 .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
         Map<UUID, String> supplierNames = vendors.names(supplierIds);
 
+        // Every machine's pictures in one query. The register draws forty rows and each may
+        // carry several; asking per row is forty queries to fill one screen.
+        Map<UUID, List<EquipmentPhotoResponse>> photosByMachine = photos
+                .findByEquipmentIdInOrderByCreatedAtAsc(
+                        machines.stream().map(SiteEquipment::getId).toList())
+                .stream()
+                .collect(Collectors.groupingBy(SiteEquipmentPhoto::getEquipmentId,
+                        Collectors.mapping(
+                                photo -> new EquipmentPhotoResponse(photo.getId(),
+                                        photo.getAttachmentId()),
+                                Collectors.toList())));
+
         Set<UUID> siteIds = machines.stream().map(SiteEquipment::getSiteId)
                 .collect(Collectors.toCollection(HashSet::new));
         Map<UUID, String> storeNames = sites.storesAtSites(siteIds).stream()
@@ -391,7 +454,8 @@ public class SiteEquipmentService {
                         // supplier, and Map.of() answers a null key with a NullPointerException.
                         machine.getSupplierId() == null
                                 ? null : supplierNames.get(machine.getSupplierId()),
-                        machine.getRemarks(), machine.getPhotoAttachmentId(),
+                        machine.getRemarks(),
+                        photosByMachine.getOrDefault(machine.getId(), List.of()),
                         machine.getStatus(), machine.getDecidedAt(), machine.getDecisionRemarks(),
                         machine.getCreatedAt(), machine.getCreatedBy(), machine.getVersion()))
                 .toList();

@@ -229,7 +229,12 @@ export interface Equipment {
    * The picture of the machine, or absent. An id rather than a URL: a download link is
    * signed and short-lived, so it is asked for when a thumbnail is actually drawn.
    */
-  photoAttachmentId?: string;
+  /**
+   * The pictures of the machine, oldest first — the first taken is of the machine and the
+   * later ones of what went wrong with it. One picture was the wrong number: the plate and
+   * the cracked jaw are not in the same frame, and the second used to replace the first.
+   */
+  photos: EquipmentPhoto[];
   /** PENDING until the office accepts it. Anybody at the site may enter a machine. */
   status: EquipmentStatus;
   decidedAt?: string;
@@ -309,4 +314,10 @@ export interface StockCorrection {
   createdAt: string;
   createdBy?: string;
   version: number;
+}
+
+/** One picture on a machine's entry. The row's own id, because removal names the row. */
+export interface EquipmentPhoto {
+  id: string;
+  attachmentId: string;
 }

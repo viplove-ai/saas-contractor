@@ -43,6 +43,7 @@ const SITE_ENTRY: Equipment = {
   quantity: 1,
   ownership: 'OWNED',
   condition: 'WORKING',
+  photos: [],
   status: 'PENDING',
   createdAt: '2026-08-11T04:00:00Z',
   /** u-1 is who the mocked session is, so this is the supervisor's own entry. */
@@ -253,8 +254,11 @@ describe('EquipmentPanel', () => {
     picture on a day of its own — from the row, without reopening or correcting anything.
   */
   it('photographs a machine already on the register, in two calls', async () => {
-    post.mockResolvedValue({ data: { id: 'att-9' } });
-    put.mockResolvedValue({ data: { ...SITE_ENTRY, photoAttachmentId: 'att-9' } });
+    post.mockImplementation((url: string) =>
+      url === '/attachments'
+        ? Promise.resolve({ data: { id: 'att-9' } })
+        : Promise.resolve({ data: SITE_ENTRY }),
+    );
     const user = userEvent.setup({ delay: null });
     renderPanel();
     const register = await findRegister();
@@ -263,7 +267,7 @@ describe('EquipmentPanel', () => {
 
     // The file into storage first: a row pointing at an attachment that does not exist is a
     // broken picture on the office's screen, while a file with no owner is only a stray file.
-    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    await waitFor(() => expect(post).toHaveBeenCalled());
     const [uploadUrl, , config] = post.mock.calls[0] as [
       string,
       FormData,
@@ -276,41 +280,110 @@ describe('EquipmentPanel', () => {
       siteId: 'site-a',
     });
 
-    await waitFor(() => expect(put).toHaveBeenCalledOnce());
-    expect(put.mock.calls[0]![0]).toBe('/inventory/equipment/eq-1/photo');
-    expect(put.mock.calls[0]![1]).toEqual({ attachmentId: 'att-9' });
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    expect(post.mock.calls[1]![0]).toBe('/inventory/equipment/eq-1/photos');
+    // The ids of the batch, not one call per picture: a supervisor takes the plate and the
+    // damage in the same minute, and one request per photograph re-opens the row per
+    // photograph as well.
+    expect(post.mock.calls[1]![1]).toEqual({ attachmentIds: ['att-9'] });
   });
 
   /*
-    The other way to a picture, and the reason it had to exist: the entry form itself says a
+    The reason there is no capture hint on this one control: the entry form itself says a
     machine written down at the gate and photographed on Thursday is the ordinary case, and by
-    Thursday the photograph is on the phone rather than in front of the lens. The camera keeps
-    its own button — going straight to the rear lens is the point of it — so the gallery is a
-    second control beside it rather than a chooser in front of both.
+    Thursday the photograph is on the phone rather than in front of the lens. A picker that
+    went straight to the rear lens would reach none of those. It was two buttons — a camera and
+    a gallery side by side — which read as two ways to do one thing on a form that already
+    shows the picture; without the hint the phone offers both routes in a single sheet.
   */
   it('takes a picture already on the phone, not only one taken now', async () => {
-    post.mockResolvedValue({ data: { id: 'att-9' } });
-    put.mockResolvedValue({ data: { ...SITE_ENTRY, photoAttachmentId: 'att-9' } });
+    post.mockImplementation((url: string) =>
+      url === '/attachments'
+        ? Promise.resolve({ data: { id: 'att-9' } })
+        : Promise.resolve({ data: SITE_ENTRY }),
+    );
     const user = userEvent.setup({ delay: null });
     renderPanel();
     const register = await findRegister();
 
-    const camera = register.getByLabelText('Photograph it');
-    const gallery = register.getByLabelText('From device');
-    expect(camera).toHaveAttribute('capture', 'environment');
-    expect(gallery).not.toHaveAttribute('capture');
+    // One control, not two. It was a camera button and a gallery button side by side, which
+    // read as two different ways to do the same thing on a form that already shows the
+    // picture; without a capture hint the phone offers both routes in one sheet.
+    const picker = register.getByLabelText('Photograph it');
+    expect(picker).not.toHaveAttribute('capture');
+    expect(register.queryByLabelText('From device')).not.toBeInTheDocument();
 
-    await user.upload(gallery, jpeg());
+    await user.upload(picker, jpeg());
 
-    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
     expect(post.mock.calls[0]![0]).toBe('/attachments');
-    await waitFor(() => expect(put).toHaveBeenCalledOnce());
-    expect(put.mock.calls[0]![0]).toBe('/inventory/equipment/eq-1/photo');
+    expect(post.mock.calls[1]![0]).toBe('/inventory/equipment/eq-1/photos');
+  });
+
+  /**
+   * The reason one column was the wrong number: the plate identifies the machine and the
+   * cracked jaw is why anybody is looking at it, and they are not in the same frame. The
+   * second picture used to replace the first with nothing on the screen to say so.
+   */
+  it('shows every picture on a machine, and sends a batch in one call', async () => {
+    post.mockImplementation((url: string) =>
+      url === '/attachments'
+        ? Promise.resolve({ data: { id: 'att-new' } })
+        : Promise.resolve({ data: SITE_ENTRY }),
+    );
+    const user = userEvent.setup({ delay: null });
+    renderPanel([
+      {
+        ...SITE_ENTRY,
+        photos: [
+          { id: 'ph-1', attachmentId: 'att-plate' },
+          { id: 'ph-2', attachmentId: 'att-jaw' },
+        ],
+      },
+    ]);
+    const register = await findRegister();
+
+    // Both drawn, neither replacing the other.
+    await waitFor(() =>
+      expect(register.getAllByRole('img', { name: 'Concrete Mixer 10/7' })).toHaveLength(2),
+    );
+
+    // Two more chosen at once go up as one request, so the row is re-opened once and not twice.
+    await user.upload(register.getByLabelText('Add another'), [jpeg(), jpeg('hoses.jpg')]);
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(3));
+    expect(post.mock.calls[2]![0]).toBe('/inventory/equipment/eq-1/photos');
+    expect(post.mock.calls[2]![1]).toEqual({ attachmentIds: ['att-new', 'att-new'] });
+  });
+
+  /** The cross sits on the picture, because one Remove button cannot say which one it removes. */
+  it('takes one picture off by the cross on it', async () => {
+    del.mockResolvedValue({ data: SITE_ENTRY });
+    const user = userEvent.setup({ delay: null });
+    renderPanel([
+      {
+        ...SITE_ENTRY,
+        photos: [
+          { id: 'ph-1', attachmentId: 'att-plate' },
+          { id: 'ph-2', attachmentId: 'att-jaw' },
+        ],
+      },
+    ]);
+    const register = await findRegister();
+
+    const crosses = await waitFor(() =>
+      register.getAllByRole('button', { name: 'Remove photo of Concrete Mixer 10/7' }),
+    );
+    expect(crosses).toHaveLength(2);
+    await user.click(crosses[1]!);
+
+    // Named by the photograph's own row, so nothing can unpick a file from another machine.
+    await waitFor(() => expect(del).toHaveBeenCalledOnce());
+    expect(del.mock.calls[0]![0]).toBe('/inventory/equipment/eq-1/photos/ph-2');
   });
 
   /** A picture on the entry is what the office is reading the register for. */
   it('shows the picture on the row once there is one', async () => {
-    renderPanel([{ ...SITE_ENTRY, photoAttachmentId: 'att-9' }]);
+    renderPanel([{ ...SITE_ENTRY, photos: [{ id: 'ph-1', attachmentId: 'att-9' }] }]);
     const register = await findRegister();
 
     const thumbnail = await waitFor(() =>
@@ -378,9 +451,14 @@ describe('EquipmentPanel', () => {
     expect(await form.findByRole('img', { name: 'mixer.jpg' })).toBeInTheDocument();
     await user.click(form.getByRole('button', { name: 'Add it' }));
 
-    await waitFor(() => expect(put).toHaveBeenCalledOnce());
-    expect(post.mock.calls.map((call) => call[0])).toEqual(['/inventory/equipment', '/attachments']);
-    expect(put.mock.calls[0]![0]).toBe('/inventory/equipment/eq-new/photo');
+    // The machine, then the file, then the picture onto the row that now exists. The other
+    // order would put a file in storage with nothing to belong to if the entry were refused.
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(3));
+    expect(post.mock.calls.map((call) => call[0])).toEqual([
+      '/inventory/equipment',
+      '/attachments',
+      '/inventory/equipment/eq-new/photos',
+    ]);
   });
 
   /** The number already on the register is the one thing the person typing can act on. */

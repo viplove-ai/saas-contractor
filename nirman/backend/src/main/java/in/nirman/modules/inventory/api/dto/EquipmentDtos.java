@@ -4,12 +4,14 @@ import in.nirman.modules.inventory.domain.SiteEquipment.Condition;
 import in.nirman.modules.inventory.domain.SiteEquipment.Ownership;
 import in.nirman.modules.inventory.domain.SiteEquipment.Status;
 import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /** Request and response shapes for the equipment held at a site. */
@@ -23,10 +25,12 @@ public final class EquipmentDtos {
      *                     plant as the register and everything else as a question.
      * @param supplierName resolved here rather than left as an id, because a hired machine
      *                     is read as "whose is it" and nobody knows a vendor by uuid.
-     * @param photoAttachmentId the picture of the machine, or null. Left as an id rather than
-     *                     a URL: a download link is signed, short-lived and re-checked against
-     *                     the caller's sites when it is asked for, so baking one into every
-     *                     row of a register would issue forty links nobody opens.
+     * @param photos       the pictures of the machine, oldest first — the first taken is of
+     *                     the machine and the later ones of what went wrong with it. Ids
+     *                     rather than URLs: a download link is signed, short-lived and
+     *                     re-checked against the caller's sites when it is asked for, so
+     *                     baking one into every row of a register would issue forty links
+     *                     nobody opens.
      */
     public record EquipmentResponse(
             UUID id,
@@ -41,7 +45,7 @@ public final class EquipmentDtos {
             UUID supplierId,
             String supplierName,
             String remarks,
-            UUID photoAttachmentId,
+            List<EquipmentPhotoResponse> photos,
             Status status,
             Instant decidedAt,
             String decisionRemarks,
@@ -108,7 +112,25 @@ public final class EquipmentDtos {
      * <p>A null {@code attachmentId} removes the picture, which is the same act as replacing
      * it and needs no second endpoint.</p>
      */
-    public record SetEquipmentPhotoRequest(UUID attachmentId) {
+    /**
+     * One picture on a machine's entry.
+     *
+     * <p>The row's own id travels with the attachment's because removing a picture names the
+     * row, not the file: a caller holding only an attachment id could otherwise ask us to
+     * unpick a file from a machine it does not belong to.</p>
+     */
+    public record EquipmentPhotoResponse(UUID id, UUID attachmentId) {
+    }
+
+    /**
+     * Adding pictures to a machine.
+     *
+     * <p>A list, because a supervisor standing at the machine photographs the plate and the
+     * damage in one go, and sending them one request at a time is where half of them get lost
+     * on a site connection.</p>
+     */
+    public record AddEquipmentPhotosRequest(
+            @NotEmpty(message = "Which pictures?") List<UUID> attachmentIds) {
     }
 
     /** Accepting the machine onto the register, or saying it is not there. */

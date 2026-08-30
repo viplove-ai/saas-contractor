@@ -409,21 +409,36 @@ export function useUpdateEquipment() {
  * machine posts straight to the server — and a photograph that queued while its row did not
  * would be a file waiting for an owner that may never be created.</p>
  */
-export function useSetEquipmentPhoto() {
+/**
+ * Adding pictures to a machine: the files into storage, then the ids onto the entry.
+ *
+ * <p>One request for the batch rather than one per picture. Somebody standing at the machine
+ * photographs the plate and the damage in one go, and sending them separately is where half of
+ * them are lost on a site connection — and it would re-open the row once per picture.</p>
+ *
+ * <p>Each is shrunk on the way. A photograph off a modern phone is four megabytes of
+ * somebody's morning, and 1600 pixels on the long edge is enough to read an asset plate.</p>
+ */
+export function useAddEquipmentPhotos() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { equipmentId: string; siteId: string; file: File }) => {
-      const photo = await compressPhoto(input.file);
-      const form = new FormData();
-      form.append('file', photo.blob, photo.fileName);
-      const uploaded = await apiClient.post<{ id: string }>('/attachments', form, {
-        params: { ownerEntityType: 'SITE_EQUIPMENT', kind: 'PHOTO', siteId: input.siteId },
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+    mutationFn: async (input: { equipmentId: string; siteId: string; files: File[] }) => {
+      const attachmentIds: string[] = [];
+      for (const file of input.files) {
+        const photo = await compressPhoto(file);
+        const form = new FormData();
+        form.append('file', photo.blob, photo.fileName);
+        const uploaded = await apiClient.post<{ id: string }>('/attachments', form, {
+          params: { ownerEntityType: 'SITE_EQUIPMENT', kind: 'PHOTO', siteId: input.siteId },
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        attachmentIds.push(uploaded.data.id);
+      }
       return (
-        await apiClient.put<Equipment>(`/inventory/equipment/${input.equipmentId}/photo`, {
-          attachmentId: uploaded.data.id,
-        })
+        await apiClient.post<Equipment>(
+          `/inventory/equipment/${input.equipmentId}/photos`,
+          { attachmentIds },
+        )
       ).data;
     },
     onSuccess: () => {
@@ -432,15 +447,20 @@ export function useSetEquipmentPhoto() {
   });
 }
 
-/** Takes the picture off the entry. The file stays in storage; the row stops pointing at it. */
+/**
+ * Takes one picture off the entry, and the file with it.
+ *
+ * <p>Named by the photograph's own row rather than by the file behind it, so nothing can
+ * unpick a file from a machine it never belonged to.</p>
+ */
 export function useRemoveEquipmentPhoto() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (equipmentId: string) =>
+    mutationFn: async (input: { equipmentId: string; photoId: string }) =>
       (
-        await apiClient.put<Equipment>(`/inventory/equipment/${equipmentId}/photo`, {
-          attachmentId: null,
-        })
+        await apiClient.delete<Equipment>(
+          `/inventory/equipment/${input.equipmentId}/photos/${input.photoId}`,
+        )
       ).data,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: inventoryKeys.allEquipment });

@@ -1,5 +1,7 @@
+import CloseIcon from '@mui/icons-material/Close';
 import {
   Alert,
+  Box,
   Button,
   Chip,
   CircularProgress,
@@ -7,6 +9,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   MenuItem,
   Stack,
   TextField,
@@ -22,12 +25,12 @@ import {
   useDecideEquipment,
   useDeleteEquipment,
   useEquipment,
+  useAddEquipmentPhotos,
   useRemoveEquipmentPhoto,
-  useSetEquipmentPhoto,
   useUpdateEquipment,
   useVendors,
 } from './api';
-import { MachinePhoto, PickPhotoButton } from './MachinePhoto';
+import { MachinePhotos, PickPhotosButton } from './MachinePhoto';
 import type {
   Equipment,
   EquipmentCondition,
@@ -91,14 +94,14 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
   const update = useUpdateEquipment();
   const decide = useDecideEquipment();
   const remove = useDeleteEquipment();
-  const setPhoto = useSetEquipmentPhoto();
+  const addPhotos = useAddEquipmentPhotos();
   const removePhoto = useRemoveEquipmentPhoto();
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Equipment | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
-  /** Picked before the machine exists, so it can only be sent once the row has an id. */
-  const [newPhoto, setNewPhoto] = useState<File | null>(null);
+  /** Picked before the machine exists, so they can only be sent once the row has an id. */
+  const [newPhotos, setNewPhotos] = useState<File[]>([]);
   /**
    * The id of the entry being typed, minted when the form opens rather than when Save is
    * pressed.
@@ -141,22 +144,20 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
   const reopensOnSave = (machine: Equipment | null): boolean =>
     Boolean(machine) && !canWrite && machine!.status !== 'PENDING';
 
-  /** The object URL for a picture chosen but not yet sent. See PhotoThumb on why it is state. */
-  const [newPhotoPreview, setNewPhotoPreview] = useState<string | null>(null);
+  /** Object URLs for pictures chosen but not yet sent. See PhotoThumb on why they are state. */
+  const [newPhotoPreviews, setNewPhotoPreviews] = useState<string[]>([]);
   useEffect(() => {
-    if (!newPhoto) {
-      setNewPhotoPreview(null);
-      return;
-    }
-    const url = URL.createObjectURL(newPhoto);
-    setNewPhotoPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [newPhoto]);
+    const urls = newPhotos.map((file) => URL.createObjectURL(file));
+    setNewPhotoPreviews(urls);
+    // Revoked together when the selection changes: a preview left behind holds the whole
+    // photograph in memory, and a supervisor retaking a picture four times holds four.
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, [newPhotos]);
 
   const openNew = () => {
     setEditing(null);
     setDraft(emptyDraft());
-    setNewPhoto(null);
+    setNewPhotos([]);
     // A new draft is a new act and gets its own id. The one before it belonged to the entry
     // that was saved or abandoned, and reusing it would have the server replay that row.
     setDraftId(crypto.randomUUID());
@@ -166,7 +167,7 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
 
   const openEdit = (machine: Equipment) => {
     setEditing(machine);
-    setNewPhoto(null);
+    setNewPhotos([]);
     setDraft({
       name: machine.name,
       assetCode: machine.assetCode ?? '',
@@ -209,11 +210,11 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
         recorded without its picture is still a machine recorded, which is the whole reason
         the picture can be added on a later day.
       */
-      if (newPhoto) {
-        await setPhoto.mutateAsync({
+      if (newPhotos.length > 0) {
+        await addPhotos.mutateAsync({
           equipmentId: saved.id,
           siteId: saved.siteId,
-          file: newPhoto,
+          files: newPhotos,
         });
       }
       setOpen(false);
@@ -225,19 +226,19 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
   };
 
   /** Photographing a machine already on the register — the "later" half of the feature. */
-  const photograph = async (machine: Equipment, file: File) => {
+  const photograph = async (machine: Equipment, files: File[]) => {
     setActionError(null);
     try {
-      await setPhoto.mutateAsync({ equipmentId: machine.id, siteId: machine.siteId, file });
+      await addPhotos.mutateAsync({ equipmentId: machine.id, siteId: machine.siteId, files });
     } catch (error) {
       setActionError(apiErrorDetail(error));
     }
   };
 
-  const unphotograph = async (machine: Equipment) => {
+  const unphotograph = async (machine: Equipment, photoId: string) => {
     setActionError(null);
     try {
-      await removePhoto.mutateAsync(machine.id);
+      await removePhoto.mutateAsync({ equipmentId: machine.id, photoId });
     } catch (error) {
       setActionError(apiErrorDetail(error));
     }
@@ -271,20 +272,32 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
       */
       key: 'photo',
       header: 'Photo',
-      cell: (machine) =>
-        machine.photoAttachmentId ? (
-          <MachinePhoto attachmentId={machine.photoAttachmentId} name={machine.name} />
-        ) : mayAmend() ? (
-          <PickPhotoButton
-            label="Photograph it"
-            busy={setPhoto.isPending}
-            onPick={(file) => void photograph(machine, file)}
+      cell: (machine) => (
+        <Stack spacing={0.5} alignItems="flex-start">
+          <MachinePhotos
+            photos={machine.photos}
+            name={machine.name}
+            size={56}
+            removing={removePhoto.isPending}
+            onRemove={
+              mayAmend() ? (photoId) => void unphotograph(machine, photoId) : undefined
+            }
           />
-        ) : (
-          <Typography variant="body2" color="text.secondary">
-            No photo
-          </Typography>
-        ),
+          {mayAmend() ? (
+            <PickPhotosButton
+              label={machine.photos.length > 0 ? 'Add another' : 'Photograph it'}
+              busy={addPhotos.isPending}
+              onPick={(files) => void photograph(machine, files)}
+            />
+          ) : (
+            machine.photos.length === 0 && (
+              <Typography variant="body2" color="text.secondary">
+                No photo
+              </Typography>
+            )
+          )}
+        </Stack>
+      ),
     },
     {
       key: 'machine',
@@ -534,42 +547,74 @@ export function EquipmentPanel({ storeId }: { storeId: string }) {
             */}
             <Stack spacing={1}>
               <Typography variant="body2" color="text.secondary">
-                A picture of it
+                Pictures of it
               </Typography>
-              <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
-                {newPhotoPreview ? (
-                  <PhotoThumb src={newPhotoPreview} name={newPhoto?.name ?? 'Photo'} size={72} />
-                ) : (
-                  editing?.photoAttachmentId && (
-                    <MachinePhoto
-                      attachmentId={editing.photoAttachmentId}
-                      name={editing.name}
-                      size={72}
-                    />
-                  )
-                )}
-                <PickPhotoButton
-                  label={
-                    newPhoto || editing?.photoAttachmentId ? 'Take another' : 'Photograph it'
+              {/*
+                The ones already on the entry, each with its own cross. Removing one here goes
+                straight to the server — it is a change to a row that exists, not part of the
+                draft being typed, and holding it until Save would leave the office reading a
+                picture the supervisor believed he had taken off.
+              */}
+              {editing && (
+                <MachinePhotos
+                  photos={editing.photos}
+                  name={editing.name}
+                  removing={removePhoto.isPending}
+                  onRemove={
+                    mayAmend() ? (photoId) => void unphotograph(editing, photoId) : undefined
                   }
-                  busy={setPhoto.isPending}
-                  onPick={setNewPhoto}
                 />
-                {editing?.photoAttachmentId && !newPhoto && mayAmend() && (
-                  <Button
-                    size="small"
-                    color="error"
-                    disabled={removePhoto.isPending}
-                    onClick={() => void unphotograph(editing)}
-                  >
-                    Remove photo
-                  </Button>
-                )}
-              </Stack>
+              )}
+              {/* Chosen but not sent: they go up once the row has an id. */}
+              {newPhotoPreviews.length > 0 && (
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  {newPhotoPreviews.map((url, index) => (
+                    <Box key={url} sx={{ position: 'relative', lineHeight: 0 }}>
+                      <PhotoThumb
+                        src={url}
+                        name={newPhotos[index]?.name ?? 'Photo'}
+                        size={72}
+                      />
+                      <IconButton
+                        size="small"
+                        aria-label={`Remove ${newPhotos[index]?.name ?? 'photo'}`}
+                        onClick={() =>
+                          setNewPhotos((current) =>
+                            current.filter((_, at) => at !== index),
+                          )
+                        }
+                        sx={{
+                          position: 'absolute',
+                          top: -8,
+                          right: -8,
+                          bgcolor: 'background.paper',
+                          border: 1,
+                          borderColor: 'divider',
+                          p: 0.25,
+                          '&:hover': { bgcolor: 'error.light' },
+                        }}
+                      >
+                        <CloseIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    </Box>
+                  ))}
+                </Stack>
+              )}
+              <Box>
+                <PickPhotosButton
+                  label={
+                    newPhotos.length > 0 || (editing?.photos.length ?? 0) > 0
+                      ? 'Add another'
+                      : 'Photograph it'
+                  }
+                  busy={addPhotos.isPending}
+                  onPick={(files) => setNewPhotos((current) => [...current, ...files])}
+                />
+              </Box>
               <Typography variant="caption" color="text.secondary">
-                {editing
+                {newPhotos.length > 0
                   ? 'Sent when you save.'
-                  : 'Or add it later — the entry does not wait for a photograph.'}
+                  : 'Or add them later — the entry does not wait for a photograph.'}
               </Typography>
             </Stack>
 
