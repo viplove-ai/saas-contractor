@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<!--
+  The month's payroll on one sheet. Rendered by PayslipPdfService through openhtmltopdf,
+  which needs well-formed XHTML — every tag closes, and nothing relies on a browser's
+  tolerance.
+
+  This is the office's document, not the employee's: it is what a month is reconciled against
+  the bank transfer with, and what the returns are filed off. The employee's own document is
+  payslip.html, and the difference matters — the employer's contributions print here, because
+  the office needs what the month cost, and they do not print there, because they were never
+  his money.
+
+  Every figure comes out of the frozen payslip row. Nothing on this page computes.
+
+      The rupee is written "Rs." and not "₹" throughout, and that is not a style choice.
+      openhtmltopdf lays this out in the built-in Helvetica, which has no glyph for the rupee
+      sign — it prints as a hash, on every money figure on the page. The alternatives were to
+      embed a font carrying it, which puts a megabyte in the jar for one character, or to write
+      what every CPWD form and every bank advice in the country already writes.
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title th:text="'Payroll register ' + ${monthLabel}">Payroll register</title>
+    <style>
+        /* Landscape, and the margins cut to what a printer will actually reach: twenty-four
+           columns of rupees do not fit any other way, and a register that wraps is a register
+           whose totals sit on a different page from the rows they total. */
+        @page { size: A4 landscape; margin: 8mm 6mm; }
+        body { font-family: Helvetica, Arial, sans-serif; font-size: 5.5pt; color: #111; }
+        h1 { font-size: 11pt; margin: 0 0 1mm; }
+        .meta { font-size: 7pt; color: #444; }
+        table.head { width: 100%; border-collapse: collapse; }
+        table.reg { width: 100%; border-collapse: collapse; margin-top: 3mm;
+                    table-layout: fixed; }
+        table.reg th, table.reg td { border: 0.2mm solid #999; padding: 0.7mm 0.6mm;
+                                     vertical-align: top; word-wrap: break-word; }
+        table.reg th { background: #eee; font-weight: bold; text-align: center;
+                       font-size: 5pt; }
+        table.reg td.num { text-align: right; }
+        table.reg td.name { text-align: left; }
+        .who { font-weight: bold; font-size: 6pt; }
+        .ids { color: #555; font-size: 4.6pt; }
+        .grp { background: #ddd; text-transform: uppercase; letter-spacing: 0.03em; }
+        tr.total td { font-weight: bold; background: #f2f2f2; }
+        .head td { border: none; padding: 0; }
+        .draft { color: #b00; font-weight: bold; font-size: 9pt; }
+        .foot { margin-top: 5mm; font-size: 6.5pt; color: #444; }
+        .sign { margin-top: 10mm; width: 100%; border-collapse: collapse; }
+        .sign td { border: none; padding-top: 8mm; font-size: 7pt; }
+        .sign .line { border-top: 0.3mm solid #444; padding-top: 1mm; width: 55mm; }
+        .empty { color: #777; font-style: italic; font-size: 8pt; }
+    </style>
+</head>
+<body>
+
+<table class="head">
+    <tr>
+        <td style="width: 62%;">
+            <h1 th:text="'Pay Slip ' + ${monthLabel}">Pay Slip July-2026</h1>
+            <div class="meta" th:text="${periodLabel}">1-Jul-26 to 31-Jul-26</div>
+            <div class="meta" th:text="${employer.name()}">Employer</div>
+            <div class="meta" th:if="${employer.address()}" th:text="${employer.address()}">Address</div>
+        </td>
+        <td style="width: 38%; text-align: right; vertical-align: top;">
+            <div class="draft" th:if="${draft}">DRAFT — this payroll has not been finalised</div>
+            <div class="meta" th:text="'Paid against ' + ${payableDays} + ' days'">days</div>
+            <div class="meta" th:text="'Printed ' + ${printedOn}">printed</div>
+            <div class="meta" th:if="${employer.pan()}" th:text="'PAN ' + ${employer.pan()}">PAN</div>
+        </td>
+    </tr>
+</table>
+
+<div class="empty" th:if="${#lists.isEmpty(slips)}">
+    Nobody has been drawn onto this payroll yet.
+</div>
+
+<table class="reg" th:unless="${#lists.isEmpty(slips)}">
+    <colgroup>
+        <col style="width: 13%;" />
+        <col th:each="i : ${#numbers.sequence(1, 23)}" />
+    </colgroup>
+    <tr>
+        <th rowspan="2">Employee</th>
+        <th class="grp" colspan="6">Salary structure (full month)</th>
+        <th class="grp" colspan="8">Earned this month</th>
+        <th class="grp" colspan="7">Deductions</th>
+        <th rowspan="2">Net<br />Amount</th>
+    </tr>
+    <tr>
+        <th>Basic</th><th>DA</th><th>HRA</th><th>Convey.</th><th>Other</th><th>Gross</th>
+        <th>Days</th><th>Basic</th><th>DA</th><th>HRA</th><th>Convey.</th><th>Other</th>
+        <th>Overtime</th><th>Total<br />Earnings</th>
+        <th>EPF<br />@12%</th><th>ESI<br />@0.75%</th><th>Prof.<br />Tax</th>
+        <th>TDS<br />u/s 392</th><th>Salary<br />Advance</th><th>Other</th>
+        <th>Total<br />Deduct.</th>
+    </tr>
+
+    <tr th:each="s : ${slips}">
+        <td class="name">
+            <div class="who" th:text="${s.employeeName()}">Name</div>
+            <div class="ids">
+                <span th:if="${s.employeeNumber()}" th:text="'No. ' + ${s.employeeNumber()}">No.</span>
+                <span th:if="${s.designation()}" th:text="' · ' + ${s.designation()}">Post</span>
+            </div>
+            <div class="ids" th:if="${s.uan()}" th:text="'UAN ' + ${s.uan()}">UAN</div>
+            <div class="ids" th:if="${s.esicNumber()}" th:text="'ESI ' + ${s.esicNumber()}">ESI</div>
+        </td>
+
+        <td class="num" th:text="${#numbers.formatDecimal(s.structBasic(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.structDa(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.structHra(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.structConveyance(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.structOther(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.structGross(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+
+        <td class="num" th:text="${#numbers.formatDecimal(s.paidDays(), 1, 'COMMA', 2, 'POINT')}">0</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.earnedBasic(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.earnedDa(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.earnedHra(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.earnedConveyance(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.earnedOther(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num">
+            <span th:text="${#numbers.formatDecimal(s.overtimeAmount(), 1, 'COMMA', 2, 'POINT')}">0.00</span>
+            <div class="ids" th:if="${s.overtimeHours()} != 0"
+                 th:text="${#numbers.formatDecimal(s.overtimeHours(), 1, 'COMMA', 2, 'POINT')} + ' hrs'">hrs</div>
+        </td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.totalEarnings(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+
+        <td class="num" th:text="${#numbers.formatDecimal(s.pfEmployee(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.esiEmployee(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.professionalTax(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.tds(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.salaryAdvance(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num">
+            <span th:text="${#numbers.formatDecimal(s.otherDeduction(), 1, 'COMMA', 2, 'POINT')}">0.00</span>
+            <div class="ids" th:if="${s.otherDeductionNote()}" th:text="${s.otherDeductionNote()}">why</div>
+        </td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.totalDeductions(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+
+        <td class="num" th:text="${#numbers.formatDecimal(s.netAmount(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+    </tr>
+</table>
+
+<!--
+  The employer's own contributions, on their own small table rather than among the deductions
+  above. They are what the month cost the firm and they are not deducted from anybody: putting
+  them in the same block as the provident fund taken out of somebody's pay is how a register
+  comes to double-count the fund.
+-->
+<table class="reg" th:unless="${#lists.isEmpty(slips)}" style="width: 60%; margin-top: 4mm;">
+    <tr>
+        <th class="grp" colspan="5">The employer's own contributions — not deducted from anyone</th>
+    </tr>
+    <tr>
+        <th>Employee</th><th>EPF @3.67%</th><th>Pension @8.33%</th><th>ESI @3.25%</th>
+        <th>Cost of employing</th>
+    </tr>
+    <tr th:each="s : ${slips}">
+        <td class="name" th:text="${s.employeeName()}">Name</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.pfEmployer(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.epsEmployer(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.esiEmployer(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num" th:text="${#numbers.formatDecimal(s.employerCost(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+    </tr>
+</table>
+
+<div class="foot">
+    Provident fund at 12% of wages up to the statutory ceiling of Rs.15,000 a month, of which
+    8.33% is the pension share; state insurance at 0.75% from the member and 3.25% from the
+    employer where the monthly wage does not exceed Rs.21,000. Wages are basic and dearness
+    allowance, raised to half the packet where the allowances exceed that, as the Code on
+    Wages requires.
+</div>
+
+<table class="sign">
+    <tr>
+        <td><div class="line">Prepared by</div></td>
+        <td><div class="line">Checked by</div></td>
+        <td><div class="line">Authorised by</div></td>
+    </tr>
+</table>
+
+</body>
+</html>

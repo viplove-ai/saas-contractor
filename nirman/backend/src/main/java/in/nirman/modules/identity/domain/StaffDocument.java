@@ -28,8 +28,17 @@ public class StaffDocument extends BaseEntity {
      * file — and a caption spelled four ways answers it four times. The note beside it carries
      * everything a list cannot say.</p>
      */
+    /**
+     * What a paper is.
+     *
+     * <p>OFFER_LETTER is distinct from APPOINTMENT and not folded into it. They are two
+     * documents and two moments — an offer is made and may be declined, an appointment letter
+     * confirms somebody who has started — and an office asking which offers have not come back
+     * signed cannot be answered by a list that calls both of them the same thing.</p>
+     */
     public enum Type {
-        AADHAAR, PAN, BANK, APPOINTMENT, EDUCATION, POLICE_VERIFICATION, PHOTOGRAPH, OTHER
+        AADHAAR, PAN, BANK, OFFER_LETTER, APPOINTMENT, EDUCATION, POLICE_VERIFICATION,
+        PHOTOGRAPH, OTHER
     }
 
     @Column(name = "org_id", nullable = false, updatable = false)

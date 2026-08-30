@@ -116,6 +116,61 @@ public class StaffProfile extends BaseEntity {
     @Column(name = "notes")
     private String notes;
 
+    /*
+     * ------------------------------------------------------------------ the enrolment
+     *
+     * What the two social security statutes need to know about this person, and what the
+     * payslip prints at the head of the page. Corrected in place like the rest of the
+     * profile: a mistyped universal account number is not history, it is a mistake, and the
+     * money it sent to the wrong member's fund has to be traceable to a corrected record and
+     * not to a second row.
+     */
+
+    /**
+     * The short number the office already uses on its muster and its bank advice. Not the id:
+     * nobody writes a UUID on a payslip, and the number the accountant reads out over the
+     * telephone has to be the number on the document.
+     */
+    @Column(name = "employee_number", length = 20)
+    private String employeeNumber;
+
+    @Column(name = "designation", length = 100)
+    private String designation;
+
+    @Column(name = "uan", length = 12)
+    private String uan;
+
+    @Column(name = "esic_number", length = 17)
+    private String esicNumber;
+
+    @Column(name = "pf_applicable", nullable = false)
+    private boolean pfApplicable;
+
+    /**
+     * Whether the state insurance reaches this member.
+     *
+     * <p>A stored decision and not a test run every month, which matters more here than
+     * anywhere else on this record: coverage is decided for a whole contribution period —
+     * April to September, October to March — and does <em>not</em> lapse in the middle of one
+     * because a raise carried somebody over the ceiling. A monthly re-test would drop him out
+     * in July and leave the establishment short-paid until the period ended.</p>
+     */
+    @Column(name = "esi_applicable", nullable = false)
+    private boolean esiApplicable;
+
+    /**
+     * Contribute to the provident fund on the whole wage rather than only on the statutory
+     * ceiling. Both are lawful and the choice is per member: somebody already contributing on
+     * full wages may not be pushed down to the ceiling, and a new joiner above it may be held
+     * to it.
+     */
+    @Column(name = "pf_on_full_wages", nullable = false)
+    private boolean pfOnFullWages;
+
+    /** Printed on the offer letter, and the one term a leaving argument is always about. */
+    @Column(name = "notice_period_days")
+    private Integer noticePeriodDays;
+
     protected StaffProfile() {
     }
 
@@ -347,5 +402,69 @@ public class StaffProfile extends BaseEntity {
 
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+
+    public String getEmployeeNumber() {
+        return employeeNumber;
+    }
+
+    public void setEmployeeNumber(String employeeNumber) {
+        this.employeeNumber = employeeNumber;
+    }
+
+    public String getDesignation() {
+        return designation;
+    }
+
+    public void setDesignation(String designation) {
+        this.designation = designation;
+    }
+
+    public String getUan() {
+        return uan;
+    }
+
+    public void setUan(String uan) {
+        this.uan = uan;
+    }
+
+    public String getEsicNumber() {
+        return esicNumber;
+    }
+
+    public void setEsicNumber(String esicNumber) {
+        this.esicNumber = esicNumber;
+    }
+
+    public boolean isPfApplicable() {
+        return pfApplicable;
+    }
+
+    public void setPfApplicable(boolean pfApplicable) {
+        this.pfApplicable = pfApplicable;
+    }
+
+    public boolean isEsiApplicable() {
+        return esiApplicable;
+    }
+
+    public void setEsiApplicable(boolean esiApplicable) {
+        this.esiApplicable = esiApplicable;
+    }
+
+    public boolean isPfOnFullWages() {
+        return pfOnFullWages;
+    }
+
+    public void setPfOnFullWages(boolean pfOnFullWages) {
+        this.pfOnFullWages = pfOnFullWages;
+    }
+
+    public Integer getNoticePeriodDays() {
+        return noticePeriodDays;
+    }
+
+    public void setNoticePeriodDays(Integer noticePeriodDays) {
+        this.noticePeriodDays = noticePeriodDays;
     }
 }

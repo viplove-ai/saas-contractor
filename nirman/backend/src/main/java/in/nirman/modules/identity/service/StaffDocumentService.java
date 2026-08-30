@@ -99,6 +99,44 @@ public class StaffDocumentService {
     }
 
     /**
+     * Files a document this system generated onto the record — an offer letter, and whatever
+     * follows it.
+     *
+     * <p>Beside {@link #add} rather than inside it, because the two arrive by different
+     * roads. An upload exists before anybody names it: the browser puts the file in storage,
+     * then says whose it is, and {@code add} checks that the file is real and not already
+     * spoken for. A generated document does not exist until this call renders it, so there is
+     * nothing to check and nothing to claim afterwards — it is stored already belonging to the
+     * row that asked for it.</p>
+     *
+     * <p>The row's id is minted first and handed to storage as the owner, rather than the file
+     * being stored and claimed in a second step. There is no moment in between when the file
+     * is unowned, which is the moment {@code AttachmentService.delete} would otherwise be
+     * willing to discard it.</p>
+     *
+     * <p>No permission of its own: the caller is inside {@code staff:write} already, and the
+     * file it is filing is one this system wrote.</p>
+     */
+    StaffDocumentResponse attachGenerated(UUID userId, StaffDocument.Type docType, String note,
+                                          byte[] content, String fileName) {
+        User member = requireMember(userId);
+        UUID documentId = UUID.randomUUID();
+        AttachmentLookup.FileInfo file = attachments.store(content, fileName, "application/pdf",
+                ENTITY, documentId);
+
+        StaffDocument document = new StaffDocument(orgId(), userId, file.id(), docType,
+                blankToNull(note));
+        document.setId(documentId);
+        documents.save(document);
+
+        audit.record(ENTITY, documentId, "CREATE", null,
+                Map.of("userId", userId.toString(), "member", member.getFullName(),
+                        "docType", docType.name(), "fileName", file.fileName(),
+                        "generated", true), null);
+        return toResponse(document, file);
+    }
+
+    /**
      * Takes a paper off the record, and the file with it.
      *
      * <p>Really deleted, not voided with a reason — the rule that keeps an approved bill on

@@ -39,6 +39,23 @@ export interface StaffProfile {
   bankIfsc?: string;
   bankName?: string;
 
+  /** The short number the office writes on a payslip and a bank advice — not the id. */
+  employeeNumber?: string;
+  designation?: string;
+  /** Twelve digits, issued once and carried between employers. */
+  uan?: string;
+  esicNumber?: string;
+  /**
+   * Whether the two statutes reach this member. Stored decisions rather than tests run every
+   * month: insurance coverage runs for a whole contribution period and does not lapse
+   * mid-period because a raise crossed the ceiling.
+   */
+  pfApplicable: boolean;
+  esiApplicable: boolean;
+  /** Contribute to the fund on the whole wage rather than only on the statutory ceiling. */
+  pfOnFullWages: boolean;
+  noticePeriodDays?: number;
+
   employmentType: EmploymentType;
   joinedOn?: string;
   probationDays?: number;
@@ -60,9 +77,27 @@ export interface StaffProfile {
   version?: number;
 }
 
+/**
+ * One revision, with its parts.
+ *
+ * <p>A salary is not one number, because the law does not treat it as one: the provident fund
+ * is computed on basic and dearness allowance, the state insurance on the whole packet, and
+ * the Code on Wages then overrules both wherever the allowances have been let run past half
+ * of it. {@link SalaryRevision.statutoryWages} is that answer, and it is what tells an office
+ * writing a structure whether the split it chose is doing what it thinks.</p>
+ */
 export interface SalaryRevision {
   id: string;
   monthlyAmount: number;
+  /** False for a row recorded before the structure existed — true, and no payslip can be drawn from it. */
+  structured: boolean;
+  basic?: number;
+  dearnessAllowance?: number;
+  hra?: number;
+  conveyance?: number;
+  otherAllowance?: number;
+  professionalTax?: number;
+  statutoryWages?: number;
   effectiveFrom: string;
   reason: string;
 }
@@ -101,6 +136,7 @@ export type StaffDocumentType =
   | 'AADHAAR'
   | 'PAN'
   | 'BANK'
+  | 'OFFER_LETTER'
   | 'APPOINTMENT'
   | 'EDUCATION'
   | 'POLICE_VERIFICATION'
@@ -111,6 +147,7 @@ export const DOCUMENT_LABEL: Record<StaffDocumentType, string> = {
   AADHAAR: 'Aadhaar card',
   PAN: 'PAN card',
   BANK: 'Bank passbook or cheque',
+  OFFER_LETTER: 'Offer letter',
   APPOINTMENT: 'Appointment or contract letter',
   EDUCATION: 'Qualification certificate',
   POLICE_VERIFICATION: 'Police verification',
@@ -132,4 +169,23 @@ export interface StaffDocument {
   image: boolean;
   uploadedAt: string;
   uploadedBy?: string;
+}
+
+/**
+ * What the offer letter needs that the record does not already hold.
+ *
+ * <p>Deliberately short: the designation, the joining date, the probation, the notice period
+ * and the whole salary structure are read off the record. Asking for them again here would be
+ * a second place to state the same terms, and the letter and the payroll would disagree about
+ * the man they both describe within a year.</p>
+ */
+export interface OfferLetterInput {
+  joiningOn?: string | undefined;
+  letterDate?: string | undefined;
+  reference?: string | undefined;
+  placeOfPosting?: string | undefined;
+  reportingTo?: string | undefined;
+  respondBy?: string | undefined;
+  signatoryName?: string | undefined;
+  signatoryDesignation?: string | undefined;
 }

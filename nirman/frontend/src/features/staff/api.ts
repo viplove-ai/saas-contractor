@@ -3,6 +3,7 @@ import { apiClient } from '../../shared/apiClient';
 import { compressPhoto } from '../../offline/uploads';
 import type {
   EmploymentType,
+  OfferLetterInput,
   SalaryRevision,
   StaffDashboard,
   StaffDocument,
@@ -58,6 +59,14 @@ export interface StaffProfileInput {
   bankAccountNo?: string | undefined;
   bankIfsc?: string | undefined;
   bankName?: string | undefined;
+  employeeNumber?: string | undefined;
+  designation?: string | undefined;
+  uan?: string | undefined;
+  esicNumber?: string | undefined;
+  pfApplicable: boolean;
+  esiApplicable: boolean;
+  pfOnFullWages: boolean;
+  noticePeriodDays?: number | undefined;
   employmentType: EmploymentType;
   joinedOn?: string | undefined;
   probationDays?: number | undefined;
@@ -87,7 +96,13 @@ export function useSaveStaffProfile() {
 
 export interface SalaryRevisionInput {
   userId: string;
-  monthlyAmount: number;
+  /** The five components, and no gross — the server derives it. See salaryRevisionSchema. */
+  basic: number;
+  dearnessAllowance: number;
+  hra: number;
+  conveyance: number;
+  otherAllowance: number;
+  professionalTax: number;
   effectiveFrom: string;
   reason: string;
 }
@@ -198,4 +213,60 @@ export function useRemoveStaffDocument() {
       void queryClient.invalidateQueries({ queryKey: staffKeys.documents(input.userId) });
     },
   });
+}
+
+// ------------------------------------------------------------------ the offer letter
+
+/**
+ * The letter, rendered and handed straight to the browser without being kept.
+ *
+ * <p>Not a query: it is a POST carrying what the letter needs, and a preview that landed in
+ * the read cache would be handed back unchanged after somebody corrected the salary it
+ * quotes.</p>
+ */
+export function usePreviewOfferLetter() {
+  return useMutation({
+    mutationFn: async ({ userId, ...body }: OfferLetterInput & { userId: string }) => {
+      const response = await apiClient.post(`/staff/${userId}/offer-letter/preview`, body, {
+        responseType: 'blob',
+      });
+      return response.data as Blob;
+    },
+  });
+}
+
+/**
+ * Issues the letter and files it on the record.
+ *
+ * <p>Rendered afresh on the server rather than sending back what the preview produced: a
+ * document the browser could hand over is a document the browser could have edited, and the
+ * one thing the firm's own letter has to be is the firm's own letter.</p>
+ */
+export function useIssueOfferLetter() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, ...body }: OfferLetterInput & { userId: string }) =>
+      (await apiClient.post<StaffDocument>(`/staff/${userId}/offer-letter`, body)).data,
+    onSuccess: (_document, input) => {
+      void queryClient.invalidateQueries({ queryKey: staffKeys.documents(input.userId) });
+    },
+  });
+}
+
+/**
+ * Hands a rendered PDF to the browser as a download.
+ *
+ * <p>An object URL rather than a data URI, and revoked on the next tick: a payroll register
+ * for thirty people is a megabyte of base64 in the DOM otherwise, and the tab keeps it for as
+ * long as it lives.</p>
+ */
+export function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }

@@ -45,6 +45,9 @@ const STAFF: StaffProfile[] = [
     active: true,
     roles: ['SUPERVISOR'],
     employmentType: 'PROBATION',
+    pfApplicable: true,
+    esiApplicable: true,
+    pfOnFullWages: false,
     joinedOn: '2026-02-01',
     probationDays: 90,
     probationMonthlySalary: 18000,
@@ -64,6 +67,9 @@ const STAFF: StaffProfile[] = [
     active: true,
     roles: ['SUPERVISOR'],
     employmentType: 'PERMANENT',
+    pfApplicable: false,
+    esiApplicable: false,
+    pfOnFullWages: false,
     probationOverdue: false,
   },
 ];
@@ -120,7 +126,20 @@ const DOCUMENTS: StaffDocument[] = [
 ];
 
 const SALARY: SalaryRevision[] = [
-  { id: 's1', monthlyAmount: 18000, effectiveFrom: '2026-02-01', reason: 'Joined on probation' },
+  {
+    id: 's1',
+    monthlyAmount: 18000,
+    structured: true,
+    basic: 15000,
+    dearnessAllowance: 0,
+    hra: 0,
+    conveyance: 0,
+    otherAllowance: 3000,
+    professionalTax: 200,
+    statutoryWages: 15000,
+    effectiveFrom: '2026-02-01',
+    reason: 'Joined on probation',
+  },
 ];
 
 function renderPage() {
@@ -401,17 +420,23 @@ describe('StaffPage', () => {
     await user.click(within(row).getByRole('button', { name: 'Salary' }));
     await screen.findByText('Joined on probation');
 
-    await user.clear(screen.getByLabelText('A month'));
-    await user.type(screen.getByLabelText('A month'), '24000');
+    // The parts, not a total: the gross is the sum of them and is never sent, because a
+    // total typed beside a breakdown is a total that can disagree with it.
+    await user.clear(screen.getByLabelText('Basic pay'));
+    await user.type(screen.getByLabelText('Basic pay'), '20000');
+    await user.clear(screen.getByLabelText('House rent allowance'));
+    await user.type(screen.getByLabelText('House rent allowance'), '4000');
     await user.type(screen.getByLabelText('Why it moved'), 'Confirmed off probation');
     await user.click(screen.getByRole('button', { name: 'Add the revision' }));
 
     await waitFor(() => expect(post).toHaveBeenCalledOnce());
     expect(post.mock.calls[0]![0]).toBe('/staff/u-1/salary');
     expect(post.mock.calls[0]![1]).toMatchObject({
-      monthlyAmount: 24000,
+      basic: 20000,
+      hra: 4000,
       reason: 'Confirmed off probation',
     });
+    expect(post.mock.calls[0]![1]).not.toHaveProperty('monthlyAmount');
   });
 
   it('will not record a change of pay with no reason', async () => {
@@ -423,12 +448,36 @@ describe('StaffPage', () => {
     await user.click(within(row).getByRole('button', { name: 'Salary' }));
     await screen.findByText('Joined on probation');
 
-    await user.clear(screen.getByLabelText('A month'));
-    await user.type(screen.getByLabelText('A month'), '24000');
+    await user.clear(screen.getByLabelText('Basic pay'));
+    await user.type(screen.getByLabelText('Basic pay'), '24000');
     await user.click(screen.getByRole('button', { name: 'Add the revision' }));
 
     expect(await screen.findByText(/Say why it moved/)).toBeInTheDocument();
     expect(post).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The single thing about the 2025 codes that changes what a contractor's payroll costs. An
+   * office writing a low basic and large allowances to keep the fund down has to learn here,
+   * before it saves, that the law counts the excess as wages anyway.
+   */
+  it('warns when the allowances run past half the packet', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('Deepak Joshi');
+
+    const row = within(screen.getByRole('table')).getByText('deepak').closest('tr')!;
+    await user.click(within(row).getByRole('button', { name: 'Salary' }));
+    await screen.findByText('Joined on probation');
+
+    // Basic 8,000 of a 20,000 packet: the wage is lifted to 10,000, not left at 8,000.
+    await user.clear(screen.getByLabelText('Basic pay'));
+    await user.type(screen.getByLabelText('Basic pay'), '8000');
+    await user.clear(screen.getByLabelText('Other allowances'));
+    await user.type(screen.getByLabelText('Other allowances'), '12000');
+
+    expect(await screen.findByText(/more than half the packet/)).toBeInTheDocument();
+    expect(screen.getByText(/Writing a low basic does not/)).toBeInTheDocument();
   });
 
   it('shows the register without the buttons to somebody who may only read it', async () => {

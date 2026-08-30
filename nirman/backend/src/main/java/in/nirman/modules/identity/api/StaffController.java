@@ -1,18 +1,23 @@
 package in.nirman.modules.identity.api;
 
 import in.nirman.modules.identity.api.dto.StaffDtos.AddStaffDocumentRequest;
+import in.nirman.modules.identity.api.dto.StaffDtos.OfferLetterRequest;
 import in.nirman.modules.identity.api.dto.StaffDtos.RecordSalaryRequest;
 import in.nirman.modules.identity.api.dto.StaffDtos.SalaryRevisionResponse;
 import in.nirman.modules.identity.api.dto.StaffDtos.SaveStaffProfileRequest;
 import in.nirman.modules.identity.api.dto.StaffDtos.StaffDashboardResponse;
 import in.nirman.modules.identity.api.dto.StaffDtos.StaffDocumentResponse;
 import in.nirman.modules.identity.api.dto.StaffDtos.StaffProfileResponse;
+import in.nirman.modules.identity.service.OfferLetterService;
 import in.nirman.modules.identity.service.StaffDocumentService;
 import in.nirman.modules.identity.service.StaffRecordService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -42,10 +47,13 @@ public class StaffController {
 
     private final StaffRecordService staff;
     private final StaffDocumentService staffDocuments;
+    private final OfferLetterService offerLetters;
 
-    public StaffController(StaffRecordService staff, StaffDocumentService staffDocuments) {
+    public StaffController(StaffRecordService staff, StaffDocumentService staffDocuments,
+                           OfferLetterService offerLetters) {
         this.staff = staff;
         this.staffDocuments = staffDocuments;
+        this.offerLetters = offerLetters;
     }
 
     @GetMapping
@@ -113,5 +121,36 @@ public class StaffController {
     public SalaryRevisionResponse recordSalary(@PathVariable UUID userId,
                                                @Valid @RequestBody RecordSalaryRequest request) {
         return staff.recordSalary(userId, request);
+    }
+
+    // ------------------------------------------------------------------ the offer
+
+    @PostMapping("/{userId}/offer-letter/preview")
+    @Operation(summary = "Render the offer letter without keeping it",
+            description = "Because a letter is read before it is sent. The terms come off the "
+                    + "staff record and the salary structure; the body carries only what "
+                    + "belongs to the letter — where he is posted, whom he reports to, by when "
+                    + "he must answer.")
+    public ResponseEntity<byte[]> previewOfferLetter(@PathVariable UUID userId,
+                                                     @Valid @RequestBody
+                                                     OfferLetterRequest request) {
+        OfferLetterService.Rendered rendered = offerLetters.preview(userId, request);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + rendered.fileName() + "\"")
+                .body(rendered.body());
+    }
+
+    @PostMapping("/{userId}/offer-letter")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Issue the offer letter and file it on the member's record",
+            description = "Rendered afresh rather than taking back what the preview produced — "
+                    + "a document the client could hand us is a document the client could have "
+                    + "edited. It is filed through the same register as a scanned passbook, as "
+                    + "a paper of type OFFER_LETTER.")
+    public StaffDocumentResponse issueOfferLetter(@PathVariable UUID userId,
+                                                  @Valid @RequestBody OfferLetterRequest request) {
+        return offerLetters.issue(userId, request);
     }
 }

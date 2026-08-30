@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<!--
+  The offer of employment. Rendered by OfferLetterService through openhtmltopdf, which needs
+  well-formed XHTML — every tag closes.
+
+  Every term on this page is read off the staff record. Nothing here is typed twice, which is
+  the whole reason the letter is generated at all: a letter written in a word processor and a
+  payroll computed from a database will disagree about somebody's basic pay within a year, and
+  the letter is the one the employee kept.
+
+  The letter states the pay and the entitlements and prints NO net figure. A net depends on a
+  tax regime he has not elected and declarations he has not made, and a candidate shown a
+  take-home on the day he was offered the job and a smaller one on his first payslip has been
+  told two different things by the same employer.
+
+      The rupee is written "Rs." and not "₹" throughout, and that is not a style choice.
+      openhtmltopdf lays this out in the built-in Helvetica, which has no glyph for the rupee
+      sign — it prints as a hash, on every money figure on the page. The alternatives were to
+      embed a font carrying it, which puts a megabyte in the jar for one character, or to write
+      what every CPWD form and every bank advice in the country already writes.
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Offer of employment</title>
+    <style>
+        @page { size: A4; margin: 20mm 18mm 18mm; }
+        body { font-family: Helvetica, Arial, sans-serif; font-size: 10.5pt; color: #111;
+               line-height: 1.5; }
+        h1 { font-size: 14pt; margin: 0 0 1mm; }
+        h2 { font-size: 11pt; margin: 7mm 0 2mm; }
+        .letterhead { border-bottom: 0.5mm solid #333; padding-bottom: 3mm; }
+        .letterhead .meta { font-size: 9pt; color: #444; }
+        .refline { margin-top: 6mm; font-size: 9.5pt; }
+        .refline td { border: none; padding: 0; }
+        table { width: 100%; border-collapse: collapse; }
+        p { margin: 3mm 0; text-align: justify; }
+        ol { margin: 2mm 0 2mm 5mm; padding-left: 4mm; }
+        li { margin-bottom: 2mm; }
+        table.pay { margin-top: 3mm; }
+        table.pay th, table.pay td { border: 0.2mm solid #999; padding: 1.6mm 2.5mm;
+                                     font-size: 10pt; }
+        table.pay th { background: #eee; text-align: left; }
+        table.pay td.num { text-align: right; }
+        table.pay tr.total td, table.pay tr.total th { font-weight: bold; background: #f6f6f6; }
+        .note { font-size: 8.5pt; color: #555; margin-top: 3mm; line-height: 1.4; }
+        .sign { margin-top: 14mm; }
+        .sign td { border: none; vertical-align: bottom; font-size: 10pt; }
+        .sign .line { border-top: 0.3mm solid #444; padding-top: 1.5mm; width: 60mm;
+                      margin-top: 16mm; }
+        .accept { margin-top: 10mm; border: 0.3mm solid #666; padding: 4mm; font-size: 9.5pt; }
+        .page-two { page-break-before: always; }
+    </style>
+</head>
+<body>
+
+<div class="letterhead">
+    <h1 th:text="${employer.name}">Employer</h1>
+    <div class="meta" th:if="${employer.address}" th:text="${employer.address}">Address</div>
+    <div class="meta">
+        <span th:if="${employer.contactPhone}" th:text="${employer.contactPhone}">phone</span>
+        <span th:if="${employer.contactEmail}" th:text="' · ' + ${employer.contactEmail}">email</span>
+        <span th:if="${employer.gstin}" th:text="' · GSTIN ' + ${employer.gstin}">gstin</span>
+    </div>
+</div>
+
+<table class="refline">
+    <tr>
+        <td th:text="'Ref: ' + ${reference}">Ref</td>
+        <td style="text-align: right;" th:text="${letterDate}">date</td>
+    </tr>
+</table>
+
+<p style="margin-top: 6mm;">
+    <strong th:text="${candidateName}">Name</strong><br />
+    <span th:if="${address}" th:text="${address}">Address</span>
+</p>
+
+<h2>Sub: Offer of employment</h2>
+
+<p>Dear <span th:text="${candidateName}">Name</span>,</p>
+
+<p>
+    We are pleased to offer you employment with
+    <strong th:text="${employer.name}">the firm</strong>
+    <span th:if="${designation}">as <strong th:text="${designation}">designation</strong></span>,
+    on the terms set out below.
+</p>
+
+<ol>
+    <li>
+        <strong>Date of joining.</strong> You are required to join on
+        <strong th:text="${joiningDate}">date</strong>. This offer is made on the basis of
+        that date; if you are unable to join on it, please tell us before you accept.
+    </li>
+
+    <li th:if="${placeOfPosting}">
+        <strong>Place of posting.</strong> You will be posted at
+        <span th:text="${placeOfPosting}">place</span>. As our work is carried on at project
+        sites, you may be transferred to any other site or office of the firm as the work
+        requires.
+    </li>
+
+    <li th:if="${reportingTo}">
+        <strong>Reporting.</strong> You will report to
+        <span th:text="${reportingTo}">person</span>.
+    </li>
+
+    <li th:if="${employmentType.name() == 'PROBATION'}">
+        <strong>Probation.</strong> You will be on probation for
+        <span th:text="${probationDays}">0</span> days from the date of joining,
+        <span th:if="${probationEnds}">that is until
+            <span th:text="${probationEnds}">date</span></span>. Your confirmation in service
+        will be communicated to you in writing; until it is, you remain on probation.
+    </li>
+
+    <li th:if="${employmentType.name() == 'CONTRACTUAL'}">
+        <strong>Term.</strong> This is a fixed-term engagement
+        <span th:if="${contractEndsOn}">expiring on
+            <span th:text="${contractEndsOn}">date</span></span>. It carries the same wages,
+        hours and social security entitlements as a permanent employee doing the same work, as
+        required by law.
+    </li>
+
+    <li>
+        <strong>Remuneration.</strong> Your salary will be
+        <strong th:text="'Rs. ' + ${#numbers.formatDecimal(structure.monthlyAmount, 1, 'COMMA', 2, 'POINT')}
+                          + ' per month'">amount</strong>
+        (<span th:text="'Rs. ' + ${#numbers.formatDecimal(annual, 1, 'COMMA', 2, 'POINT')}">annual</span>
+        a year), made up as shown in the annexure to this letter. Salary is paid monthly and
+        is subject to deduction of tax at source and of your own contributions to the
+        statutory funds.
+    </li>
+
+    <li>
+        <strong>Provident fund, insurance and gratuity.</strong>
+        <span th:if="${pfApplicable}">You will be enrolled in the Employees' Provident Fund,
+            to which you and the firm each contribute at the statutory rate.</span>
+        <span th:if="${esiApplicable}">You will be covered by the Employees' State Insurance
+            scheme.</span>
+        Gratuity is payable on the terms and at the rates the law provides. All three are
+        computed on wages as defined by the Code on Wages, which is shown in the annexure.
+    </li>
+
+    <li th:if="${noticePeriodDays}">
+        <strong>Notice.</strong> After confirmation, either you or the firm may end this
+        employment by giving <span th:text="${noticePeriodDays}">0</span> days' notice in
+        writing, or salary in lieu of the notice period.
+    </li>
+
+    <li>
+        <strong>Documents.</strong> Please bring the originals and one copy each of your proof
+        of identity, permanent account number, bank passbook or a cancelled cheque, and your
+        educational and experience certificates on the day you join.
+    </li>
+
+    <li>
+        <strong>General.</strong> You will be governed by the firm's rules as they stand and
+        as they may be amended, and by the law applicable to your employment. This offer is
+        made on the basis of the information you have given us, and is liable to be withdrawn
+        if any of it is found to be incorrect.
+    </li>
+</ol>
+
+<p th:if="${respondBy}">
+    Please confirm your acceptance by signing and returning the copy of this letter on or
+    before <strong th:text="${respondBy}">date</strong>.
+</p>
+<p th:unless="${respondBy}">
+    Please confirm your acceptance by signing and returning the copy of this letter.
+</p>
+
+<p>We look forward to your joining us.</p>
+
+<table class="sign">
+    <tr>
+        <td>
+            Yours sincerely,
+            <div class="line">
+                <span th:text="${signatoryName} ?: 'Authorised signatory'">signatory</span>
+                <div th:if="${signatoryDesignation}" style="font-size: 9pt; color: #444;"
+                     th:text="${signatoryDesignation}">post</div>
+                <div style="font-size: 9pt; color: #444;" th:text="'For ' + ${employer.name}">firm</div>
+            </div>
+        </td>
+    </tr>
+</table>
+
+<div class="accept">
+    <strong>Acceptance</strong><br />
+    I have read and understood the terms above and accept this offer. I confirm that I will
+    join on the date stated.
+    <table style="margin-top: 8mm;">
+        <tr>
+            <td style="border: none;">Signature: ______________________</td>
+            <td style="border: none;">Date: ______________</td>
+        </tr>
+    </table>
+</div>
+
+<!--
+  The annexure on its own page, because it is the part that gets photocopied and argued about
+  and because a salary table that breaks across a page fold is a salary table somebody reads
+  half of.
+-->
+<div class="page-two">
+    <h2 style="margin-top: 0;">Annexure — salary structure</h2>
+    <p style="font-size: 9.5pt;">
+        For <strong th:text="${candidateName}">Name</strong>, with effect from
+        <span th:text="${joiningDate}">date</span>.
+    </p>
+
+    <table class="pay">
+        <tr>
+            <th style="width: 55%;">Component</th>
+            <th class="num" style="width: 22%;">Per month (Rs.)</th>
+            <th class="num" style="width: 23%;">Per year (Rs.)</th>
+        </tr>
+        <tr>
+            <td>Basic pay</td>
+            <td class="num" th:text="${#numbers.formatDecimal(structure.basic, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td class="num" th:text="${#numbers.formatDecimal(structure.basic * 12, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        </tr>
+        <tr th:if="${structure.dearnessAllowance != null and structure.dearnessAllowance != 0}">
+            <td>Dearness allowance</td>
+            <td class="num" th:text="${#numbers.formatDecimal(structure.dearnessAllowance, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td class="num" th:text="${#numbers.formatDecimal(structure.dearnessAllowance * 12, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        </tr>
+        <tr th:if="${structure.hra != null and structure.hra != 0}">
+            <td>House rent allowance</td>
+            <td class="num" th:text="${#numbers.formatDecimal(structure.hra, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td class="num" th:text="${#numbers.formatDecimal(structure.hra * 12, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        </tr>
+        <tr th:if="${structure.conveyance != null and structure.conveyance != 0}">
+            <td>Conveyance allowance</td>
+            <td class="num" th:text="${#numbers.formatDecimal(structure.conveyance, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td class="num" th:text="${#numbers.formatDecimal(structure.conveyance * 12, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        </tr>
+        <tr th:if="${structure.otherAllowance != null and structure.otherAllowance != 0}">
+            <td>Other allowances</td>
+            <td class="num" th:text="${#numbers.formatDecimal(structure.otherAllowance, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td class="num" th:text="${#numbers.formatDecimal(structure.otherAllowance * 12, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        </tr>
+        <tr class="total">
+            <th>Gross salary</th>
+            <td class="num" th:text="${#numbers.formatDecimal(structure.monthlyAmount, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td class="num" th:text="${#numbers.formatDecimal(annual, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        </tr>
+    </table>
+
+    <div class="note">
+        <p>
+            <strong>Wages for statutory purposes:</strong>
+            Rs. <span th:text="${#numbers.formatDecimal(statutoryWages, 1, 'COMMA', 2, 'POINT')}">0.00</span>
+            a month. Under the Code on Wages this is basic pay together with dearness
+            allowance, raised to one half of the total remuneration where the excluded
+            allowances exceed that half. Your provident fund, your gratuity and any statutory
+            bonus are computed on this figure and not on the gross.
+        </p>
+        <p>
+            Deductions from your monthly salary will be your own contributions to the
+            provident fund and, where applicable, to the state insurance scheme, professional
+            tax as charged by the State, and tax deducted at source. Those figures depend on
+            the tax regime you elect and on the declarations you make, so they are not stated
+            here; they will appear, itemised, on your monthly payslip. The firm's own
+            contributions to the provident fund, the pension scheme and the insurance scheme
+            are paid over and above the salary shown and are not deducted from it.
+        </p>
+    </div>
+</div>
+
+</body>
+</html>

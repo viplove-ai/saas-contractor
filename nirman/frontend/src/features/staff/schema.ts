@@ -70,6 +70,20 @@ export const staffProfileSchema = z
       .or(z.literal('')),
     bankName: optionalText(100),
 
+    employeeNumber: optionalText(20),
+    designation: optionalText(100),
+    uan: z
+      .string()
+      .trim()
+      .regex(/^[0-9]{12}$/, 'A UAN is twelve digits')
+      .optional()
+      .or(z.literal('')),
+    esicNumber: optionalText(17),
+    pfApplicable: z.boolean(),
+    esiApplicable: z.boolean(),
+    pfOnFullWages: z.boolean(),
+    noticePeriodDays: z.string().trim().optional().or(z.literal('')),
+
     employmentType: z.enum(['PERMANENT', 'CONTRACTUAL', 'PROBATION']),
     joinedOn: optionalDate,
     probationDays: z.string().trim().optional().or(z.literal('')),
@@ -125,11 +139,29 @@ export const staffProfileSchema = z
 
 export type StaffProfileForm = z.infer<typeof staffProfileSchema>;
 
-/** A change of pay. The reason is required — see RecordSalaryRequest for why. */
+/**
+ * A change of pay, as a structure rather than as a figure.
+ *
+ * <p>The basic is required and the rest are not. A salary of basic alone is a real and common
+ * arrangement; a salary with no basic at all is not an arrangement, it is a figure somebody
+ * has declined to break down — and no payslip can be drawn from it, because the provident
+ * fund has nothing to stand on.</p>
+ *
+ * <p>There is no gross box. It is the sum of the five, shown while typing and sent as
+ * nothing: a total typed beside a breakdown is a total that can disagree with it, and the
+ * check constraint under the row would then refuse the save over arithmetic the person typing
+ * cannot act on.</p>
+ */
+const component = (label: string) =>
+  z.coerce.number({ invalid_type_error: label }).min(0, 'Not less than zero');
+
 export const salaryRevisionSchema = z.object({
-  monthlyAmount: z.coerce
-    .number({ invalid_type_error: 'Enter the monthly salary' })
-    .min(0, 'Not less than zero'),
+  basic: component('Enter the basic pay'),
+  dearnessAllowance: component('A number, or leave it at zero'),
+  hra: component('A number, or leave it at zero'),
+  conveyance: component('A number, or leave it at zero'),
+  otherAllowance: component('A number, or leave it at zero'),
+  professionalTax: component('A number, or leave it at zero'),
   effectiveFrom: z.string().min(1, 'From which date?'),
   reason: z
     .string()
@@ -139,3 +171,17 @@ export const salaryRevisionSchema = z.object({
 });
 
 export type SalaryRevisionForm = z.infer<typeof salaryRevisionSchema>;
+
+/** What the offer letter asks for, which is only what the record does not already hold. */
+export const offerLetterSchema = z.object({
+  joiningOn: optionalDate,
+  letterDate: optionalDate,
+  reference: optionalText(60),
+  placeOfPosting: optionalText(200),
+  reportingTo: optionalText(150),
+  respondBy: optionalDate,
+  signatoryName: optionalText(150),
+  signatoryDesignation: optionalText(150),
+});
+
+export type OfferLetterForm = z.infer<typeof offerLetterSchema>;

@@ -185,7 +185,7 @@ class StaffRecordIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", "Bearer " + admin)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"monthlyAmount":19000,"effectiveFrom":"2026-02-01",
+                                {"basic":19000,"effectiveFrom":"2026-02-01",
                                  "reason":"Corrected"}"""))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value(containsString("pick another date")));
@@ -268,7 +268,7 @@ class StaffRecordIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"monthlyAmount":%s,"effectiveFrom":"%s","reason":"%s"}"""
+                                {"basic":%s,"effectiveFrom":"%s","reason":"%s"}"""
                                 .formatted(amount, from, reason)))
                 .andExpect(status().isCreated());
     }

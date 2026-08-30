@@ -57,6 +57,16 @@ public final class StaffDtos {
             String bankIfsc,
             String bankName,
 
+            /** The short number the office writes on a payslip and a bank advice. */
+            String employeeNumber,
+            String designation,
+            String uan,
+            String esicNumber,
+            boolean pfApplicable,
+            boolean esiApplicable,
+            boolean pfOnFullWages,
+            Integer noticePeriodDays,
+
             StaffProfile.EmploymentType employmentType,
             LocalDate joinedOn,
             Integer probationDays,
@@ -107,6 +117,21 @@ public final class StaffDtos {
                     message = "An IFSC is four letters, a zero and six characters") String bankIfsc,
             @Size(max = 100) String bankName,
 
+            @Size(max = 20) String employeeNumber,
+            @Size(max = 100) String designation,
+            @Pattern(regexp = "[0-9]{12}|", message = "A UAN is twelve digits") String uan,
+            @Size(max = 17) String esicNumber,
+            /**
+             * Whether the two statutes reach this member. Stored decisions rather than tests
+             * run every month — insurance coverage runs for a whole contribution period and
+             * does not lapse mid-period because a raise crossed the ceiling.
+             */
+            boolean pfApplicable,
+            boolean esiApplicable,
+            /** Contribute to the fund on the whole wage rather than on the statutory ceiling. */
+            boolean pfOnFullWages,
+            @Min(0) @Max(365) Integer noticePeriodDays,
+
             @NotNull StaffProfile.EmploymentType employmentType,
             LocalDate joinedOn,
             @Min(1) @Max(730) Integer probationDays,
@@ -128,14 +153,58 @@ public final class StaffDtos {
      * who changed it.</p>
      */
     public record RecordSalaryRequest(
-            @NotNull @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal monthlyAmount,
+            /**
+             * The five components, and no gross.
+             *
+             * <p>The gross is derived from them rather than sent alongside, because a total
+             * typed beside a breakdown is a total that can disagree with it — and the check
+             * constraint under the row would then refuse the save with a complaint about
+             * arithmetic that the person typing cannot act on.</p>
+             *
+             * <p>The basic is required and the rest are not. A salary of basic alone is a
+             * real and common arrangement; a salary with no basic at all is not an
+             * arrangement, it is a figure somebody has declined to break down, and it cannot
+             * produce a payslip because the provident fund has nothing to stand on.</p>
+             */
+            @NotNull @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal basic,
+            @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal dearnessAllowance,
+            @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal hra,
+            @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal conveyance,
+            @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal otherAllowance,
+            /**
+             * What the State charges on a salary of this size. Typed rather than looked up:
+             * the slabs are twenty different state schedules amended by notification, and one
+             * hardcoded wrong would come out of somebody's pay every month with perfect
+             * confidence.
+             */
+            @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal professionalTax,
             @NotNull LocalDate effectiveFrom,
             @NotBlank @Size(max = 300) String reason) {
     }
 
+    /**
+     * One revision, with its parts.
+     *
+     * @param structured    false for a row written before the structure existed — a true
+     *                      record of what somebody was paid, and one no payslip can be drawn
+     *                      from. The screen says which of the two it is rather than showing
+     *                      zeroes
+     * @param statutoryWages what the Code on Wages makes of this structure: basic and
+     *                      dearness allowance, raised to half the packet where the allowances
+     *                      exceed that. Shown because it is what tells an office writing a
+     *                      structure whether the split it chose is doing what it thinks
+     */
     public record SalaryRevisionResponse(
             UUID id,
             BigDecimal monthlyAmount,
+            boolean structured,
+            BigDecimal basic,
+            BigDecimal dearnessAllowance,
+            BigDecimal hra,
+            BigDecimal conveyance,
+            BigDecimal otherAllowance,
+            BigDecimal professionalTax,
+            BigDecimal statutoryWages,
             LocalDate effectiveFrom,
             String reason) {
     }
@@ -211,5 +280,35 @@ public final class StaffDtos {
             @NotNull UUID attachmentId,
             @NotNull StaffDocument.Type docType,
             @Size(max = 200) String note) {
+    }
+
+    // ------------------------------------------------------------------ the offer
+
+    /**
+     * What the offer letter needs that the record does not already hold.
+     *
+     * <p>Deliberately short. The designation, the joining date, the probation, the notice
+     * period and the whole salary structure are read off {@code staff_profiles} and the
+     * salary revisions — asking for them again here would be a second place to state the same
+     * terms, and the letter and the payroll would then disagree about the man they both
+     * describe within a year. What is left is what belongs to the letter alone: where he is
+     * posted, whom he reports to, by when he must answer, and who is signing.</p>
+     *
+     * @param joiningOn  overrides the record's joining date, for the ordinary case of an
+     *                   offer written before the date is entered anywhere
+     * @param reference  the office's own filing reference. Absent, one is built from the
+     *                   organisation code, the year and the employee number — offered rather
+     *                   than imposed, because a firm that already numbers its correspondence
+     *                   has a scheme this one would only fight with
+     */
+    public record OfferLetterRequest(
+            LocalDate joiningOn,
+            LocalDate letterDate,
+            @Size(max = 60) String reference,
+            @Size(max = 200) String placeOfPosting,
+            @Size(max = 150) String reportingTo,
+            LocalDate respondBy,
+            @Size(max = 150) String signatoryName,
+            @Size(max = 150) String signatoryDesignation) {
     }
 }

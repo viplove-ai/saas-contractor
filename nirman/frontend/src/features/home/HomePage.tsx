@@ -96,6 +96,12 @@ const GROUPS: Group[] = [
         much as the administrator's, which is why it is offered on the read permission.
       */
       { title: 'Treasury', to: '/treasury', permission: 'security:read' },
+      /*
+        The accountant's screen as much as the administrator's, and offered on the read
+        permission for the same reason Treasury is: seeing what last month cost is a
+        different act from deciding what this month pays.
+      */
+      { title: 'Payroll', to: '/payroll', permission: 'payroll:read' },
       { title: 'Site dashboard', to: '/dashboard/site', permission: 'dashboard:site' },
       { title: 'Data quality', to: '/dashboard/quality', permission: 'dashboard:dataquality' },
     ],

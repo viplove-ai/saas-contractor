@@ -113,6 +113,11 @@ export default defineConfig({
     // load of a full run a test that takes ~2s alone can take three times that. The tests
     // were passing individually and failing in the suite, which is a machine speed problem
     // rather than a slow assertion, so the limit moves rather than the tests.
-    testTimeout: 20_000,
+    //
+    // Raised from 20s when the staff record dialog grew its payroll section. It is now the
+    // largest form in the app — thirty-odd MUI fields in one dialog — and the two tests that
+    // drive its leaving section landed at 21s and 24s in a full run against 4s alone. Same
+    // diagnosis as before, one screen further along.
+    testTimeout: 30_000,
   },
 });

@@ -47,7 +47,17 @@ const ITEMS: NavItem[] = [
   {
     label: 'More',
     to: '/home',
-    match: ['/profile', '/sync', '/users', '/projects', '/sites', '/stores', '/vendors', '/staff'],
+    match: [
+      '/profile',
+      '/sync',
+      '/users',
+      '/projects',
+      '/sites',
+      '/stores',
+      '/vendors',
+      '/staff',
+      '/payroll',
+    ],
   },
 ];
 

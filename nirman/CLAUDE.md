@@ -103,7 +103,8 @@ The rules, enforced by review rather than by tooling:
 - A controller in module A never imports a repository or entity from module B.
 - Cross-module reads go through the other module's **`*Lookup` service interface** —
   `LabourLookup`, `InventoryLookup`, `ExpenseLookup`, `SiteLookup`, `BoqLookup`,
-  `MaterialLookup`, `UnitLookup`. Each is paired with a `*LookupService` impl and returns
+  `MaterialLookup`, `UnitLookup`, `StaffPayrollLookup`. Each is paired with a `*LookupService`
+  impl and returns
   purpose-shaped
   records for the caller (the DPR, the dashboards), not entities. When the DPR needs one
   site's labour for one day, it calls `LabourLookup.day(...)`, not
@@ -444,6 +445,66 @@ if the tests pass:
   `vendor:balance:manage` and always was. The duplicate check bites harder here than on a
   material: two rows for one firm split his *account* in half, and neither half is what he thinks
   he is owed.
+- **A salary is not one number, and the payslip is the proof.** `staff_salary_revisions` held
+  one `monthly_amount` from a date, which is the right shape at the wrong resolution: the
+  provident fund is computed on basic and dearness allowance, the state insurance on the whole
+  packet, gratuity on the same wage the fund uses, and the Code on Wages then overrules all
+  three by counting the excess as wages wherever the allowances have been let run past half of
+  the packet. A single gross answers none of them, so the office answered them in a spreadsheet
+  and the system held a figure that agreed with the payslip by luck. V54 puts the five
+  components on the revision that already carries the date they apply from — not a second
+  effective-dated table beside it, which would be two answers to one question disagreeing the
+  first time somebody edited one. Rows written before it are **older, not wrong**: a gross with
+  no breakdown is a true record of what somebody was paid, and the only thing it cannot do is
+  produce a payslip, which the office is told in a sentence rather than shown as five zeroes.
+  The statutory rates live in `StatutoryContributions` and in no column anywhere: they are
+  national law, identical for every organisation, and a payslip carrying the wrong provident
+  fund rate is the one mistake in this feature that would never be noticed from the document.
+  **Two judgment calls are stated there rather than buried** — the fifty-per-cent test is run
+  on the fixed structure with overtime left out of it (read at its widest the proviso would
+  make a man's fund wage rise and fall with his Sundays, which no payroll office in the country
+  does), and the ceilings are prorated for a part month.
+- **A payslip is frozen, and it is the exception that proves the rule.** Everything else here
+  is derived per call because a stored total is a second version of the truth. A payslip is not
+  a roll-up: it is a *document issued to a person*, kept three years by statute, reconciled
+  against a transfer that has already left the bank and quite possibly folded in somebody's
+  pocket. One that recomputed itself would change the day an administrator corrected a salary
+  revision, and the copy in the office would stop matching the copy in his hand. The identity
+  fields freeze with the figures, because a woman who marries in August has not changed the
+  name on July's payslip. A `payroll_runs` row is **drawn, corrected, finalised once** and never
+  reopened; a figure found wrong afterwards is corrected in the next month, the same way an
+  over-measured quantity is. **Redrawing keeps what was typed** — the structure half is rebuilt
+  and the days, overtime, tax and recoveries are carried across, exactly as the daily report
+  carries the office's plant rates over a supervisor's corrected plant list, because a redraw
+  that reset them would not be used and the month would go out on a figure everybody knew was
+  wrong. Three figures on the row are the **employer's** and sit outside `total_deductions` and
+  outside the net: they print on the register and never on his slip. **Two things are typed and
+  not computed, and both say why**: the tax, because it depends on a regime he elected and
+  declarations he made and this system holds neither — a figure guessed there is money
+  deposited to the government in somebody else's name — and the salary advance, because a loan
+  against pay is its own ledger and half of one would be worse than none (`site_advances` is
+  deliberately not it: that is petty cash cleared by producing bills, and netting a man's wages
+  against the float in his pocket confuses two different debts). **Nothing here posts an
+  expense**, for the reason billing never writes progress entries: a bill that appeared in the
+  approval queue because a payroll run was finalised is a bill nobody typed and nobody can
+  answer for.
+- **The offer letter states the record and is filed back onto it.** The designation, the
+  joining date, the probation, the notice period and the whole structure are already columns
+  somebody typed; a screen that collected them again at letter time would be a second place to
+  state the same terms, and the letter and the payroll would disagree about the man they both
+  describe inside a year. So `OfferLetterService` reads them and refuses to be told them — what
+  the request carries is only what belongs to the letter (where he is posted, whom he reports
+  to, by when he must answer, who signs). Issuing it renders the PDF **afresh on the server**
+  rather than taking the preview's bytes back from the browser (a document the client could
+  hand us is one the client could have edited) and files it through V51's register as a paper
+  of type `OFFER_LETTER` — distinct from `APPOINTMENT`, because an offer is made and may be
+  declined and an appointment letter confirms somebody who has started, and "which offers have
+  not come back signed" cannot be answered by a list that calls both the same thing. A letter
+  that lived only in a download folder would be the one term of employment nobody could produce
+  when it was disputed. **It prints no net figure**: a candidate shown a take-home on the day he
+  was offered the job and a smaller one on his first payslip has been told two things by the
+  same employer. **No new permission** — `staff:write` is already this act of custody, the
+  argument V51 made about the passbook and the account number.
 - **A wrong stock figure is reported, never edited.** `stock_transactions` is append-only, and
   an ADJUSTMENT is `inventory:adjust`, the office's, because a role that can move a balance can
   hide a loss. That left the one man who can see the shed unable to say anything about it. So
@@ -749,6 +810,21 @@ alongside `vendor_type = OTHER` and required there by `MasterDataService` for an
 after it. The same split V34 drew for a lost day — the list is the half that can be counted and
 the note is the half a person reads — and the check constraint runs one way only, because rows
 that carried OTHER before the column existed are old rather than wrong. **No new permission.**
+
+`V54` is the salary as the law reads it, and the month's document. It adds the five components
+and the professional tax to `staff_salary_revisions` (nullable, with a check that they come to
+`monthly_amount` when present); the enrolment half — employee number, designation, UAN, ESIC
+number, the two applicability flags and `pf_on_full_wages` — to `staff_profiles`; and
+`payroll_runs` and `payslips`. **Two new permissions**, `payroll:read` and `payroll:process`,
+split the way `staff:read` and `staff:write` are and granted to ADMIN and ACCOUNTANT; there is
+deliberately no third for issuing the slip, since drawing a month and finalising it are one job
+in one sitting and an organisation that could split them would have somebody able to produce
+twenty documents nobody can make final. It also **grants `staff:read` and `staff:write` to
+ACCOUNTANT**, which V22 gave to the administrator alone: that was right when the record held an
+address and a next of kin and stopped being right when the record became the thing salaries are
+computed from, because an accountant who has to ask for every bank account keeps his own copy in
+a spreadsheet. And it widens `ck_staff_document_type` with `OFFER_LETTER`. No rate, ceiling or
+percentage is stored anywhere — see the salary rule above.
 
 **A note on JPQL and optional parameters.** `(:param IS NULL OR column = :param)` expands to two
 placeholders, and Postgres cannot infer a type for the one standing alone in `? IS NULL` — it

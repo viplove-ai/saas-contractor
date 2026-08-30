@@ -33,6 +33,55 @@ Base path `/api/v1`. JSON only. OpenAPI served at `/swagger-ui.html`.
 
 A reset takes `{temporaryPassword}`, returns 204 and never echoes a password: it forces `must_change_password` and revokes the member's refresh families, so the value the admin typed is the only copy. Creating a site with `siteEngineerId` or `supervisorId` opens a site assignment for those members, and dropping them closes it — `sites.supervisor_id` is a label, `user_site_assignments` is the permission, and the two are kept in step server-side.
 
+### /staff
+`GET /staff`, `GET /staff/dashboard`, `GET|PUT /staff/{userId}`, `GET|POST
+/staff/{userId}/salary`, `GET|POST /staff/{userId}/documents`, `DELETE
+/staff/{userId}/documents/{documentId}`, `POST /staff/{userId}/offer-letter/preview`,
+`POST /staff/{userId}/offer-letter`.
+
+`/users` administers logins; this administers people — where they live, who to telephone, what
+was agreed about their pay. A member with no record reads as the login plus blanks rather than
+as a 404: the screen's job is to collect what is missing and it cannot do that from an error.
+`PUT` takes the record whole, with `version` null on the first save and required afterwards.
+
+`POST /staff/{userId}/salary` takes the **five components** — `basic` (required),
+`dearnessAllowance`, `hra`, `conveyance`, `otherAllowance` — plus `professionalTax`,
+`effectiveFrom` and a required `reason`. There is no gross field: it is derived, because a
+total typed beside a breakdown is a total that can disagree with it. Appended and never edited;
+two revisions effective the same day are a 409. The response carries `statutoryWages` — basic
+and dearness allowance, raised to half the packet where the allowances exceed that — which is
+what tells an office whether the split it wrote is doing what it thinks.
+
+`POST /staff/{userId}/offer-letter/preview` returns the rendered PDF and keeps nothing.
+`POST /staff/{userId}/offer-letter` renders it **again on the server** and files it on the
+record as a `staff_documents` row of type `OFFER_LETTER`, returning that row. Both take only
+what belongs to the letter — `joiningOn`, `letterDate`, `reference`, `placeOfPosting`,
+`reportingTo`, `respondBy`, `signatoryName`, `signatoryDesignation` — because every term it
+states is already on the record. Refused with a sentence where there is no record, no joining
+date, no salary, or a salary with no breakdown. `staff:write`; no permission of its own.
+
+### /payroll
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/payroll/runs` | every month drawn, newest first (`payroll:read`) |
+| POST | `/payroll/runs` | `{periodMonth, payableDays?, notes?}` — opens the month and draws every slip it can. `payableDays` defaults to the calendar's count. Refused for a month not yet begun, and 409 for a month already open |
+| GET | `/payroll/runs/{id}` | the run, its totals, its payslips, and **`notDrawn`** — everybody on the books with no slip, by name and with the reason. A payroll of eleven in an office of fourteen looks complete otherwise |
+| PUT | `/payroll/runs/{id}` | `{payableDays, notes, version}`. Changing the days redraws every slip under it |
+| POST | `/payroll/runs/{id}/redraw` | rebuilds the structure half against today's records and adds anybody now drawable. The typed figures are carried across |
+| POST | `/payroll/runs/{id}/finalise` | ends the month, once, with no way back. Refused on a run with no payslips |
+| DELETE | `/payroll/runs/{id}` | a draft only; a finalised run is a 409 |
+| PUT | `/payroll/payslips/{id}` | the figures no rule can know: `paidDays`, `overtimeHours`, an optional `overtimeAmount` override, `professionalTax`, `tds`, `salaryAdvance`, `otherDeduction` + note, `remarks`, `version`. Everything else is recomputed from them in the same call |
+| DELETE | `/payroll/payslips/{id}` | takes somebody out of the month. Really removed rather than zeroed: a slip of zeroes says he was paid nothing, which is a different claim |
+| GET | `/payroll/members/{userId}/payslips` | one member's slips, newest month first |
+| GET | `/payroll/runs/{id}/register.pdf` | the office's landscape sheet — carries the employer's own contributions |
+| GET | `/payroll/runs/{id}/payslips.pdf` | every slip, one to a page |
+| GET | `/payroll/payslips/{id}/pdf` | one member's slip, as it is handed to him |
+
+`payroll:process` for everything that changes a month, `payroll:read` for the rest and for all
+three documents. A draft prints, and says so across the page. Overtime sent as hours alone is
+priced at twice the ordinary rate on a twenty-six day month of eight hours; `overtimeAmount` is
+for an office that has agreed something else, and the hours still print beside it.
+
 ### /projects, /sites, /boq-items
 `GET|POST /projects`, `GET|PUT /projects/{id}`, `GET /projects/{id}/summary`.
 `GET|POST /sites` (`?projectId`), `GET|PUT /sites/{id}`, `GET|POST /sites/{id}/stores`.

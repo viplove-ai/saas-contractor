@@ -127,6 +127,14 @@ public class StaffRecordService {
         profile.setBankAccountNo(blankToNull(request.bankAccountNo()));
         profile.setBankIfsc(blankToNull(request.bankIfsc()));
         profile.setBankName(blankToNull(request.bankName()));
+        profile.setEmployeeNumber(blankToNull(request.employeeNumber()));
+        profile.setDesignation(blankToNull(request.designation()));
+        profile.setUan(blankToNull(request.uan()));
+        profile.setEsicNumber(blankToNull(request.esicNumber()));
+        profile.setPfApplicable(request.pfApplicable());
+        profile.setEsiApplicable(request.esiApplicable());
+        profile.setPfOnFullWages(request.pfOnFullWages());
+        profile.setNoticePeriodDays(request.noticePeriodDays());
         profile.setEmploymentType(request.employmentType());
         profile.setJoinedOn(request.joinedOn());
         profile.setProbationDays(request.probationDays());
@@ -153,9 +161,7 @@ public class StaffRecordService {
     public List<SalaryRevisionResponse> salaryHistory(UUID userId) {
         requireUser(userId);
         return salaries.findByUserIdOrderByEffectiveFromDesc(userId).stream()
-                .map(revision -> new SalaryRevisionResponse(revision.getId(),
-                        revision.getMonthlyAmount(), revision.getEffectiveFrom(),
-                        revision.getReason()))
+                .map(StaffRecordService::toResponse)
                 .toList();
     }
 
@@ -179,12 +185,13 @@ public class StaffRecordService {
         }
 
         StaffSalaryRevision revision = new StaffSalaryRevision(orgId(), userId,
-                request.monthlyAmount(), request.effectiveFrom(), request.reason());
+                request.basic(), request.dearnessAllowance(), request.hra(),
+                request.conveyance(), request.otherAllowance(), request.professionalTax(),
+                request.effectiveFrom(), request.reason());
         salaries.save(revision);
         audit.record(ENTITY, userId, "SALARY_REVISED", null,
                 Map.of("effectiveFrom", request.effectiveFrom().toString()), request.reason());
-        return new SalaryRevisionResponse(revision.getId(), revision.getMonthlyAmount(),
-                revision.getEffectiveFrom(), revision.getReason());
+        return toResponse(revision);
     }
 
     /**
@@ -267,6 +274,14 @@ public class StaffRecordService {
 
     // ------------------------------------------------------------------ internals
 
+    private static SalaryRevisionResponse toResponse(StaffSalaryRevision revision) {
+        return new SalaryRevisionResponse(revision.getId(), revision.getMonthlyAmount(),
+                revision.isStructured(), revision.getBasic(), revision.getDearnessAllowance(),
+                revision.getHra(), revision.getConveyance(), revision.getOtherAllowance(),
+                revision.getProfessionalTax(), revision.statutoryWages(),
+                revision.getEffectiveFrom(), revision.getReason());
+    }
+
     /**
      * The combinations that describe nothing real.
      *
@@ -335,7 +350,9 @@ public class StaffRecordService {
             return new StaffProfileResponse(user.getId(), user.getUsername(), user.getFullName(),
                     user.getMobile(), user.getEmail(), user.isActive(), roles,
                     null, null, null, null, null, null, null, null, null, null, null, null,
-                    null, EmploymentType.PERMANENT, null, null, null, null, null, null, null,
+                    null,
+                    null, null, null, null, false, false, false, null,
+                    EmploymentType.PERMANENT, null, null, null, null, null, null, null,
                     false, currentSalary, null, null, null, null);
         }
         return new StaffProfileResponse(user.getId(), user.getUsername(), user.getFullName(),
@@ -345,6 +362,9 @@ public class StaffRecordService {
                 profile.getEmergencyContactName(), profile.getEmergencyContactMobile(),
                 profile.getEmergencyContactRelation(), profile.getBankAccountName(),
                 profile.getBankAccountNo(), profile.getBankIfsc(), profile.getBankName(),
+                profile.getEmployeeNumber(), profile.getDesignation(), profile.getUan(),
+                profile.getEsicNumber(), profile.isPfApplicable(), profile.isEsiApplicable(),
+                profile.isPfOnFullWages(), profile.getNoticePeriodDays(),
                 profile.getEmploymentType(), profile.getJoinedOn(), profile.getProbationDays(),
                 profile.getProbationMonthlySalary(), profile.getConfirmedMonthlySalary(),
                 profile.getConfirmedOn(), profile.getContractEndsOn(), profile.probationEndsOn(),

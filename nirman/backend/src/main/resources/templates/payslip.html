@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<!--
+  The employee's own payslip — one member, one month, one page.
+
+  This is the document the Code on Wages requires an employer to issue, and it is written for
+  the person receiving it rather than for the office: every component named, the days it was
+  worked out on stated at the top, and every deduction on its own line with what it is.
+
+  What is deliberately NOT on this page is the employer's own contributions. They belong to
+  the register (payslip-register.html), because they are what the month cost the firm and were
+  never this man's money — printing them beside his deductions is how somebody comes to
+  believe the fund took twice what it took.
+
+  Every figure comes off the frozen payslip row. A slip reprinted in November is the document
+  that was handed over in July, to the paisa, or it is not a copy of anything.
+
+      The rupee is written "Rs." and not "₹" throughout, and that is not a style choice.
+      openhtmltopdf lays this out in the built-in Helvetica, which has no glyph for the rupee
+      sign — it prints as a hash, on every money figure on the page. The alternatives were to
+      embed a font carrying it, which puts a megabyte in the jar for one character, or to write
+      what every CPWD form and every bank advice in the country already writes.
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title th:text="'Payslip ' + ${monthLabel}">Payslip</title>
+    <style>
+        @page { size: A4; margin: 14mm 14mm; }
+        body { font-family: Helvetica, Arial, sans-serif; font-size: 9pt; color: #111; }
+        /* One member to a page. A payslip that shares a sheet with the next man's is a
+           payslip that cannot be handed to either of them. */
+        .slip { page-break-after: always; }
+        .slip.last { page-break-after: auto; }
+        h1 { font-size: 13pt; margin: 0; }
+        h2 { font-size: 9pt; margin: 5mm 0 1mm; text-transform: uppercase;
+             letter-spacing: 0.05em; border-bottom: 0.3mm solid #999; padding-bottom: 0.6mm; }
+        table { width: 100%; border-collapse: collapse; }
+        .head td { border: none; padding: 0; vertical-align: top; }
+        .meta { font-size: 8pt; color: #444; }
+        .who { margin-top: 4mm; }
+        .who td { border: 0.2mm solid #bbb; padding: 1.4mm 2mm; font-size: 8.5pt; }
+        .who td.k { background: #f4f4f4; width: 22%; color: #333; }
+        .money th, .money td { border: 0.2mm solid #bbb; padding: 1.4mm 2mm; }
+        .money th { background: #eee; text-align: left; font-size: 8.5pt; }
+        .money td.num { text-align: right; }
+        .money tr.total td, .money tr.total th { font-weight: bold; background: #f6f6f6; }
+        .net { margin-top: 4mm; border: 0.5mm solid #111; padding: 2.5mm 3mm; font-size: 11pt; }
+        .net .words { font-size: 8pt; color: #444; margin-top: 1mm; }
+        .draft { color: #b00; font-weight: bold; }
+        .note { font-size: 7.5pt; color: #555; margin-top: 4mm; line-height: 1.35; }
+        .sign { margin-top: 12mm; }
+        .sign td { border: none; padding-top: 10mm; font-size: 8pt; }
+        .sign .line { border-top: 0.3mm solid #444; padding-top: 1mm; width: 55mm; }
+        .zero { color: #888; }
+    </style>
+</head>
+<body>
+
+<div th:each="s, it : ${slips}" th:class="${it.last} ? 'slip last' : 'slip'">
+
+    <table class="head">
+        <tr>
+            <td>
+                <h1 th:text="${employer.name()}">Employer</h1>
+                <div class="meta" th:if="${employer.address()}" th:text="${employer.address()}">Address</div>
+                <div class="meta" th:if="${employer.pan()}" th:text="'PAN ' + ${employer.pan()}">PAN</div>
+            </td>
+            <td style="text-align: right;">
+                <div><strong th:text="'Pay Slip for ' + ${monthLabel}">Pay Slip</strong></div>
+                <div class="meta" th:text="${periodLabel}">period</div>
+                <div class="draft" th:if="${draft}">DRAFT — not final</div>
+            </td>
+        </tr>
+    </table>
+
+    <table class="who">
+        <tr>
+            <td class="k">Employee</td>
+            <td th:text="${s.employeeName()}">Name</td>
+            <td class="k">Employee no.</td>
+            <td th:text="${s.employeeNumber()} ?: '—'">—</td>
+        </tr>
+        <tr>
+            <td class="k">Designation</td>
+            <td th:text="${s.designation()} ?: '—'">—</td>
+            <td class="k">UAN</td>
+            <td th:text="${s.uan()} ?: '—'">—</td>
+        </tr>
+        <tr>
+            <td class="k">Days paid</td>
+            <td th:text="${#numbers.formatDecimal(s.paidDays(), 1, 'COMMA', 2, 'POINT')}
+                         + ' of ' + ${s.payableDays()}">26 of 26</td>
+            <td class="k">ESIC no.</td>
+            <td th:text="${s.esicNumber()} ?: '—'">—</td>
+        </tr>
+    </table>
+
+    <h2>Earnings and deductions</h2>
+    <table class="money">
+        <tr>
+            <th style="width: 30%;">Earnings</th>
+            <th class="num" style="width: 12%;">Full month</th>
+            <th class="num" style="width: 12%;">Earned</th>
+            <th style="width: 34%;">Deductions</th>
+            <th class="num" style="width: 12%;">Amount</th>
+        </tr>
+        <tr>
+            <td>Basic pay</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.structBasic(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.earnedBasic(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td>Provident fund @ 12%</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.pfEmployee(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        </tr>
+        <tr>
+            <td>Dearness allowance</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.structDa(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.earnedDa(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td>State insurance @ 0.75%</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.esiEmployee(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        </tr>
+        <tr>
+            <td>House rent allowance</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.structHra(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.earnedHra(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td>Professional tax</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.professionalTax(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        </tr>
+        <tr>
+            <td>Conveyance allowance</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.structConveyance(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.earnedConveyance(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td>Tax deducted at source (u/s 392)</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.tds(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        </tr>
+        <tr>
+            <td>Other allowances</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.structOther(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.earnedOther(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td>Salary advance recovered</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.salaryAdvance(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        </tr>
+        <tr>
+            <td>
+                Overtime
+                <span class="meta" th:if="${s.overtimeHours()} != 0"
+                      th:text="'(' + ${#numbers.formatDecimal(s.overtimeHours(), 1, 'COMMA', 2, 'POINT')}
+                               + ' hours at twice the ordinary rate)'">hours</span>
+            </td>
+            <td class="num zero">—</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.overtimeAmount(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td th:text="${s.otherDeductionNote()} ?: 'Other deductions'">Other deductions</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.otherDeduction(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        </tr>
+        <tr class="total">
+            <th>Gross salary</th>
+            <td class="num" th:text="${#numbers.formatDecimal(s.structGross(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.totalEarnings(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <th>Total deductions</th>
+            <td class="num" th:text="${#numbers.formatDecimal(s.totalDeductions(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        </tr>
+    </table>
+
+    <div class="net">
+        <strong>Net pay for the month:
+            <span th:text="'Rs. ' + ${#numbers.formatDecimal(s.netAmount(), 1, 'COMMA', 2, 'POINT')}">Rs. 0.00</span>
+        </strong>
+        <div class="words" th:if="${s.remarks()}" th:text="${s.remarks()}">remarks</div>
+    </div>
+
+    <!--
+      The wage the statutes were worked out on, stated rather than left to be inferred. An
+      employee who wants to check the provident fund line is looking for this number and
+      cannot arrive at it from the components alone whenever the fifty-per-cent rule has
+      lifted it above basic and dearness allowance.
+    -->
+    <div class="note">
+        Provident fund is computed on wages of
+        <strong th:text="'Rs. ' + ${#numbers.formatDecimal(s.pfWages(), 1, 'COMMA', 2, 'POINT')}">Rs. 0.00</strong>
+        for this month<span th:if="${s.esiWages()} != 0">, and state insurance on
+        <strong th:text="'Rs. ' + ${#numbers.formatDecimal(s.esiWages(), 1, 'COMMA', 2, 'POINT')}">Rs. 0.00</strong>
+        of wages</span>. Wages are basic pay and dearness allowance, raised to half of the
+        total remuneration where the allowances exceed that, as required by the Code on Wages.
+        The employer contributes a further
+        <strong th:text="'Rs. ' + ${#numbers.formatDecimal(s.pfEmployer() + s.epsEmployer(), 1, 'COMMA', 2, 'POINT')}">Rs. 0.00</strong>
+        to the provident fund and pension on your behalf<span th:if="${s.esiEmployer()} != 0">,
+        and Rs. <span th:text="${#numbers.formatDecimal(s.esiEmployer(), 1, 'COMMA', 2, 'POINT')}">0.00</span>
+        to the insurance scheme</span>; that is not deducted from your pay.
+        This is a computer-generated statement.
+    </div>
+
+    <table class="sign">
+        <tr>
+            <td><div class="line">Employee's signature</div></td>
+            <td style="text-align: right;">
+                <div class="line" style="margin-left: auto;">For <span th:text="${employer.name()}">employer</span></div>
+            </td>
+        </tr>
+    </table>
+
+</div>
+
+</body>
+</html>

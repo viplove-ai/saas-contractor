@@ -16,7 +16,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { useSaveStaffProfile } from './api';
 import { StaffDocuments } from './StaffDocuments';
@@ -58,7 +58,6 @@ export function StaffProfileDialog({ open, member, onClose }: Props) {
     handleSubmit,
     reset,
     setValue,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<StaffProfileForm>({
     resolver: zodResolver(staffProfileSchema),
@@ -72,8 +71,14 @@ export function StaffProfileDialog({ open, member, onClose }: Props) {
     }
   }, [open, member, reset]);
 
-  const employmentType = watch('employmentType');
-  const leaving = watch('leaving');
+  /*
+    useWatch rather than the form's own watch(). watch() re-renders this whole dialog on every
+    change anywhere in it, and the dialog is thirty-odd MUI fields — so typing a house number
+    into the address box re-rendered the bank details, the probation terms and the payroll
+    section along with it. useWatch subscribes to the one field it names.
+  */
+  const employmentType = useWatch({ control, name: 'employmentType' });
+  const leaving = useWatch({ control, name: 'leaving' });
 
   const submit = handleSubmit(async ({ leaving: isLeaving, ...values }) => {
     setServerError(null);
@@ -88,6 +93,9 @@ export function StaffProfileDialog({ open, member, onClose }: Props) {
         exitDate: isLeaving ? values.exitDate : '',
         exitReason: isLeaving ? values.exitReason : '',
         probationDays: values.probationDays ? Number(values.probationDays) : undefined,
+        noticePeriodDays: values.noticePeriodDays
+          ? Number(values.noticePeriodDays)
+          : undefined,
         probationMonthlySalary: toAmount(values.probationMonthlySalary),
         confirmedMonthlySalary: toAmount(values.confirmedMonthlySalary),
         version: member.version,
@@ -202,6 +210,96 @@ export function StaffProfileDialog({ open, member, onClose }: Props) {
           <Alert severity="info" sx={{ mt: -1 }}>
             These are the terms that were agreed. What is actually paid, and from when, is the
             salary history — record a revision there when it changes.
+          </Alert>
+
+          {/*
+            The payroll half of the record. It is here rather than on the salary screen
+            because none of it is a figure: a universal account number and an insurance
+            number belong to the person and follow him between employers, and whether the two
+            schemes reach him at all is a fact about his enrolment, not about this month.
+          */}
+          <Section>Payroll and statutory</Section>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <TextField
+              label="Employee number"
+              fullWidth
+              error={!!errors.employeeNumber}
+              helperText={errors.employeeNumber?.message ?? 'What the payslip and the bank advice call him'}
+              {...register('employeeNumber')}
+            />
+            <TextField
+              label="Designation"
+              fullWidth
+              error={!!errors.designation}
+              helperText={errors.designation?.message ?? 'Prints on the payslip and the offer letter'}
+              {...register('designation')}
+            />
+          </Stack>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <TextField
+              label="UAN"
+              fullWidth
+              inputMode="numeric"
+              error={!!errors.uan}
+              helperText={errors.uan?.message ?? 'Twelve digits, carried between employers'}
+              {...register('uan')}
+            />
+            <TextField
+              label="ESIC number"
+              fullWidth
+              error={!!errors.esicNumber}
+              helperText={errors.esicNumber?.message ?? 'How a claim is made'}
+              {...register('esicNumber')}
+            />
+            <TextField
+              label="Notice period (days)"
+              fullWidth
+              inputMode="numeric"
+              error={!!errors.noticePeriodDays}
+              helperText={errors.noticePeriodDays?.message ?? 'Prints on the offer letter'}
+              {...register('noticePeriodDays')}
+            />
+          </Stack>
+          <Controller
+            control={control}
+            name="pfApplicable"
+            render={({ field }) => (
+              <FormControlLabel
+                control={<Checkbox {...field} checked={field.value} />}
+                label="Enrolled in the provident fund"
+              />
+            )}
+          />
+          <Controller
+            control={control}
+            name="pfOnFullWages"
+            render={({ field }) => (
+              <FormControlLabel
+                control={<Checkbox {...field} checked={field.value} />}
+                label="Contribute on full wages rather than on the ₹15,000 ceiling"
+              />
+            )}
+          />
+          <Controller
+            control={control}
+            name="esiApplicable"
+            render={({ field }) => (
+              <FormControlLabel
+                control={<Checkbox {...field} checked={field.value} />}
+                label="Covered by state insurance"
+              />
+            )}
+          />
+          {/*
+            Why coverage is a tick and not a test. It runs for a whole contribution period and
+            does not lapse in the middle of one because a raise carried somebody over the
+            ceiling — a screen that recomputed it monthly would drop him out in July and leave
+            the establishment short-paid until the period ended.
+          */}
+          <Alert severity="info" sx={{ mt: -1 }}>
+            Insurance coverage is decided for a whole contribution period (April–September,
+            October–March) and does not stop mid-period because a raise crossed the ₹21,000
+            ceiling. Leave the tick where the scheme put it.
           </Alert>
 
           <Section>How you reach them</Section>
@@ -431,6 +529,15 @@ function fromProfile(member: StaffProfile): StaffProfileForm {
     bankAccountNo: member.bankAccountNo ?? '',
     bankIfsc: member.bankIfsc ?? '',
     bankName: member.bankName ?? '',
+    employeeNumber: member.employeeNumber ?? '',
+    designation: member.designation ?? '',
+    uan: member.uan ?? '',
+    esicNumber: member.esicNumber ?? '',
+    pfApplicable: member.pfApplicable,
+    esiApplicable: member.esiApplicable,
+    pfOnFullWages: member.pfOnFullWages,
+    noticePeriodDays:
+      member.noticePeriodDays === undefined ? '' : String(member.noticePeriodDays),
     employmentType: member.employmentType,
     joinedOn: member.joinedOn ?? '',
     probationDays: member.probationDays === undefined ? '' : String(member.probationDays),

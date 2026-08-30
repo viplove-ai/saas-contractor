@@ -38,6 +38,30 @@ public interface AttachmentLookup {
     void claimFor(UUID attachmentId, UUID ownerEntityId);
 
     /**
+     * Stores a file this system generated itself, already claimed by the record that asked
+     * for it.
+     *
+     * <p>The second write here, and the one that needed a reason. {@code AttachmentService}
+     * takes a {@code MultipartFile} because everything it had ever been asked to store came
+     * off somebody's device — a challan photographed at the gate, a scan of a passbook — and
+     * every check it runs is a check on an upload: the size a handset might send, the content
+     * types a browser is allowed to offer, the site the uploader may reach. None of those
+     * questions has an answer when the bytes are a PDF this system rendered a moment ago out
+     * of figures it already holds, and dressing a generated document up as a multipart upload
+     * to get it past checks that do not apply would be a lie told to our own code.</p>
+     *
+     * <p>Claimed in the same act rather than in a second call. A generated document has an
+     * owner from the moment it exists — nothing generates one speculatively — and leaving it
+     * unclaimed for even one statement would open the window in which
+     * {@code AttachmentService.delete} would happily discard it.</p>
+     *
+     * @param ownerEntityType the same discriminator an upload carries, so a generated
+     *                        document is found by exactly the queries that find an uploaded one
+     */
+    FileInfo store(byte[] content, String fileName, String contentType,
+                   String ownerEntityType, UUID ownerEntityId);
+
+    /**
      * Throws the file away with the record that was carrying it.
      *
      * <p>The mirror of {@link #claimFor}, and it exists because claiming is what makes

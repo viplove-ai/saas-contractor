@@ -17,6 +17,7 @@ import { useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { formatAmount } from '../../shared/formatters';
 import { useAuth } from '../auth/AuthContext';
+import { OfferLetterDialog } from './OfferLetterDialog';
 import { SalaryHistoryDialog } from './SalaryHistoryDialog';
 import { StaffProfileDialog } from './StaffProfileDialog';
 import { useStaff, useStaffDashboard } from './api';
@@ -36,6 +37,7 @@ export function StaffPage() {
   const staff = useStaff();
   const [editing, setEditing] = useState<StaffProfile | null>(null);
   const [showingSalary, setShowingSalary] = useState<StaffProfile | null>(null);
+  const [offering, setOffering] = useState<StaffProfile | null>(null);
 
   const canWrite = hasPermission('staff:write');
 
@@ -123,6 +125,9 @@ export function StaffPage() {
                     <Button size="small" onClick={() => setShowingSalary(member)}>
                       Salary
                     </Button>
+                    <Button size="small" onClick={() => setOffering(member)}>
+                      Offer letter
+                    </Button>
                   </Stack>
                 )}
               </Stack>
@@ -180,6 +185,9 @@ export function StaffPage() {
                         <Button size="small" onClick={() => setShowingSalary(member)}>
                           Salary
                         </Button>
+                        <Button size="small" onClick={() => setOffering(member)}>
+                          Offer letter
+                        </Button>
                       </Stack>
                     </TableCell>
                   )}
@@ -192,6 +200,9 @@ export function StaffPage() {
 
       {editing && (
         <StaffProfileDialog open member={editing} onClose={() => setEditing(null)} />
+      )}
+      {offering && (
+        <OfferLetterDialog open member={offering} onClose={() => setOffering(null)} />
       )}
       {showingSalary && (
         <SalaryHistoryDialog
