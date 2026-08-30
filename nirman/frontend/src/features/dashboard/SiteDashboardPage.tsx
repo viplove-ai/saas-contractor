@@ -348,8 +348,16 @@ export function SiteDashboardPage() {
               Contract progress
             </Typography>
             <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap>
+              {/*
+                Not "quoted value", which is the company dashboard's headline and a different
+                figure. This is the site's own BOQ added up at whatever rates the lines carry,
+                and a BOQ imported from a notice carries the department's estimate rather than
+                the rate bid. Calling it the quote would claim a discount the lines may not
+                have on them; the label says which book it came out of and the reader can
+                compare it with the project's quote himself.
+              */}
               <Figure
-                label="Contract value"
+                label="BOQ value"
                 value={formatAmount(dashboard.data.progress.contractValue)}
               />
               <Figure
@@ -368,7 +376,8 @@ export function SiteDashboardPage() {
             </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               By value, not by line count — finishing nine cheap lines and none of the expensive
-              one is not ninety per cent of a job.
+              one is not ninety per cent of a job. Both figures are at the BOQ&rsquo;s own rates,
+              which are the estimate&rsquo;s on a project imported from its notice.
             </Typography>
             {dashboard.data.progress.itemsOverClaimed > 0 && (
               <Alert severity="warning" sx={{ mt: 1.5 }}>

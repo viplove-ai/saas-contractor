@@ -52,18 +52,29 @@ public final class DashboardDtos {
     // ---------------------------------------------------------------- company dashboard
 
     /**
-     * @param costIncurred labour + material consumed + non-material, non-wage expense. The one
-     *                     total that may be compared with a budget.
-     * @param totalBooked  everything that left the books, which is a cash figure and not a cost
-     *                     figure. Carried beside {@code costIncurred} so nobody has to guess
-     *                     which one they are looking at.
+     * @param costIncurred     labour + material consumed + non-material, non-wage expense. The
+     *                         one total that may be compared with a budget.
+     * @param totalBooked      everything that left the books, which is a cash figure and not a
+     *                         cost figure. Carried beside {@code costIncurred} so nobody has to
+     *                         guess which one they are looking at.
+     * @param quotedValue      what the live work pays at the rates bid — the amount that can be
+     *                         billed to the department, which is the question this tile is read
+     *                         for. Deliberately not the contract value: that is the department's
+     *                         estimate, and a firm that bid thirty per cent below it would be
+     *                         reading an order book it can never invoice.
+     * @param unpricedProjects live projects carrying no quoted cost, and so counted in
+     *                         {@code activeProjects} but absent from {@code quotedValue}. Sent
+     *                         rather than left to be inferred: a total short by four projects
+     *                         looks exactly like a complete one, and the same argument
+     *                         {@code projectPortfolio.ts} makes about the order-book strip.
      */
     public record CompanyDashboard(
             LocalDate from,
             LocalDate to,
             int activeProjects,
             int activeSites,
-            BigDecimal contractValue,
+            BigDecimal quotedValue,
+            int unpricedProjects,
             BigDecimal budgetAmount,
             BigDecimal costIncurred,
             BigDecimal labourCost,
@@ -80,13 +91,17 @@ public final class DashboardDtos {
     /**
      * @param percentBudgetUsed null when the project carries no budget — an unanswerable
      *                          question rather than a zero
+     * @param quotedCost        what the row pays at the rate bid, null when nobody has quoted
+     *                          it. Null and not the contract value: falling back to the
+     *                          estimate would put two different figures in one column and give
+     *                          a total no project is worth.
      */
     public record ProjectRow(
             UUID projectId,
             String projectCode,
             String projectName,
             String status,
-            BigDecimal contractValue,
+            BigDecimal quotedCost,
             BigDecimal budgetAmount,
             BigDecimal costIncurred,
             BigDecimal percentBudgetUsed,

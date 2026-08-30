@@ -43,7 +43,8 @@ function dashboard(overrides: Partial<CompanyDashboard> = {}): CompanyDashboard 
     to: '2025-06-30',
     activeProjects: 1,
     activeSites: 2,
-    contractValue: 18500000,
+    quotedValue: 16465000,
+    unpricedProjects: 0,
     budgetAmount: 16000000,
     labourCost: 499528,
     materialConsumed: 160000,
@@ -58,7 +59,7 @@ function dashboard(overrides: Partial<CompanyDashboard> = {}): CompanyDashboard 
         projectCode: 'KSN01',
         projectName: 'Kausani Guest House Extension',
         status: 'ACTIVE',
-        contractValue: 18500000,
+        quotedCost: 16465000,
         budgetAmount: 16000000,
         costIncurred: 747528,
         percentBudgetUsed: 4.67,
@@ -171,6 +172,52 @@ describe('CompanyDashboardPage', () => {
   });
 
   /** No budget is not nought per cent used — it is a question nobody can answer. */
+  /**
+   * The headline is what the firm may invoice, not what the department estimated. A tile built
+   * on the estimate tells a contractor who bid below it that his order book is larger than
+   * anything he can send a bill for.
+   */
+  it('heads the page with the quoted value rather than the contract value', async () => {
+    renderPage();
+
+    // Three times: the tile, the table column, and the same column on the card layout that
+    // RecordTable renders alongside it for a hand.
+    expect(await screen.findAllByText('Quoted value')).toHaveLength(3);
+    expect(screen.queryByText('Contract value')).not.toBeInTheDocument();
+    expect(screen.queryByText('Contract')).not.toBeInTheDocument();
+  });
+
+  it('says how many projects the quoted total leaves out', async () => {
+    get.mockImplementation((url: string) => {
+      if (url === '/dashboard/admin') {
+        return Promise.resolve({ data: { ...dashboard(), unpricedProjects: 3 } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    renderPage();
+
+    expect(
+      await screen.findByText('3 projects carry no quote and are not in this total'),
+    ).toBeInTheDocument();
+  });
+
+  /** An em dash, never the contract value: two figures in one column total to nothing. */
+  it('leaves an unquoted project blank in the quoted column', async () => {
+    get.mockImplementation((url: string) => {
+      if (url === '/dashboard/admin') {
+        const base = dashboard();
+        const project = { ...base.projects[0]!, quotedCost: undefined };
+        return Promise.resolve({ data: { ...base, projects: [project] } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    renderPage();
+
+    const table = within(await screen.findByRole('table', { name: 'Projects over the period' }));
+    expect(table.getByText('Quoted value')).toBeInTheDocument();
+    expect(table.getAllByText('\u2014').length).toBeGreaterThan(0);
+  });
+
   it('says a project has no budget rather than showing it as zero per cent used', async () => {
     get.mockImplementation((url: string) => {
       if (url === '/dashboard/admin') {

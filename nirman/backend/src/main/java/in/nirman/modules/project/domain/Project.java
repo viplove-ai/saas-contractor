@@ -78,10 +78,20 @@ public class Project extends BaseEntity {
     private BigDecimal quotedPercent;
 
     /**
-     * The estimated cost put to tender. Not the same figure as {@link #contractValue}, and the
-     * difference is the whole of the guarantee arithmetic: a performance guarantee is five per
-     * cent of this <em>or</em> of the contract, whichever is higher, so bidding thirty per cent
-     * below leaves the guarantee standing on the full estimate.
+     * What the work pays at the rate bid: {@link #contractValue} moved by {@link #quotedPercent}.
+     *
+     * <p>This is the billable figure — the amount that can be invoiced to the department — and
+     * it is what every roll-up of the order book totals. {@link #contractValue} is the
+     * department's own estimate off the notice, and the two must never be summed together or
+     * substituted for one another: a firm that bid thirty per cent below would read an order
+     * book a third larger than anything it can send a bill for.</p>
+     *
+     * <p>The difference between the two is also the whole of the guarantee arithmetic: a
+     * performance guarantee is five per cent of the estimate <em>or</em> of the contract,
+     * whichever is higher, so bidding well below leaves the guarantee standing on the full
+     * estimate.</p>
+     *
+     * <p>Null when nobody has quoted, which is not zero and is not the contract value.</p>
      */
     @Column(name = "quoted_cost", precision = 18, scale = 2)
     private BigDecimal quotedCost;

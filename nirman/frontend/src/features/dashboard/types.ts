@@ -44,7 +44,12 @@ export interface ProjectRow {
   projectCode: string;
   projectName: string;
   status: string;
-  contractValue: number;
+  /**
+   * What the row pays at the rate bid. Absent when nobody has quoted it — not the contract
+   * value, because falling back to the department's estimate would put two different figures
+   * in one column.
+   */
+  quotedCost?: number;
   budgetAmount?: number;
   costIncurred: number;
   /** Null when the project carries no budget — an unanswerable question, not a zero. */
@@ -59,7 +64,13 @@ export interface CompanyDashboard {
   to: string;
   activeProjects: number;
   activeSites: number;
-  contractValue: number;
+  /**
+   * What the live work pays at the rates bid — the amount that can be billed to the
+   * department. Not the contract value, which is the department's own estimate.
+   */
+  quotedValue: number;
+  /** Live projects carrying no quote, counted above but absent from {@link quotedValue}. */
+  unpricedProjects: number;
   budgetAmount: number;
   /** Labour + material consumed + other expense. The one total comparable with a budget. */
   costIncurred: number;

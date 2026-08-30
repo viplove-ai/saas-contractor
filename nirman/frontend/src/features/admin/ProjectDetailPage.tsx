@@ -247,8 +247,17 @@ export function ProjectDetailPage() {
             ['NIT number', p.nitNumber],
             ['Agreement no.', p.agreementNo],
             ['Tender reference', p.tenderReference],
-            ['Contract value', p.contractValue == null ? null : formatAmount(p.contractValue)],
-            ['Quoted cost', p.quotedCost == null ? null : formatAmount(p.quotedCost)],
+            /*
+              The quote leads and the estimate follows it, because the quoted value is what
+              the work pays and the contract value is only what the department put to tender.
+              Both stay on the page: the guarantee arithmetic stands on whichever is higher,
+              so a screen carrying one of them cannot answer what a deposit was worked out on.
+            */
+            ['Quoted value', p.quotedCost == null ? null : formatAmount(p.quotedCost)],
+            [
+              'Estimate put to tender',
+              p.contractValue == null ? null : formatAmount(p.contractValue),
+            ],
             ['Budget', p.budgetAmount == null ? null : formatAmount(p.budgetAmount)],
             ['Start date', p.startDate],
             ['Expected completion', p.expectedCompletionDate],

@@ -135,10 +135,18 @@ public class DashboardService {
                 .add(stock.consumedValue())
                 .add(spend.costIncurred());
 
+        // The quoted cost and not the contract value: the contract value is what the notice
+        // put to tender, and what the firm may invoice is that figure moved by the rate it
+        // bid. A headline built on the estimate tells a contractor who bid thirty per cent
+        // below that his order book is a third larger than anything he can send a bill for.
+        // Rows carrying no quote are counted and not totalled, and the count travels with
+        // the figure — see projectPortfolio.ts, which settled the same argument for the list.
         return new CompanyDashboard(from, to,
                 (int) live.stream().filter(p -> p.getStatus() == Project.Status.ACTIVE).count(),
                 sites.findByOrgIdAndDeletedAtIsNullOrderByCode(orgId()).size(),
-                sum(live, Project::getContractValue), sum(live, Project::getBudgetAmount),
+                sum(live, Project::getQuotedCost),
+                (int) live.stream().filter(p -> p.getQuotedCost() == null).count(),
+                sum(live, Project::getBudgetAmount),
                 costIncurred, labourPeriod.cost(), stock.consumedValue(), spend.costIncurred(),
                 spend.totalBooked(), spend.payable(),
                 materialPosition(stock, spend.materialPurchases()),
@@ -248,7 +256,7 @@ public class DashboardService {
         }
 
         return new ProjectRow(project.getId(), project.getCode(), project.getName(),
-                project.getStatus().name(), project.getContractValue(), project.getBudgetAmount(),
+                project.getStatus().name(), project.getQuotedCost(), project.getBudgetAmount(),
                 cost, percentOf(cost, project.getBudgetAmount()),
                 progress.valueOfWorkDone(), progress.percentComplete(), projectSites.size());
     }

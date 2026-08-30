@@ -34,10 +34,15 @@ const PROJECT_COLUMNS: RecordColumn<ProjectRow>[] = [
     ),
   },
   {
-    key: 'contract',
-    header: 'Contract',
+    key: 'quoted',
+    header: 'Quoted value',
     align: 'right',
-    cell: (project) => formatAmount(project.contractValue),
+    /*
+      What the row pays at the rate bid, which is what can be billed. An em dash on a project
+      nobody has quoted, never the contract value: the department's estimate and the firm's
+      quote in one column is a column that adds up to nothing anybody is owed.
+    */
+    cell: (project) => (project.quotedCost == null ? '—' : formatAmount(project.quotedCost)),
   },
   {
     key: 'cost',
@@ -116,7 +121,16 @@ export function CompanyDashboardPage() {
           >
             <Tile label="Active projects" value={String(dashboard.data.activeProjects)} />
             <Tile label="Sites" value={String(dashboard.data.activeSites)} />
-            <Tile label="Contract value" value={formatAmount(dashboard.data.contractValue)} />
+            {/*
+              What the work pays at the rates bid, not what the department estimated. This is
+              the amount that can be invoiced, and it is the question the tile is read for; the
+              contract value is on each project's own page beside the quote that moved it.
+            */}
+            <Tile
+              label="Quoted value"
+              value={formatAmount(dashboard.data.quotedValue)}
+              note={unpricedNote(dashboard.data.unpricedProjects)}
+            />
             <Tile label="Budget" value={formatAmount(dashboard.data.budgetAmount)} />
           </Box>
 
@@ -174,15 +188,42 @@ export function CompanyDashboardPage() {
   );
 }
 
-function Tile({ label, value }: { label: string; value: string }) {
+function Tile({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: string;
+  note?: string | undefined;
+}) {
   return (
     <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider', height: '100%' }}>
       <Typography variant="body2" color="text.secondary">
         {label}
       </Typography>
       <Typography variant="h3">{value}</Typography>
+      {note && (
+        <Typography variant="caption" color="text.secondary">
+          {note}
+        </Typography>
+      )}
     </Paper>
   );
+}
+
+/**
+ * What the quoted total is short by, said out loud.
+ *
+ * <p>A headline missing four projects looks exactly like a complete one, and a firm that never
+ * fills the quote box would read ₹0 as the truth about its order book. The projects list makes
+ * the same statement under its portfolio strip; this is the tile-sized version of it.</p>
+ */
+function unpricedNote(unpriced: number): string | undefined {
+  if (unpriced === 0) return undefined;
+  return unpriced === 1
+    ? '1 project carries no quote and is not in this total'
+    : `${unpriced} projects carry no quote and are not in this total`;
 }
 
 function Figure({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
