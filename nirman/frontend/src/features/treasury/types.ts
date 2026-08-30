@@ -206,3 +206,78 @@ export interface DepositRegister {
   deposits: BankDeposit[];
   summary: DepositSummary;
 }
+
+// ------------------------------------------------------------------ site floats
+
+/**
+ * Where the treasury's fourth question is answered: how much of the company's cash is not in
+ * the bank, not with a department, and not with a supplier, but in the pocket of somebody
+ * standing on a site.
+ *
+ * <p>Deliberately shaped like the vendor account rather than like a balance: four figures that
+ * add up, never one that has to be trusted. Issued less spent less returned is what he is
+ * carrying, and the server sums it per call from the floats themselves — a stored per-person
+ * balance is the version that stops matching the rows behind it.</p>
+ *
+ * <p><b>{@link inHandAmount} carries a sign.</b> Positive is cash still with him. Negative is a
+ * man who bought at the gate with more than he was given, and the company owes him that much —
+ * the position it most needs to see and the one the register could not record until V49.</p>
+ */
+export interface FloatBalance {
+  userId: string;
+  holderName?: string;
+  siteId: string;
+  issuedAmount: number;
+  spentAmount: number;
+  returnedAmount: number;
+  inHandAmount: number;
+  /** How many of his floats still have something left to argue about. */
+  openFloats: number;
+  oldestOpenOn?: string;
+}
+
+export type FloatStatus =
+  | 'OPEN'
+  | 'PARTIALLY_SETTLED'
+  | 'SETTLED'
+  /** Spent past what was issued. The balance is negative and the company owes the holder. */
+  | 'OVERSPENT'
+  | 'CANCELLED';
+
+/** One float handed over: a document with a number, not a line in a running account. */
+export interface SiteFloat {
+  id: string;
+  advanceNumber: string;
+  siteId: string;
+  issuedToUserId: string;
+  issuedToName?: string;
+  advanceDate: string;
+  amount: number;
+  paymentMode: string;
+  referenceNumber?: string;
+  purpose: string;
+  adjustedAmount: number;
+  returnedAmount: number;
+  /** Issued less spent less returned. Negative once the float has been overdrawn. */
+  balanceAmount: number;
+  settlementStatus: FloatStatus;
+  closedAt?: string;
+  remarks?: string;
+  version: number;
+}
+
+/** Somebody posted to a site, offered as a person a float can be handed to. */
+export interface FloatHolderOption {
+  userId: string;
+  username: string;
+  fullName?: string;
+  roleCodes: string[];
+}
+
+/** Only what the site picker needs. Every feature holds its own; features do not import
+ *  from one another. */
+export interface Site {
+  id: string;
+  code: string;
+  name: string;
+}

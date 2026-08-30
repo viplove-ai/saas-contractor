@@ -19,8 +19,10 @@ import { StatusChip } from '../../shared/StatusChip';
 import { useAuth } from '../auth/AuthContext';
 import { EvidencePhotoField } from '../../shared/EvidencePhotoField';
 import {
+  useChargeToFloat,
   useDecideExpense,
   useExpenses,
+  useFloatBalances,
   usePayments,
   usePendingApprovals,
   useRecordPayment,
@@ -28,7 +30,7 @@ import {
 } from './api';
 import { AllocationChip } from './AllocationChip';
 import { BillPreview } from './BillPreview';
-import type { ApprovalAction, CostAllocation, Expense } from './types';
+import type { ApprovalAction, CostAllocation, Expense, FloatBalance } from './types';
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -88,6 +90,8 @@ export function ApprovalsPage() {
    */
   const [allocation, setAllocation] = useState<Record<string, CostAllocation>>({});
   const [siteShare, setSiteShare] = useState<Record<string, string>>({});
+  /** Whose float each approved bill is being charged back to, where it is. */
+  const [holder, setHolder] = useState<Record<string, string>>({});
 
   const sites = useSites();
   const [siteId, setSiteId] = useSelectedSite(sites.data);
@@ -97,9 +101,15 @@ export function ApprovalsPage() {
   const approved = useExpenses(siteId || undefined, 'APPROVED');
   const decide = useDecideExpense();
   const pay = useRecordPayment();
+  const chargeToFloat = useChargeToFloat();
 
   const canDecide = hasPermission('expense:approve:l1');
   const canPay = hasPermission('payment:record');
+  /**
+   * Who is carrying cash at this site, so an approved bill can be charged back to whoever
+   * actually paid it. Only fetched for the person who can act on it.
+   */
+  const floats = useFloatBalances(siteId || undefined, canPay);
 
   /** Everything with a level still waiting, whichever level that is. */
   const waiting = [...(submitted.data?.content ?? []), ...(l1.data?.content ?? [])];
@@ -424,11 +434,142 @@ export function ApprovalsPage() {
                   >
                     Record payment
                   </Button>
+
+                  {/*
+                    The other answer to the same question. It is here, under the payment box
+                    and not on a screen of its own, because it is not a different act — it is
+                    the same bill being settled the other way, and the person deciding which is
+                    already looking at this row.
+                  */}
+                  <SettleFromFloat
+                    expense={expense}
+                    holders={floats.data ?? []}
+                    holderId={holder[expense.id] ?? ''}
+                    onPick={(userId) =>
+                      setHolder((current) => ({ ...current, [expense.id]: userId }))
+                    }
+                    busy={chargeToFloat.isPending}
+                    error={chargeToFloat.isError ? apiErrorDetail(chargeToFloat.error) : null}
+                    onCharge={(userId) =>
+                      chargeToFloat.mutate(
+                        {
+                          expenseId: expense.id,
+                          holderUserId: userId,
+                          paymentDate: today(),
+                        },
+                        {
+                          onSuccess: () =>
+                            setHolder((current) => ({ ...current, [expense.id]: '' })),
+                        },
+                      )
+                    }
+                  />
                 </Stack>
               </Paper>
             ))}
           </Stack>
         </>
+      )}
+    </Stack>
+  );
+}
+
+/**
+ * The bill settled out of somebody's pocket instead of out of the bank.
+ *
+ * <p>The two ways of settling sit on the same card because they answer one question — is this
+ * bill still owed, and by whom — and separating them onto two screens would mean the accountant
+ * chooses between them before he has seen the row. Recording a payment says the office paid the
+ * supplier. This says the supervisor already did, an hour after the lorry arrived, and the
+ * person the company now owes is its own man.</p>
+ *
+ * <p>It charges <b>the whole of what is left owing</b> and offers no amount box. Nobody hands a
+ * shopkeeper two-thirds of a challan out of his pocket and leaves the rest for the office, and a
+ * box inviting somebody to try is a box that gets a number typed into it.</p>
+ *
+ * <p>The consequence is spelled out before it is taken, including the one that reads as a
+ * mistake if it is not: charging ₹9,000 to a man carrying ₹2,000 leaves the company owing him
+ * ₹7,000, which is correct, ordinary, and exactly what a lorry at a gate produces.</p>
+ */
+function SettleFromFloat({
+  expense,
+  holders,
+  holderId,
+  onPick,
+  onCharge,
+  busy,
+  error,
+}: {
+  expense: Expense;
+  holders: FloatBalance[];
+  holderId: string;
+  onPick: (userId: string) => void;
+  onCharge: (userId: string) => void;
+  busy: boolean;
+  error: string | null;
+}) {
+  // Nobody at this site has ever been handed a float, so there is nothing to charge against
+  // and a picker offering an empty list is a control that only teaches the reader it is broken.
+  if (holders.length === 0) {
+    return null;
+  }
+  const chosen = holders.find((row) => row.userId === holderId);
+  const after = chosen ? chosen.inHandAmount - expense.payableAmount : 0;
+
+  /*
+    Both halves of the sentence say the sign in words rather than printing it. "He is carrying
+    -₹6,000" is a figure every reader has to decode, and half of them decode it as a bug — on
+    the one screen where the whole point is that a man being owed money is normal.
+  */
+  const standing = (row: FloatBalance) =>
+    row.inHandAmount < 0
+      ? `He is already owed ${formatAmount(-row.inHandAmount)},`
+      : `He is carrying ${formatAmount(row.inHandAmount)},`;
+  const result = (left: number) =>
+    left < 0
+      ? `so this leaves the company owing him ${formatAmount(-left)}.`
+      : `and ${formatAmount(left)} would be left with him.`;
+
+  return (
+    <Stack spacing={1}>
+      <Divider flexItem>
+        <Typography variant="caption" color="text.secondary">
+          or it was paid out of somebody&apos;s float
+        </Typography>
+      </Divider>
+      {error && <Alert severity="error">{error}</Alert>}
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+        <TextField
+          select
+          label="Who paid it"
+          size="small"
+          value={holderId}
+          onChange={(e) => onPick(e.target.value)}
+          sx={{ minWidth: 240 }}
+        >
+          {holders.map((row) => (
+            <MenuItem key={row.userId} value={row.userId}>
+              {row.holderName ?? 'Unnamed'} —{' '}
+              {row.inHandAmount < 0
+                ? `owed ${formatAmount(-row.inHandAmount)}`
+                : `holding ${formatAmount(row.inHandAmount)}`}
+            </MenuItem>
+          ))}
+        </TextField>
+        <Button
+          variant="outlined"
+          color="secondary"
+          disabled={busy || !chosen}
+          onClick={() => chosen && onCharge(chosen.userId)}
+          sx={{ minHeight: 48 }}
+        >
+          Charge {formatAmount(expense.payableAmount)} to his float
+        </Button>
+      </Stack>
+      {chosen && (
+        <Typography variant="body2" color={after < 0 ? 'warning.main' : 'text.secondary'}>
+          {standing(chosen)} {result(after)}
+        </Typography>
       )}
     </Stack>
   );

@@ -290,6 +290,41 @@ if the tests pass:
   alone. The screen calls this **external labour** and asks which supplier sent the men, off
   the one supplier register (V23); naming him stays optional, because a count with no name on
   it is still a true count.
+- **A float is a running account with one holder, and it is allowed to go negative.** Petty cash
+  handed to a supervisor is `site_advances`, which has existed since V1 with no screen onto it,
+  cleared one way: the holder submits a settlement listing his bills and the office approves it.
+  That shape is right for a fortnight of pocket receipts and wrong for the ordinary case — one
+  bill he already paid at the counter while the lorry stood at the gate — which sat in the
+  payable queue looking like money owed to a shopkeeper settled an hour after delivery. So
+  `POST /expenses/{id}/charge-to-float` settles it the other way, and **it is recorded as a
+  payment**: the supplier *was* paid, `paid_amount` moves, and approved cost, cash paid and
+  payable still reconcile. Only the source of the cash differs, which is the whole of what
+  `payments.site_advance_id` (V49) says. It carries **no new permission** — `payment:record` is
+  the accountant's, and choosing between the two ways of settling a bill is part of settling it,
+  the same argument that minted none for the allocation on the approval. It **names the man, not
+  the float**: the office knows who paid and has no reason to care which envelope the rupees came
+  out of, so the server charges his oldest float with something left in it and falls through to
+  his most recent when they are all spent. That last case **overdraws the float**, and V49 removed
+  the check that made it unrecordable: a man holding ₹5,000 who buys ₹7,000 of steel is owed
+  ₹2,000, refusing the row never stopped it happening, and `OVERSPENT` is its own status because a
+  float read as SETTLED drops off the open-balances report — leaving the one position the office
+  most needs in front of it as the one it stopped looking at. The batch settlement keeps its own
+  ceiling: a holder's *claim* about his own pocket is checked, an approver's decision about a bill
+  he has just approved is not. A bill that has been paid either way is refused on a settlement,
+  because the same rupees would otherwise leave the same pocket twice.
+- **A balance is summed, never stored.** `FloatBalanceRow` is rolled up per call from the floats
+  themselves — issued, spent, returned, and the signed difference — for the reason the vendor
+  account keeps no balance on the vendor: a figure somebody can write is the version that stops
+  matching the rows behind it, and the rows are what the argument is about. The register shows
+  what is **out with the staff** and what is **owed back to them** as two figures and never nets
+  them: cash to account for and cash to hand over are two different acts, and one net number is
+  neither. Reading the register is `expense:read`; reading *your own* pocket is behind nothing at
+  all (`GET /advances/my-float`), because a man is entitled to know what he was handed without
+  being entitled to know what the engineer beside him was handed — and the expense form that
+  shows it is opened by exactly him. `SiteStaffing.postedTo` answers who a float may be handed to,
+  because the user list is behind `user:read` and an accountant holding `advance:issue` could
+  otherwise reach the call that hands over the money and not the one that says who is there to
+  take it.
 - **A labour payment settles a wage only where a wage was costed.** `is_labour_payment` keeps
   money handed over for wages out of cost incurred, because verified attendance already
   counted it. On a site flagged `uses_outsourced_labour` there is no muster and nothing was
@@ -621,6 +656,11 @@ by `PaymentService` alone. The checks keep a deposit inside its own bill, keep w
 settled inside the deposit, and keep both out of a bill nobody has approved (the same guard V8
 put on `paid_amount`, and `VOIDED` is allowed for the same reason). **No new permission** — see
 the deposit rule above.
+
+`V49` is the bill settled out of somebody's pocket. It adds `payments.site_advance_id` and drops
+two checks that were each stopping a true fact being written: the ceiling on
+`site_advances.adjusted_amount`, so a float may be overdrawn, and the status list, which gains
+`OVERSPENT`. **No new permission** — see the float rule above.
 
 **A note on JPQL and optional parameters.** `(:param IS NULL OR column = :param)` expands to two
 placeholders, and Postgres cannot infer a type for the one standing alone in `? IS NULL` — it

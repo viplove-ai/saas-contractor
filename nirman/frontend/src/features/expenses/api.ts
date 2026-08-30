@@ -16,6 +16,7 @@ import type {
   DuplicateExpenseError,
   Expense,
   ExpenseCategory,
+  FloatBalance,
   ExpenseWorkflow,
   PageResponse,
   Payment,
@@ -35,6 +36,9 @@ export const expenseKeys = {
   pending: ['approvals', 'pending'] as const,
   payments: (expenseId: string) => ['payments', expenseId] as const,
   vendorBalances: ['vendors', 'balances'] as const,
+  myFloat: (siteId: string) => ['advances', 'my-float', siteId] as const,
+  floatBalances: (siteId: string) => ['advances', 'float-balances', siteId] as const,
+  floats: ['advances'] as const,
   deposits: (siteId: string, openOnly: boolean) =>
     ['deposits', siteId, openOnly] as const,
   depositsAll: ['deposits'] as const,
@@ -551,6 +555,76 @@ export function useRecordPayment() {
       void queryClient.invalidateQueries({ queryKey: expenseKeys.all });
       void queryClient.invalidateQueries({ queryKey: ['payments'] });
       void queryClient.invalidateQueries({ queryKey: expenseKeys.vendorBalances });
+    },
+  });
+}
+
+/**
+ * What the caller himself is carrying at a site.
+ *
+ * <p>Shown on the expense form, which is the one moment it changes anything: a supervisor
+ * about to book a ₹9,000 purchase is entitled to know he is holding ₹2,000, and the form was
+ * the only screen in the app that could have told him and did not.</p>
+ *
+ * <p>Never cached by the service worker and never served stale — the whole value of the figure
+ * is that it is today's. A float balance read off yesterday's cache is worse than no figure,
+ * because it reads as an answer.</p>
+ */
+export function useMyFloat(siteId: string | undefined) {
+  return useQuery({
+    queryKey: expenseKeys.myFloat(siteId ?? ''),
+    queryFn: async () =>
+      (await apiClient.get<FloatBalance[]>('/advances/my-float', { params: { siteId } })).data,
+    enabled: Boolean(siteId),
+  });
+}
+
+/** Every holder's float at a site — what the office charges an approved bill against. */
+export function useFloatBalances(siteId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: expenseKeys.floatBalances(siteId ?? ''),
+    queryFn: async () =>
+      (await apiClient.get<FloatBalance[]>('/advances/float-balances', { params: { siteId } }))
+        .data,
+    enabled: Boolean(siteId) && enabled,
+  });
+}
+
+/**
+ * Settles an approved bill out of the float in somebody's pocket.
+ *
+ * <p>The other answer to the question {@link useRecordPayment} asks. The supplier was paid —
+ * by the supervisor, at the counter, an hour after the lorry arrived — so the bill leaves the
+ * payable queue exactly as a bank transfer would take it out, and what changes is only who the
+ * company owes: its own man rather than the shopkeeper.</p>
+ *
+ * <p>No amount: a float charge is the whole of what is still owed on the bill. Nobody pays a
+ * shopkeeper two-thirds of a challan out of his pocket and leaves the rest for the office.</p>
+ *
+ * <p>It names the man rather than one of his floats. The office knows who paid; which of the
+ * envelopes he was handed the rupees came out of is the server's arithmetic, not a question to
+ * put to an accountant.</p>
+ */
+export function useChargeToFloat() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      expenseId: string;
+      holderUserId: string;
+      paymentDate: string;
+      remarks?: string | undefined;
+    }) => {
+      const { expenseId, ...body } = input;
+      return (
+        await apiClient.post<Payment>(`/expenses/${expenseId}/charge-to-float`, body)
+      ).data;
+    },
+    onSuccess: () => {
+      // It moves three things at once: the bill's paid and payable figures, the payments
+      // register, and the holder's balance. All three caches go.
+      void queryClient.invalidateQueries({ queryKey: expenseKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['payments'] });
+      void queryClient.invalidateQueries({ queryKey: expenseKeys.floats });
     },
   });
 }

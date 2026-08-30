@@ -108,6 +108,9 @@ public class VendorAccountService {
                 vendorId, vendor.getName(), payment.getPaymentDate(), payment.getAmount(),
                 payment.getPaymentMode(), payment.getReferenceNumber(),
                 payment.getBankAccount(), payment.getRemarks(), payment.getReconciledAt(),
+                // Nor a float: an advance on account is the office's own money going out
+                // early, and nobody's pocket is involved.
+                null, null,
                 // An advance carries no proof yet: this endpoint takes no file, and adding
                 // one is a separate change to a separate act. Empty rather than absent.
                 payment.getVersion(), List.of());

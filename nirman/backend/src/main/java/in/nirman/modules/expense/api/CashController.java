@@ -5,6 +5,9 @@ import in.nirman.modules.approval.api.dto.ApprovalDtos.ActionRequest;
 import in.nirman.modules.approval.domain.Approval;
 import in.nirman.modules.approval.service.ApprovalEngine;
 import in.nirman.modules.expense.api.dto.CashDtos.AdvanceResponse;
+import in.nirman.modules.expense.api.dto.CashDtos.ChargeToFloatRequest;
+import in.nirman.modules.expense.api.dto.CashDtos.FloatBalanceRow;
+import in.nirman.modules.expense.api.dto.CashDtos.FloatHolderOption;
 import in.nirman.modules.expense.api.dto.CashDtos.IssueAdvanceRequest;
 import in.nirman.modules.expense.api.dto.CashDtos.PaymentResponse;
 import in.nirman.modules.expense.api.dto.CashDtos.RecordPaymentRequest;
@@ -88,6 +91,25 @@ public class CashController {
     }
 
     /**
+     * A bill the holder already paid out of his float.
+     *
+     * <p>Its own endpoint rather than a payment mode on the one above, for the reason the
+     * vendor advance has its own: the office paying a supplier and the office deciding that a
+     * supervisor already paid him are different acts, and the second one moves who the company
+     * owes from the supplier to its own man. A nullable field on the first request is how the
+     * second one gets done by accident.</p>
+     */
+    @PostMapping("/expenses/{id}/charge-to-float")
+    @Operation(summary = "Settle an approved bill out of the float in somebody's pocket, "
+            + "instead of paying it. May overdraw the float, which is what puts the company "
+            + "on the owing side of it.")
+    public ResponseEntity<PaymentResponse> chargeToFloat(
+            @PathVariable UUID id, @Valid @RequestBody ChargeToFloatRequest request) {
+        PaymentResponse created = payments.chargeToFloat(id, request);
+        return ResponseEntity.created(URI.create("/api/v1/payments/" + created.id())).body(created);
+    }
+
+    /**
      * Cash to a supplier before any bill of his exists. Its own endpoint rather than a
      * payment with a null expense, because the two are different acts and the second is a
      * mistake far more often than it is an advance.
@@ -161,6 +183,30 @@ public class CashController {
     public List<AdvanceResponse> advanceBalances(@RequestParam(required = false) UUID siteId,
                                                   @RequestParam(required = false) UUID userId) {
         return advances.openBalances(siteId, userId);
+    }
+
+    @GetMapping("/advances/float-balances")
+    @Operation(summary = "Where each person's float stands: issued, spent, returned, in hand. "
+            + "In hand is negative where he spent past it and the company owes him.")
+    public List<FloatBalanceRow> floatBalances(@RequestParam(required = false) UUID siteId,
+                                               @RequestParam(required = false) UUID userId) {
+        return advances.floatBalances(siteId, userId);
+    }
+
+    /**
+     * What the caller himself is carrying. Behind no permission of its own — a man is entitled
+     * to know what he was handed, and the expense form that shows it is opened by exactly him.
+     */
+    @GetMapping("/advances/my-float")
+    @Operation(summary = "The caller's own float, per site")
+    public List<FloatBalanceRow> myFloat(@RequestParam(required = false) UUID siteId) {
+        return advances.myFloat(siteId);
+    }
+
+    @GetMapping("/advances/holders")
+    @Operation(summary = "Who a float can be handed to at a site — the people posted to it")
+    public List<FloatHolderOption> floatHolders(@RequestParam UUID siteId) {
+        return advances.holdersAt(siteId);
     }
 
     // ------------------------------------------------------------------ settlements

@@ -23,12 +23,30 @@ import java.util.UUID;
  * <p>{@code balanceAmount} is a generated column — issued less adjusted less returned — and
  * is read here, never written. It is the one number the holder and the office argue about,
  * so it must not be independently settable by either.</p>
+ *
+ * <p><b>It carries a sign.</b> Positive is cash still in his pocket. Negative is a float he
+ * has spent past, which the company owes him — the ordinary case of a supervisor holding
+ * ₹5,000 who buys ₹7,000 of steel because the lorry was at the gate. V49 removed the check
+ * that made that unrecordable; refusing the row never stopped it happening, it only sent it
+ * into a notebook nobody can read back.</p>
  */
 @Entity
 @Table(name = "site_advances")
 public class SiteAdvance extends BaseEntity {
 
-    public enum SettlementStatus { OPEN, PARTIALLY_SETTLED, SETTLED, CANCELLED }
+    public enum SettlementStatus {
+        OPEN,
+        PARTIALLY_SETTLED,
+        SETTLED,
+        /**
+         * Spent past what was issued. The balance is negative and the company owes the holder
+         * the difference — its own state rather than a SETTLED one, because a float read as
+         * settled drops off the open-balances report, and a man the company owes money to is
+         * the last position it should stop looking at (V49).
+         */
+        OVERSPENT,
+        CANCELLED
+    }
 
     @Column(name = "org_id", nullable = false, updatable = false)
     private UUID orgId;
@@ -103,6 +121,34 @@ public class SiteAdvance extends BaseEntity {
     }
 
     /**
+     * Charges a bill the holder paid himself against the float he was given.
+     *
+     * <p>Distinct from {@link #settle}, and the difference is who is asserting it. A
+     * settlement is the holder's claim about his own pocket and is capped at what he was
+     * given. This is the office charging a bill it has just approved, and it is allowed to
+     * overdraw the float — which is what puts the company on the wrong side of the balance
+     * and is the whole point of recording it.</p>
+     */
+    public void charge(BigDecimal amountSpent, Instant at) {
+        this.adjustedAmount = adjustedAmount.add(amountSpent);
+        this.settlementStatus = statusFor(adjustedAmount.add(returnedAmount));
+        if (settlementStatus == SettlementStatus.SETTLED) {
+            this.closedAt = at;
+        }
+    }
+
+    private SettlementStatus statusFor(BigDecimal cleared) {
+        int against = cleared.compareTo(amount);
+        if (against > 0) {
+            return SettlementStatus.OVERSPENT;
+        }
+        if (against == 0) {
+            return SettlementStatus.SETTLED;
+        }
+        return cleared.signum() > 0 ? SettlementStatus.PARTIALLY_SETTLED : SettlementStatus.OPEN;
+    }
+
+    /**
      * Applies an approved settlement. Called only from the settlement service, which has
      * already checked that the float can cover it.
      */
@@ -118,7 +164,10 @@ public class SiteAdvance extends BaseEntity {
         }
     }
 
-    /** What is still in the holder's pocket, computed here for the same-transaction reader. */
+    /**
+     * What is still in the holder's pocket, computed here for the same-transaction reader.
+     * Negative once the float has been overdrawn — see the class note.
+     */
     public BigDecimal outstanding() {
         return amount.subtract(adjustedAmount).subtract(returnedAmount);
     }

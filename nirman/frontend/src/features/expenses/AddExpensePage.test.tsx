@@ -6,7 +6,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createQueryClient } from '../../app/queryClient';
 import { offlineDb } from '../../offline/db';
 import { AddExpensePage } from './AddExpensePage';
-import type { Expense, ExpenseCategory, PageResponse, Site } from './types';
+import type {
+  Expense,
+  ExpenseCategory,
+  FloatBalance,
+  PageResponse,
+  Site,
+} from './types';
 
 const get = vi.fn();
 const post = vi.fn();
@@ -85,13 +91,34 @@ function renderPage(client?: QueryClient) {
   );
 }
 
+/**
+ * What the author is carrying. Empty by default, because most people booking an expense have
+ * never been handed a float and the strip is silent for them.
+ */
+let myFloat: FloatBalance[] = [];
+
 function mockGets(expenses: PageResponse<Expense> = NO_EXPENSES) {
   get.mockImplementation((url: string) => {
     if (url === '/sites') return Promise.resolve({ data: SITES });
     if (url === '/expense-categories') return Promise.resolve({ data: CATEGORIES });
+    if (url === '/advances/my-float') return Promise.resolve({ data: myFloat });
     if (url === '/expenses') return Promise.resolve({ data: expenses });
     return Promise.reject(new Error(`unexpected GET ${url}`));
   });
+}
+
+/** One float, shaped as the register returns it, with whatever is left of it. */
+function float(inHand: number, spent: number, issued: number): FloatBalance {
+  return {
+    userId: 'u-me',
+    holderName: 'Vivek Aggarwal',
+    siteId: 'site-a',
+    issuedAmount: issued,
+    spentAmount: spent,
+    returnedAmount: 0,
+    inHandAmount: inHand,
+    openFloats: 1,
+  };
 }
 
 /** One expense the office has sent back, as the list under the form returns it. */
@@ -152,6 +179,7 @@ describe('AddExpensePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     permissions = ['expense:create', 'expense:read'];
+    myFloat = [];
     mockGets();
     post.mockResolvedValue({ data: { id: 'e1', expenseNumber: 'EXP-2025-0001' } });
   });
@@ -630,5 +658,48 @@ describe('AddExpensePage', () => {
       if (onLine) Object.defineProperty(window.navigator, 'onLine', onLine);
       window.dispatchEvent(new Event('online'));
     }
+  });
+
+  // ---------------------------------------------------------------- the float he carries
+
+  /**
+   * The one screen where the figure changes anything, and the one screen that could not tell
+   * him. A supervisor about to book a ₹9,000 purchase knows he was handed something last week
+   * and rarely what is left of it, so the answer came by telephone or not at all — and the bill
+   * got booked either way, because the lorry was at the gate.
+   */
+  it('tells the author what he is carrying at this site', async () => {
+    myFloat = [float(12000, 8000, 20000)];
+    renderPage();
+
+    expect(
+      await screen.findByText('You are holding ₹12,000.00 of site cash'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/₹20,000.00 handed to you/)).toBeInTheDocument();
+  });
+
+  /**
+   * A negative float is not an error and not a debt of his. He bought at the gate with more
+   * than he was given, and the company owes him — which is what the strip has to say, because
+   * a minus sign on a cash figure reads as a mistake.
+   */
+  it('says the company owes him when he has paid past his float', async () => {
+    myFloat = [float(-4000, 9000, 5000)];
+    renderPage();
+
+    expect(await screen.findByText('The company owes you ₹4,000.00')).toBeInTheDocument();
+  });
+
+  /**
+   * Silent for everybody the office has never handed a float to, which is most people. A line
+   * reading "you are holding nothing" on every one of their screens is how a reader learns to
+   * stop looking at that part of the page.
+   */
+  it('says nothing at all to somebody who has never held a float', async () => {
+    renderPage();
+    await screen.findByLabelText('Site');
+
+    expect(screen.queryByText(/of site cash/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/The company owes you/)).not.toBeInTheDocument();
   });
 });

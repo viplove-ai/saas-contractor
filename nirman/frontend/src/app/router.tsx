@@ -182,6 +182,12 @@ export const router = createBrowserRouter([
           screen('treasury/fdrs', async () => ({
             Component: (await import('../features/treasury/FdrRegisterPage')).FdrRegisterPage,
           })),
+          // The third treasury question, and the one nothing answered: where is the company's
+          // cash standing right now. Some of it is in the pocket of a supervisor on a site, and
+          // the register that holds it has existed since V1 with no screen onto it.
+          screen('treasury/floats', async () => ({
+            Component: (await import('../features/treasury/SiteFloatsPage')).SiteFloatsPage,
+          })),
           screen('sites', async () => ({
             Component: (await import('../features/admin/SitesPage')).SitesPage,
           })),

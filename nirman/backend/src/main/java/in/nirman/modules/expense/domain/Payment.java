@@ -65,6 +65,16 @@ public class Payment extends BaseEntity {
     @Column(name = "reconciled_by")
     private UUID reconciledBy;
 
+    /**
+     * The float this payment came out of, where the holder paid the vendor himself.
+     *
+     * <p>Null on every payment the office makes, which is almost all of them. When it is set
+     * the cash did not leave a bank account at all — it left a supervisor's pocket, and the
+     * person the company now owes is him rather than the supplier (V49).</p>
+     */
+    @Column(name = "site_advance_id", updatable = false)
+    private UUID siteAdvanceId;
+
     protected Payment() {
     }
 
@@ -83,6 +93,15 @@ public class Payment extends BaseEntity {
         this.paymentDate = paymentDate;
         this.amount = amount;
         this.paymentMode = paymentMode;
+    }
+
+    /** Says the cash came out of a float rather than out of the bank. Set once, at creation. */
+    public void fundedByFloat(UUID advanceId) {
+        this.siteAdvanceId = advanceId;
+    }
+
+    public UUID getSiteAdvanceId() {
+        return siteAdvanceId;
     }
 
     public void reconcile(Instant at, UUID by) {

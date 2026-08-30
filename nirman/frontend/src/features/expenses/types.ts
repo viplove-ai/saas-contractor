@@ -260,6 +260,12 @@ export interface Payment {
   referenceNumber?: string;
   remarks?: string;
   /**
+   * The float this came out of, where the holder paid the vendor himself. Absent on every
+   * payment the office made, which is almost all of them.
+   */
+  siteAdvanceId?: string;
+  siteAdvanceNumber?: string;
+  /**
    * What proves the cash went out — the UPI screenshot, the signed receipt, the bank slip.
    *
    * <p>Empty on a payment recorded with nothing, which is a real case: a cash payment across
@@ -277,6 +283,29 @@ export interface PaymentAttachment {
   docType: string;
   fileName?: string;
   contentType?: string;
+}
+
+/**
+ * Where one person's site float stands.
+ *
+ * <p>Shaped by the server per call rather than stored, and read here by two screens that ask
+ * two different questions of it: the expense form asks the holder what he is carrying, and the
+ * approvals queue asks the office what it can charge a bill against.</p>
+ *
+ * <p><b>{@code inHandAmount} carries a sign.</b> Positive is cash still in his pocket.
+ * Negative is a man who spent past his float — he bought at the gate with more than he was
+ * given — and the company owes him that much.</p>
+ */
+export interface FloatBalance {
+  userId: string;
+  holderName?: string;
+  siteId: string;
+  issuedAmount: number;
+  spentAmount: number;
+  returnedAmount: number;
+  inHandAmount: number;
+  openFloats: number;
+  oldestOpenOn?: string;
 }
 
 export interface VendorBalance {

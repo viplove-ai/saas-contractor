@@ -25,6 +25,7 @@ import {
   useCreateExpense,
   useExpenseCategories,
   useExpenses,
+  useMyFloat,
   useNameExpenseCategory,
   useReviseExpense,
   useSites,
@@ -386,6 +387,14 @@ export function AddExpensePage() {
           helperText="The office approved this figure once. Say what has to change and why."
         />
       )}
+
+      {/*
+        What he is carrying, above the form that spends it. Drawn only when the office has
+        actually handed him something — a strip saying "you are holding nothing" on the screen
+        of every supervisor who was never given a float is a line that teaches the reader to
+        stop looking at that part of the page.
+      */}
+      <FloatStrip siteId={siteId} />
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
         <TextField
@@ -777,6 +786,50 @@ export function AddExpensePage() {
 }
 
 /** Draft, returned and rejected rows are still the author's to send. */
+/**
+ * What the person filling this form is carrying at this site.
+ *
+ * <p>The one screen where the figure changes anything, and the one screen that could not tell
+ * him. A supervisor about to book a ₹9,000 purchase knows he was handed something last week and
+ * rarely what is left of it, so the answer came by telephone or not at all — and the bill got
+ * booked either way, because the lorry was at the gate.</p>
+ *
+ * <p><b>The figure has a sign and both signs are said in words.</b> Positive is cash still in
+ * his pocket. Negative means he has already paid more than he was given, which is not an error
+ * and not a debt of his: the company owes him that much, and it is the fact he most wants on
+ * the screen when he is about to spend again.</p>
+ *
+ * <p>Its own component so that the balance query is scoped to it. The strip is silent for
+ * everybody the office has never handed a float to — which is most people — and a line reading
+ * "you are holding nothing" on every one of their screens is how a reader learns to stop
+ * looking at that part of the page.</p>
+ */
+function FloatStrip({ siteId }: { siteId: string }) {
+  const float = useMyFloat(siteId || undefined);
+  const mine = (float.data ?? []).find((row) => row.siteId === siteId);
+  if (!mine || (mine.inHandAmount === 0 && mine.issuedAmount === 0)) {
+    return null;
+  }
+  const owed = mine.inHandAmount < 0;
+  return (
+    <Alert severity={owed ? 'warning' : 'info'} icon={false}>
+      <Typography fontWeight={600}>
+        {owed
+          ? `The company owes you ${formatAmount(-mine.inHandAmount)}`
+          : `You are holding ${formatAmount(mine.inHandAmount)} of site cash`}
+      </Typography>
+      <Typography variant="body2">
+        {formatAmount(mine.issuedAmount)} handed to you, {formatAmount(mine.spentAmount)} charged
+        back against bills
+        {mine.returnedAmount > 0 && <>, {formatAmount(mine.returnedAmount)} returned</>}.
+        {owed
+          ? ' You have paid past your float — the office settles it by handing you cash or another advance.'
+          : ' The office charges an approved bill back against this when you paid it yourself.'}
+      </Typography>
+    </Alert>
+  );
+}
+
 function isSendable(status: ExpenseWorkflow): boolean {
   return status === 'DRAFT' || status === 'RETURNED' || status === 'REJECTED';
 }

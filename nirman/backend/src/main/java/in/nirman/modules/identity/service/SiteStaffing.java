@@ -1,5 +1,6 @@
 package in.nirman.modules.identity.service;
 
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -14,6 +15,28 @@ import java.util.UUID;
  * {@code sites.supervisor_id} is a label, {@code user_site_assignments} is the permission.</p>
  */
 public interface SiteStaffing {
+
+    /**
+     * One person the caller may hand something to at a site: the name, and the roles that say
+     * what he does there.
+     *
+     * @param roleCodes the roles he holds in the organisation, so a caller can say "engineer"
+     *                  beside the name without joining to identity itself
+     */
+    record SiteMember(UUID userId, String username, String fullName, List<String> roleCodes) {
+    }
+
+    /**
+     * Everybody posted to a site today, in name order.
+     *
+     * <p>Exists because handing a man petty cash means naming him, and the only list of users
+     * identity publishes is behind {@code user:read} — an administrator's permission. An
+     * accountant holding {@code advance:issue} and nothing else could reach the endpoint that
+     * issues the float and not the one that says who is standing on the site. This answers
+     * that question and only that question: the people the site's own postings already name,
+     * with no password, no e-mail and no way to reach anybody the caller is not scoped to.</p>
+     */
+    List<SiteMember> postedTo(UUID orgId, UUID siteId);
 
     /**
      * @throws in.nirman.common.BusinessException 422 if the user is unknown to this org, is

@@ -4,7 +4,14 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApprovalsPage } from './ApprovalsPage';
-import type { Expense, ExpenseWorkflow, PageResponse, Payment, Site } from './types';
+import type {
+  Expense,
+  ExpenseWorkflow,
+  FloatBalance,
+  PageResponse,
+  Payment,
+  Site,
+} from './types';
 
 const get = vi.fn();
 const post = vi.fn();
@@ -156,6 +163,37 @@ const OWED = expense({
   vendorName: 'Shri Ji Traders',
 });
 
+/**
+ * Two men carrying site cash: one with money left, one already out of pocket.
+ *
+ * <p>Both are in the fixture on purpose. The screen's whole job on a negative balance is to
+ * say "owed to him" rather than to draw a minus sign, and a fixture with only positive rows
+ * would never exercise the sentence that matters.</p>
+ */
+const FLOATS: FloatBalance[] = [
+  {
+    userId: 'u-vivek',
+    holderName: 'Vivek Aggarwal',
+    siteId: 'site-a',
+    issuedAmount: 20000,
+    spentAmount: 8000,
+    returnedAmount: 0,
+    inHandAmount: 12000,
+    openFloats: 1,
+    oldestOpenOn: '2025-06-01',
+  },
+  {
+    userId: 'u-ramesh',
+    holderName: 'Ramesh Bisht',
+    siteId: 'site-a',
+    issuedAmount: 5000,
+    spentAmount: 9000,
+    returnedAmount: 0,
+    inHandAmount: -4000,
+    openFloats: 1,
+  },
+];
+
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -183,6 +221,7 @@ function mockGets() {
     }
     // What has already gone out against a part-paid bill, and what proved it.
     if (url === '/payments') return Promise.resolve({ data: page2(PAYMENTS) });
+    if (url === '/advances/float-balances') return Promise.resolve({ data: FLOATS });
     if (url === '/expenses') {
       const status = config?.params?.status;
       if (status === 'SUBMITTED') return Promise.resolve({ data: page([SUBMITTED]) });
@@ -498,5 +537,122 @@ describe('ApprovalsPage', () => {
     await screen.findByText('EXP-2025-0002');
 
     expect(screen.getAllByText('No photograph of the bill')).not.toHaveLength(0);
+  });
+
+  // ---------------------------------------------------------------- settling from a float
+
+  /**
+   * The second way of settling, offered on the same card as the first. Separating them onto
+   * two screens would mean the accountant chooses between them before he has seen the bill.
+   */
+  it('offers the bill to be charged to whoever actually paid it', async () => {
+    permissions = ['expense:read', 'payment:record'];
+    renderPage();
+    await screen.findByText('EXP-2025-0003');
+
+    expect(await screen.findByLabelText('Who paid it')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Charge .* to his float/ }),
+    ).toBeInTheDocument();
+  });
+
+  /**
+   * A negative balance is said in words. "−4,000" on a cash register reads as a mistake to
+   * everyone who has not been told otherwise, and the fact it carries — that the company owes
+   * this man money — is the one that needs acting on.
+   */
+  it('says a man is owed money rather than drawing him a minus sign', async () => {
+    permissions = ['expense:read', 'payment:record'];
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('EXP-2025-0003');
+
+    await user.click(await screen.findByLabelText('Who paid it'));
+    expect(
+      await screen.findByRole('option', { name: /Ramesh Bisht — owed ₹4,000/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: /Vivek Aggarwal — holding ₹12,000/ }),
+    ).toBeInTheDocument();
+  });
+
+  /**
+   * What the charge will do, before it is taken. Charging ₹30,000 to a man carrying ₹12,000
+   * leaves the company owing him ₹18,000, which is correct, ordinary, and exactly what a lorry
+   * at a gate produces — and reads as a bug if nobody says it first.
+   */
+  it('spells out that charging past a float leaves the company owing him', async () => {
+    permissions = ['expense:read', 'payment:record'];
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('EXP-2025-0003');
+
+    await user.click(await screen.findByLabelText('Who paid it'));
+    await user.click(
+      await screen.findByRole('option', { name: /Vivek Aggarwal — holding ₹12,000/ }),
+    );
+
+    expect(
+      await screen.findByText(
+        'He is carrying ₹12,000.00, so this leaves the company owing him ₹18,000.00.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  /**
+   * And the same rule on the other side of zero. A man already out of pocket is the case where
+   * a raw "-₹4,000" is most likely to be read as a bug, because the reader is being asked to
+   * act on it.
+   */
+  it('says a holder is already owed rather than printing him a minus sign', async () => {
+    permissions = ['expense:read', 'payment:record'];
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('EXP-2025-0003');
+
+    await user.click(await screen.findByLabelText('Who paid it'));
+    await user.click(
+      await screen.findByRole('option', { name: /Ramesh Bisht — owed ₹4,000/ }),
+    );
+
+    expect(
+      await screen.findByText(
+        'He is already owed ₹4,000.00, so this leaves the company owing him ₹34,000.00.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  /** It names the man and charges the whole of what is left owing — there is no amount box. */
+  it('charges the whole payable amount to the chosen holder', async () => {
+    permissions = ['expense:read', 'payment:record'];
+    const user = userEvent.setup();
+    post.mockResolvedValue({ data: { id: 'pay-2' } });
+    renderPage();
+    await screen.findByText('EXP-2025-0003');
+
+    await user.click(await screen.findByLabelText('Who paid it'));
+    await user.click(
+      await screen.findByRole('option', { name: /Vivek Aggarwal — holding ₹12,000/ }),
+    );
+    await user.click(screen.getByRole('button', { name: /Charge ₹30,000/ }));
+
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith(
+        '/expenses/e3/charge-to-float',
+        expect.objectContaining({ holderUserId: 'u-vivek' }),
+      ),
+    );
+    // No amount on the request: the charge is the whole of what is still owed.
+    expect(post.mock.calls[0]?.[1]).not.toHaveProperty('amount');
+  });
+
+  /** The engineer approves and never pays, so neither way of settling is his to choose. */
+  it('shows an approver no way to settle a bill', async () => {
+    permissions = ['expense:read', 'expense:approve:l1'];
+    renderPage();
+    await screen.findByText('EXP-2025-0001');
+
+    expect(screen.queryByLabelText('Who paid it')).not.toBeInTheDocument();
+    expect(get).not.toHaveBeenCalledWith('/advances/float-balances', expect.anything());
   });
 });

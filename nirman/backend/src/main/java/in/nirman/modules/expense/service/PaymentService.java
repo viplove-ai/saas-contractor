@@ -3,8 +3,10 @@ package in.nirman.modules.expense.service;
 import in.nirman.common.BusinessException;
 import in.nirman.common.DocumentNumberService;
 import in.nirman.common.PageResponse;
+import in.nirman.common.PeriodLockGuard;
 import in.nirman.modules.attachment.service.AttachmentLookup;
 import in.nirman.modules.audit.AuditService;
+import in.nirman.modules.expense.api.dto.CashDtos.ChargeToFloatRequest;
 import in.nirman.modules.expense.api.dto.CashDtos.PaymentAttachmentResponse;
 import in.nirman.modules.expense.api.dto.CashDtos.PaymentResponse;
 import in.nirman.modules.expense.api.dto.CashDtos.RecordPaymentRequest;
@@ -12,18 +14,22 @@ import in.nirman.modules.expense.api.dto.CashDtos.VendorBalanceRow;
 import in.nirman.modules.expense.domain.Expense;
 import in.nirman.modules.expense.domain.Payment;
 import in.nirman.modules.expense.domain.PaymentAttachment;
+import in.nirman.modules.expense.domain.SiteAdvance;
 import in.nirman.modules.expense.repository.ExpenseRepository;
 import in.nirman.modules.expense.repository.PaymentAttachmentRepository;
 import in.nirman.modules.expense.repository.PaymentRepository;
+import in.nirman.modules.expense.repository.SiteAdvanceRepository;
 import in.nirman.modules.masterdata.domain.Vendor;
 import in.nirman.modules.masterdata.repository.VendorRepository;
 import in.nirman.security.CurrentUserProvider;
+import in.nirman.security.SiteAccessGuard;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -54,21 +60,29 @@ public class PaymentService {
     private final PaymentAttachmentRepository proofs;
     private final ExpenseRepository expenses;
     private final VendorRepository vendors;
+    private final SiteAdvanceRepository advances;
     private final DocumentNumberService documentNumbers;
     private final AttachmentLookup attachments;
+    private final SiteAccessGuard siteAccessGuard;
+    private final PeriodLockGuard periodLockGuard;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
 
     public PaymentService(PaymentRepository payments, PaymentAttachmentRepository proofs,
                           ExpenseRepository expenses, VendorRepository vendors,
+                          SiteAdvanceRepository advances,
                           DocumentNumberService documentNumbers, AttachmentLookup attachments,
+                          SiteAccessGuard siteAccessGuard, PeriodLockGuard periodLockGuard,
                           CurrentUserProvider currentUser, AuditService audit) {
         this.payments = payments;
         this.proofs = proofs;
         this.expenses = expenses;
         this.vendors = vendors;
+        this.advances = advances;
         this.documentNumbers = documentNumbers;
         this.attachments = attachments;
+        this.siteAccessGuard = siteAccessGuard;
+        this.periodLockGuard = periodLockGuard;
         this.currentUser = currentUser;
         this.audit = audit;
     }
@@ -143,6 +157,107 @@ public class PaymentService {
     }
 
     /**
+     * Settles an approved bill out of the float in somebody's pocket.
+     *
+     * <p><b>Why this is a payment and not a flag.</b> The supervisor handed the shopkeeper
+     * cash an hour after the lorry arrived. The supplier <i>was</i> paid, so
+     * {@code paid_amount} moves and the bill leaves the payable queue — recording it any other
+     * way would leave the ageing report claiming the company owes a shopkeeper who was settled
+     * a fortnight ago, and would leave the man it actually owes, its own supervisor, nowhere on
+     * the books at all. What changes is only where the cash came from, which is what
+     * {@code payments.site_advance_id} says.</p>
+     *
+     * <p><b>Whose decision it is.</b> {@code payment:record} — the accountant's and the
+     * administrator's, the same permission and the same people as recording a bank transfer,
+     * because it is the same question answered the other way: this bill is settled, and here is
+     * what settled it. No new permission was minted, for the reason the allocation minted none
+     * on the approval: choosing between the two ways of settling a bill is part of settling
+     * it.</p>
+     *
+     * <p><b>It may overdraw the float, and that is the point.</b> A supervisor holding ₹5,000
+     * who buys ₹7,000 of steel is owed ₹2,000, and V49 removed the check that made that
+     * unrecordable. What is refused is charging a bill to a float at a different site, to a
+     * cancelled one, or to a period that is closed.</p>
+     */
+    @PreAuthorize("hasAuthority('payment:record')")
+    public PaymentResponse chargeToFloat(UUID expenseId, ChargeToFloatRequest request) {
+        Expense expense = expenses.findByIdAndOrgId(expenseId, orgId())
+                .orElseThrow(() -> BusinessException.notFound("Expense", expenseId));
+        siteAccessGuard.assertCanAccess(expense.getSiteId());
+
+        if (expense.getWorkflowStatus() != Expense.Workflow.APPROVED) {
+            throw new BusinessException("payment.expense-not-approved",
+                    "Expense %s is %s. Nothing is settled until it is approved."
+                            .formatted(expense.getExpenseNumber(),
+                                    expense.getWorkflowStatus().name().toLowerCase()
+                                            .replace('_', ' ')));
+        }
+        BigDecimal payable = expense.payableAmount();
+        if (payable.signum() <= 0) {
+            throw new BusinessException("payment.nothing-payable",
+                    "Nothing is left owing on " + expense.getExpenseNumber() + ".");
+        }
+        periodLockGuard.assertOpen(expense.getSiteId(), request.paymentDate(),
+                PeriodLockGuard.Module.EXPENSE);
+
+        SiteAdvance advance = floatFor(request.holderUserId(), expense.getSiteId());
+
+        String number = documentNumbers.next(orgId(), DocumentNumberService.DocType.PAYMENT,
+                request.paymentDate());
+        Payment payment = new Payment(orgId(), expense.getProjectId(), expense.getSiteId(),
+                expense.getId(), expense.getVendorId(), number, request.paymentDate(),
+                payable, "SITE_FLOAT");
+        payment.fundedByFloat(advance.getId());
+        payment.setRemarks(request.remarks());
+        payments.save(payment);
+
+        expense.addPayment(payable);
+        expense.setSiteAdvanceId(advance.getId());
+        advance.charge(payable, Instant.now());
+
+        audit.record("PAYMENT", payment.getId(), "CHARGE_TO_FLOAT", null,
+                Map.of("paymentNumber", number, "expenseNumber", expense.getExpenseNumber(),
+                        "advanceNumber", advance.getAdvanceNumber(),
+                        "holder", advance.getIssuedToUserId().toString(),
+                        "amount", payable, "floatBalance", advance.outstanding()),
+                request.remarks());
+        return toResponse(payment);
+    }
+
+    /**
+     * Which of a holder's floats a bill comes out of.
+     *
+     * <p>Oldest first among those with something left, so the money he has been carrying
+     * longest is the money accounted for first — that is what makes the age of an open float
+     * mean anything. When every one of them is spent the charge falls to his most recent, which
+     * is the case that overdraws it and puts the company on the owing side. That is deliberately
+     * not an error: it is the ordinary event of a man buying at a gate with more than he was
+     * given, and the only thing worse than recording it is not recording it.</p>
+     *
+     * <p>Locked as it is read. Two bills charged to one float at the same moment must not both
+     * start from the same balance — the same reason {@code applyApprovedSettlement} locks, and
+     * it matters more here, because here the balance may go negative and a lost update would
+     * simply be wrong rather than refused.</p>
+     */
+    private SiteAdvance floatFor(UUID holderUserId, UUID siteId) {
+        List<SiteAdvance> held = advances.findLive(orgId(), siteId, holderUserId,
+                false, List.of());
+        SiteAdvance chosen = held.stream()
+                .filter(row -> row.outstanding().signum() > 0)
+                .findFirst()
+                .orElseGet(() -> held.isEmpty() ? null : held.get(held.size() - 1));
+        if (chosen == null) {
+            throw new BusinessException("float.none",
+                    "No float has been handed to that person at this site. Hand one over from "
+                            + "the treasury register first, then charge the bill to it.");
+        }
+        // Re-read under a write lock: the list above was not locked, and the balance this
+        // charge is about to move is exactly what another charge could be moving now.
+        return advances.findForUpdate(chosen.getId())
+                .orElseThrow(() -> BusinessException.notFound("Site advance", chosen.getId()));
+    }
+
+    /**
      * What is owed to each vendor, in the three figures that must never be merged.
      *
      * <p>Built from outstanding expenses rather than from a stored balance on the vendor.
@@ -198,7 +313,11 @@ public class PaymentService {
                 payment.getExpenseId(), expenseNumber, payment.getVendorId(), vendorName,
                 payment.getPaymentDate(), payment.getAmount(), payment.getPaymentMode(),
                 payment.getReferenceNumber(), payment.getBankAccount(), payment.getRemarks(),
-                payment.getReconciledAt(), payment.getVersion(), proofsFor(payment.getId()));
+                payment.getReconciledAt(), payment.getSiteAdvanceId(),
+                payment.getSiteAdvanceId() == null ? null
+                        : advances.findById(payment.getSiteAdvanceId())
+                                .map(SiteAdvance::getAdvanceNumber).orElse(null),
+                payment.getVersion(), proofsFor(payment.getId()));
     }
 
     /**

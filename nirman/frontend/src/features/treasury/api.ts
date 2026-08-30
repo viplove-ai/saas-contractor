@@ -3,11 +3,15 @@ import { compressPhoto } from '../../offline/uploads';
 import { apiClient } from '../../shared/apiClient';
 import type {
   BankDeposit,
+  FloatBalance,
+  FloatHolderOption,
+  SiteFloat,
   DepositRegister,
   Security,
   SecurityInstrument,
   SecurityProposal,
   SecurityType,
+  Site,
   TreasuryDashboard,
 } from './types';
 
@@ -16,6 +20,12 @@ export const treasuryKeys = {
   forProject: (projectId: string) => ['treasury', 'project', projectId] as const,
   proposal: (projectId: string) => ['treasury', 'proposal', projectId] as const,
   deposits: () => ['treasury', 'deposits'] as const,
+  floatBalances: (siteId: string) => ['advances', 'float-balances', siteId] as const,
+  floats: (siteId: string) => ['advances', 'list', siteId] as const,
+  floatHolders: (siteId: string) => ['advances', 'holders', siteId] as const,
+  /** Everything the register draws. One key to drop after a float is issued. */
+  allFloats: ['advances'] as const,
+  sites: ['sites'] as const,
   /** One signed link per attachment, shared by the thumbnail and the full view drawn from it. */
   attachmentUrl: (attachmentId: string) => ['attachments', attachmentId, 'url'] as const,
 };
@@ -343,5 +353,99 @@ export function useAttachmentUrl(attachmentId: string | undefined) {
         .data,
     enabled: Boolean(attachmentId),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+
+// ------------------------------------------------------------------ site floats
+
+/**
+ * Where each person's float stands at a site.
+ *
+ * <p>Never cached by the service worker and never served stale, for the reason the treasury
+ * dashboard is not: the whole value of this figure is that it is today's. A cash balance read
+ * off yesterday's cache is worse than none, because it reads as an answer.</p>
+ */
+export function useSites() {
+  return useQuery({
+    queryKey: treasuryKeys.sites,
+    queryFn: async () => (await apiClient.get<Site[]>('/sites')).data,
+    staleTime: 15 * 60_000,
+  });
+}
+
+export function useFloatBalances(siteId: string | undefined) {
+  return useQuery({
+    queryKey: treasuryKeys.floatBalances(siteId ?? ''),
+    queryFn: async () =>
+      (await apiClient.get<FloatBalance[]>('/advances/float-balances', { params: { siteId } }))
+        .data,
+    enabled: Boolean(siteId),
+  });
+}
+
+/**
+ * The floats themselves, behind the balances.
+ *
+ * <p>A balance is what the office argues about and a float is what it argues from — the date,
+ * the purpose, the reference number on the transfer. The register shows the first and opens
+ * onto the second, because "he is holding ₹8,000" is never the end of the conversation.</p>
+ */
+export function useSiteFloats(siteId: string | undefined, userId?: string | undefined) {
+  return useQuery({
+    queryKey: [...treasuryKeys.floats(siteId ?? ''), userId ?? ''],
+    queryFn: async () =>
+      (
+        await apiClient.get<{ content: SiteFloat[] }>('/advances', {
+          params: { siteId, userId, size: 200 },
+        })
+      ).data.content,
+    enabled: Boolean(siteId),
+  });
+}
+
+/**
+ * Who a float can be handed to at this site.
+ *
+ * <p>The site's own postings, not the user list — that one is behind {@code user:read}, an
+ * administrator's permission, so an accountant holding {@code advance:issue} could reach the
+ * call that hands over the cash and not the one that says who is standing there to take it.</p>
+ */
+export function useFloatHolders(siteId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: treasuryKeys.floatHolders(siteId ?? ''),
+    queryFn: async () =>
+      (await apiClient.get<FloatHolderOption[]>('/advances/holders', { params: { siteId } })).data,
+    enabled: Boolean(siteId) && enabled,
+  });
+}
+
+export interface IssueFloatInput {
+  siteId: string;
+  issuedToUserId: string;
+  advanceDate: string;
+  amount: number;
+  paymentMode: string;
+  referenceNumber?: string | undefined;
+  purpose: string;
+  remarks?: string | undefined;
+}
+
+/**
+ * Hands a float to somebody.
+ *
+ * <p>Not queued offline. Issuing petty cash is the accountant's act at a desk, against a
+ * register the server already holds — and unlike a bill photographed at a gate, there is no
+ * version of it that has to survive no signal: the cash and the record are handed over in the
+ * same room.</p>
+ */
+export function useIssueFloat() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: IssueFloatInput) =>
+      (await apiClient.post<SiteFloat>('/advances', input)).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: treasuryKeys.allFloats });
+    },
   });
 }

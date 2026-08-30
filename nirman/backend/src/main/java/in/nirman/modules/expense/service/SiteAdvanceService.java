@@ -7,6 +7,8 @@ import in.nirman.common.PeriodLockGuard;
 import in.nirman.modules.approval.service.ApprovalEngine;
 import in.nirman.modules.audit.AuditService;
 import in.nirman.modules.expense.api.dto.CashDtos.AdvanceResponse;
+import in.nirman.modules.expense.api.dto.CashDtos.FloatBalanceRow;
+import in.nirman.modules.expense.api.dto.CashDtos.FloatHolderOption;
 import in.nirman.modules.expense.api.dto.CashDtos.IssueAdvanceRequest;
 import in.nirman.modules.expense.api.dto.CashDtos.SettlementLineResponse;
 import in.nirman.modules.expense.api.dto.CashDtos.SettlementResponse;
@@ -20,6 +22,7 @@ import in.nirman.modules.expense.repository.AdvanceSettlementRepository;
 import in.nirman.modules.expense.repository.ExpenseRepository;
 import in.nirman.modules.expense.repository.SiteAdvanceRepository;
 import in.nirman.modules.identity.repository.UserRepository;
+import in.nirman.modules.identity.service.SiteStaffing;
 import in.nirman.modules.project.service.SiteLookup;
 import in.nirman.security.CurrentUserProvider;
 import in.nirman.security.SiteAccessGuard;
@@ -30,8 +33,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -63,6 +69,7 @@ public class SiteAdvanceService {
     private final ExpenseRepository expenses;
     private final ApprovalEngine approvals;
     private final UserRepository users;
+    private final SiteStaffing staffing;
     private final SiteLookup sites;
     private final SiteAccessGuard siteAccessGuard;
     private final PeriodLockGuard periodLockGuard;
@@ -74,7 +81,7 @@ public class SiteAdvanceService {
                               AdvanceSettlementRepository settlements,
                               AdvanceSettlementExpenseRepository settlementLines,
                               ExpenseRepository expenses, ApprovalEngine approvals,
-                              UserRepository users, SiteLookup sites,
+                              UserRepository users, SiteStaffing staffing, SiteLookup sites,
                               SiteAccessGuard siteAccessGuard, PeriodLockGuard periodLockGuard,
                               DocumentNumberService documentNumbers,
                               CurrentUserProvider currentUser, AuditService audit) {
@@ -84,6 +91,7 @@ public class SiteAdvanceService {
         this.expenses = expenses;
         this.approvals = approvals;
         this.users = users;
+        this.staffing = staffing;
         this.sites = sites;
         this.siteAccessGuard = siteAccessGuard;
         this.periodLockGuard = periodLockGuard;
@@ -162,6 +170,108 @@ public class SiteAdvanceService {
                         || siteAccessGuard.canAccess(advance.getSiteId()))
                 .map(this::toResponse)
                 .toList();
+    }
+
+    /**
+     * Where each person's float stands at a site — the register the office reads and the one
+     * figure the field is shown on the expense form.
+     *
+     * <p>Rolled up per call from the floats themselves, never stored: a per-person balance
+     * somebody can write is a second version of what these rows already say, and it is the
+     * version that stops matching them (docs/09, and the same argument the vendor account
+     * makes about not keeping a balance on the vendor).</p>
+     *
+     * <p>A negative {@code inHandAmount} is not an error state. It is a man who bought steel
+     * at the gate with more than he was carrying, and it is the position the office most needs
+     * to see.</p>
+     */
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAuthority('expense:read')")
+    public List<FloatBalanceRow> floatBalances(UUID siteId, UUID userId) {
+        if (siteId != null) {
+            siteAccessGuard.assertCanAccess(siteId);
+        }
+        boolean restricted = !currentUser.seesAllSites();
+        Collection<UUID> visible = restricted ? currentUser.assignedSiteIds() : List.of();
+        if (restricted && visible.isEmpty()) {
+            return List.of();
+        }
+        return rollUp(advances.findLive(orgId(), siteId, userId, restricted, visible));
+    }
+
+    /**
+     * What the caller himself is carrying, per site.
+     *
+     * <p>Its own method rather than {@link #floatBalances} with his own id, and the difference
+     * is the permission. Reading the register is {@code expense:read} and reading your own
+     * pocket is nothing at all — a supervisor is entitled to know what he was handed without
+     * being entitled to know what the engineer beside him was handed, and the expense form
+     * that shows it is opened by exactly that person.</p>
+     */
+    @Transactional(readOnly = true)
+    public List<FloatBalanceRow> myFloat(UUID siteId) {
+        UUID me = currentUser.currentUserIdOrNull();
+        if (me == null) {
+            return List.of();
+        }
+        if (siteId != null && !siteAccessGuard.canAccess(siteId)) {
+            return List.of();
+        }
+        return rollUp(advances.findLive(orgId(), siteId, me, false, List.of()));
+    }
+
+    /**
+     * Who a float can be handed to at a site: the people its own postings already name.
+     *
+     * <p>Not the user list, which is behind {@code user:read} and therefore an administrator's
+     * — an accountant holding {@code advance:issue} could reach the endpoint that hands over
+     * the cash and not the one that says who is standing there to take it.</p>
+     */
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAuthority('advance:issue')")
+    public List<FloatHolderOption> holdersAt(UUID siteId) {
+        siteAccessGuard.assertCanAccess(siteId);
+        return staffing.postedTo(orgId(), siteId).stream()
+                .map(member -> new FloatHolderOption(member.userId(), member.username(),
+                        member.fullName(), member.roleCodes()))
+                .toList();
+    }
+
+    /** One row per holder and site, summed over his floats there. */
+    private List<FloatBalanceRow> rollUp(List<SiteAdvance> rows) {
+        record Key(UUID userId, UUID siteId) {
+        }
+        Map<Key, List<SiteAdvance>> byHolder = new LinkedHashMap<>();
+        for (SiteAdvance advance : rows) {
+            byHolder.computeIfAbsent(new Key(advance.getIssuedToUserId(), advance.getSiteId()),
+                    key -> new ArrayList<>()).add(advance);
+        }
+        return byHolder.entrySet().stream().map(entry -> {
+            BigDecimal issued = BigDecimal.ZERO;
+            BigDecimal spent = BigDecimal.ZERO;
+            BigDecimal returned = BigDecimal.ZERO;
+            int open = 0;
+            LocalDate oldest = null;
+            for (SiteAdvance advance : entry.getValue()) {
+                issued = issued.add(advance.getAmount());
+                spent = spent.add(advance.getAdjustedAmount());
+                returned = returned.add(advance.getReturnedAmount());
+                if (advance.outstanding().signum() != 0) {
+                    open++;
+                    if (oldest == null || advance.getAdvanceDate().isBefore(oldest)) {
+                        oldest = advance.getAdvanceDate();
+                    }
+                }
+            }
+            return new FloatBalanceRow(entry.getKey().userId(), holderName(entry.getKey().userId()),
+                    entry.getKey().siteId(), issued, spent, returned,
+                    issued.subtract(spent).subtract(returned), open, oldest);
+        }).sorted(Comparator.comparing(FloatBalanceRow::holderName,
+                Comparator.nullsLast(String::compareToIgnoreCase))).toList();
+    }
+
+    private String holderName(UUID userId) {
+        return users.findById(userId).map(user -> user.getFullName()).orElse(null);
     }
 
     // ------------------------------------------------------------------ settlements
@@ -305,6 +415,20 @@ public class SiteAdvanceService {
                 throw BusinessException.conflict("settlement.expense-already-settled",
                         "Expense " + expense.getExpenseNumber()
                                 + " has already been claimed against a float.");
+            }
+            /*
+              Cash has already gone out against this bill — either the office paid the supplier
+              or it charged the bill straight to somebody's float (V49). Either way the money
+              is accounted for, and clearing it a second time through a settlement would take
+              the same rupees out of the same pocket twice. The uniqueness constraint below
+              catches the settlement-against-settlement case; this catches the one that arrives
+              through the payments table, which the constraint cannot see.
+            */
+            if (expense.getPaidAmount().signum() > 0) {
+                throw BusinessException.conflict("settlement.expense-already-paid",
+                        "Expense " + expense.getExpenseNumber() + " has already been settled — "
+                                + expense.getPaidAmount().toPlainString()
+                                + " has gone out against it. It cannot also clear a float.");
             }
         }
         return found;

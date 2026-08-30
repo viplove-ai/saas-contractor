@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -63,6 +64,22 @@ public class SiteStaffingService implements SiteStaffing {
                     user.getFullName() + " does not hold the " + roleCode + " role.",
                     HttpStatus.UNPROCESSABLE_ENTITY);
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SiteMember> postedTo(UUID orgId, UUID siteId) {
+        List<UUID> ids = assignments.findActiveUserIds(orgId, siteId, LocalDate.now());
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return users.findAllById(ids).stream()
+                .filter(user -> user.getOrgId().equals(orgId) && user.isActive())
+                .map(user -> new SiteMember(user.getId(), user.getUsername(), user.getFullName(),
+                        user.getRoles().stream().map(Role::getCode).sorted().toList()))
+                .sorted(Comparator.comparing(SiteMember::fullName,
+                        Comparator.nullsLast(String::compareToIgnoreCase)))
+                .toList();
     }
 
     @Override

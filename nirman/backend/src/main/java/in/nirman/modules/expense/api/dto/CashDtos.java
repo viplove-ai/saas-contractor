@@ -63,6 +63,12 @@ public final class CashDtos {
             String bankAccount,
             String remarks,
             Instant reconciledAt,
+            /**
+             * The float this came out of, where the holder paid the vendor himself. Null on
+             * every payment the office made, which is almost all of them (V49).
+             */
+            UUID siteAdvanceId,
+            String siteAdvanceNumber,
             Long version,
             /** What proves the cash went out. Empty on a payment recorded with nothing. */
             List<PaymentAttachmentResponse> attachments) {
@@ -213,6 +219,65 @@ public final class CashDtos {
             Instant closedAt,
             String remarks,
             Long version) {
+    }
+
+    /**
+     * A bill the holder already paid out of the float in his pocket.
+     *
+     * <p>Not a variant of {@link RecordPaymentRequest} with a flag on it. The office paying a
+     * supplier and the office deciding that a supervisor already paid him are different acts
+     * with different consequences — the second one moves who the company owes from the
+     * supplier to its own man — and merging them behind a nullable field is how the second one
+     * gets done by accident.</p>
+     *
+     * <p>No amount: a float charge is the whole of what is still payable on the bill. A
+     * supervisor does not pay a shopkeeper two-thirds of a challan out of his pocket and leave
+     * the rest for the office, and offering the box would invite somebody to try.</p>
+     *
+     * <p><b>It names the man, not the float.</b> The office knows Uttam paid for the steel; it
+     * does not know, and has no reason to care, which of the two envelopes he was handed in
+     * March the rupees came out of. The server charges his oldest float with something left in
+     * it and falls through to his most recent one when they are all spent — which is the case
+     * that overdraws it, and the case worth recording.</p>
+     */
+    public record ChargeToFloatRequest(
+            @NotNull UUID holderUserId,
+            @NotNull LocalDate paymentDate,
+            String remarks) {
+    }
+
+    /**
+     * Where one person's site float stands — the figures a holder and the office argue about.
+     *
+     * <p>Summed per call over that person's floats rather than stored anywhere, for the reason
+     * the vendor account keeps no balance on the vendor: a figure somebody can store is a
+     * figure that stops matching the rows behind it, and the rows are what the argument is
+     * actually about.</p>
+     *
+     * @param issuedAmount   every float handed to him at this site, cancelled ones aside
+     * @param spentAmount    bills of his the office has charged back to those floats
+     * @param returnedAmount cash he handed back
+     * @param inHandAmount   issued less spent less returned. <b>Negative means he spent past
+     *                       his float and the company owes him that much.</b>
+     */
+    public record FloatBalanceRow(
+            UUID userId,
+            String holderName,
+            UUID siteId,
+            BigDecimal issuedAmount,
+            BigDecimal spentAmount,
+            BigDecimal returnedAmount,
+            BigDecimal inHandAmount,
+            int openFloats,
+            LocalDate oldestOpenOn) {
+    }
+
+    /** Somebody posted to a site, offered as a person a float can be handed to. */
+    public record FloatHolderOption(
+            UUID userId,
+            String username,
+            String fullName,
+            List<String> roleCodes) {
     }
 
     // ------------------------------------------------------------------ settlements
