@@ -1,15 +1,19 @@
 package in.nirman.modules.identity.api;
 
+import in.nirman.modules.identity.api.dto.StaffDtos.AddStaffDocumentRequest;
 import in.nirman.modules.identity.api.dto.StaffDtos.RecordSalaryRequest;
 import in.nirman.modules.identity.api.dto.StaffDtos.SalaryRevisionResponse;
 import in.nirman.modules.identity.api.dto.StaffDtos.SaveStaffProfileRequest;
 import in.nirman.modules.identity.api.dto.StaffDtos.StaffDashboardResponse;
+import in.nirman.modules.identity.api.dto.StaffDtos.StaffDocumentResponse;
 import in.nirman.modules.identity.api.dto.StaffDtos.StaffProfileResponse;
+import in.nirman.modules.identity.service.StaffDocumentService;
 import in.nirman.modules.identity.service.StaffRecordService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,9 +41,11 @@ import java.util.UUID;
 public class StaffController {
 
     private final StaffRecordService staff;
+    private final StaffDocumentService staffDocuments;
 
-    public StaffController(StaffRecordService staff) {
+    public StaffController(StaffRecordService staff, StaffDocumentService staffDocuments) {
         this.staff = staff;
+        this.staffDocuments = staffDocuments;
     }
 
     @GetMapping
@@ -71,6 +77,33 @@ public class StaffController {
     @Operation(summary = "What they have been paid, newest first")
     public List<SalaryRevisionResponse> salaryHistory(@PathVariable UUID userId) {
         return staff.salaryHistory(userId);
+    }
+
+    @GetMapping("/{userId}/documents")
+    @Operation(summary = "The papers on this member's record, newest first")
+    public List<StaffDocumentResponse> documents(@PathVariable UUID userId) {
+        return staffDocuments.list(userId);
+    }
+
+    @PostMapping("/{userId}/documents")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Put an uploaded file on the record and say what it is",
+            description = "The file goes to POST /attachments first with "
+                    + "ownerEntityType=STAFF_DOCUMENT; this names it. Nothing about the "
+                    + "member is written — reading a number off a scan is the office's act.")
+    public StaffDocumentResponse addDocument(@PathVariable UUID userId,
+                                             @Valid @RequestBody AddStaffDocumentRequest request) {
+        return staffDocuments.add(userId, request);
+    }
+
+    @DeleteMapping("/{userId}/documents/{documentId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Take a paper off the record, and the file with it",
+            description = "Really deleted rather than voided: what was read off it was typed "
+                    + "into the record and stays there, and the ordinary reason to remove one "
+                    + "is that it is the wrong man's card or a thumb over the lens.")
+    public void removeDocument(@PathVariable UUID userId, @PathVariable UUID documentId) {
+        staffDocuments.remove(userId, documentId);
     }
 
     @PostMapping("/{userId}/salary")

@@ -36,4 +36,22 @@ public interface AttachmentLookup {
      * @throws in.nirman.common.BusinessException 409 if another record already owns it
      */
     void claimFor(UUID attachmentId, UUID ownerEntityId);
+
+    /**
+     * Throws the file away with the record that was carrying it.
+     *
+     * <p>The mirror of {@link #claimFor}, and it exists because claiming is what makes
+     * {@code AttachmentService.delete} refuse: once a record owns a file, the uploader can no
+     * longer discard it, and without this the owning record could be deleted while the file
+     * behind it stayed downloadable for ever by anybody holding its id. Only the owner may
+     * do it — the id is checked against the one passed in — so this cannot be used to reach
+     * a file belonging to something else.</p>
+     *
+     * <p>The row is soft-deleted, which is what stops another signed link being minted; the
+     * object itself stays in the store, exactly as {@code AttachmentService.delete} leaves
+     * it, and an orphan sweep is still a later phase's task.</p>
+     *
+     * @throws in.nirman.common.BusinessException 409 if the file belongs to another record
+     */
+    void discardFor(UUID attachmentId, UUID ownerEntityId);
 }

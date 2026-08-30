@@ -7,6 +7,7 @@ import in.nirman.security.CurrentUserProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -49,6 +50,18 @@ public class AttachmentLookupService implements AttachmentLookup {
                     "That file is already attached to another record.");
         }
         attachment.attachTo(ownerEntityId);
+        attachments.save(attachment);
+    }
+
+    @Override
+    public void discardFor(UUID attachmentId, UUID ownerEntityId) {
+        Attachment attachment = load(attachmentId);
+        if (attachment.getOwnerEntityId() != null
+                && !attachment.getOwnerEntityId().equals(ownerEntityId)) {
+            throw BusinessException.conflict("attachment.claimed",
+                    "That file belongs to another record.");
+        }
+        attachment.softDelete(Instant.now());
         attachments.save(attachment);
     }
 

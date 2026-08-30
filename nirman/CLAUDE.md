@@ -352,6 +352,27 @@ if the tests pass:
   `replaceMachinery` rebuilds the table and carries rates across by the machine's name, because
   otherwise the second mixer arriving at four deletes the office's figure. A machine renamed
   loses its rate, which is right: what was priced was "JCB 3DX".
+- **The papers stay with the person, and are really deleted.** Every figure on a staff record
+  was typed off a document — the Aadhaar card the last four digits were read from, the cheque
+  the account number was copied from, the letter somebody signed — and until V51 those stayed in
+  a folder at head office, so the record could state an account number and never show the
+  passbook behind it. `staff_documents` is keyed on **`user_id`, not on `staff_profiles.id`**: a
+  member exists as a login on the day he starts and `StaffRecordService.get` deliberately answers
+  a member with no profile with blanks rather than a 404, so papers that could only hang off a
+  saved profile would wait in the drawer until somebody had typed the rest of the record. What a
+  paper is comes off a **closed list with a free note beside it** — the same split V34 drew for a
+  lost day, because "who has no PAN copy on file" is a question an office asks and a caption
+  spelled four ways answers four times. **No new permission**: holding somebody's bank account
+  number and holding the picture of the passbook it was read off are one act of custody, so
+  `staff:read` and `staff:write` are already exactly these two questions. And the row is
+  **deleted, not voided** — the rule that keeps an approved bill on the books does not reach
+  here, because a document is not a figure anything was computed from and the ordinary reason to
+  remove one is that it is the wrong man's card. The file goes with it
+  (`AttachmentLookup.discardFor`, the mirror of `claimFor`), because keeping a scan of somebody's
+  identity document so the register does not lose a row is the worse of the two failures.
+  **Nothing about the member is written**: a scan of an Aadhaar card does not fill in the last
+  four digits, since reading a number off a photograph is the office's act and a screen that did
+  it silently would put a figure on the payroll nobody had looked at.
 - **Plant is held, not consumed.** A mixer is at the site in March and in June, so
   `site_equipment` is its own register and no equipment row ever reaches
   `stock_transactions` — a posting would report the mixer as used up by the slab it poured
@@ -680,6 +701,11 @@ named. It is not folded into `vendor:write` for the reason V15 was not folded in
 `masterdata:write`: somebody who may name the firm whose lorry is at the gate has not thereby
 been given its bank account. `PUT /vendors/{id}/field` is the correcting half, and the office
 editing the row clears the flag — that edit is the act of vetting it.
+
+`V51` is the papers behind a staff record: `staff_documents`, one row per file, keyed to the
+member and typed off a closed list with a note beside it. **No new permission** — see the rule
+above. It adds no column to `staff_profiles` and no flag anywhere: a document is evidence for
+what the record already says, not a second place to say it.
 
 **A note on JPQL and optional parameters.** `(:param IS NULL OR column = :param)` expands to two
 placeholders, and Postgres cannot infer a type for the one standing alone in `? IS NULL` — it

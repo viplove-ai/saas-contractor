@@ -19,6 +19,7 @@ import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { useSaveStaffProfile } from './api';
+import { StaffDocuments } from './StaffDocuments';
 import { staffProfileSchema, type StaffProfileForm } from './schema';
 import { EMPLOYMENT_LABEL, type EmploymentType, type StaffProfile } from './types';
 
@@ -374,6 +375,14 @@ export function StaffProfileDialog({ open, member, onClose }: Props) {
               />
             </Stack>
           </Collapse>
+
+          {/*
+            The papers the fields above were typed off. Last, because it is the one part of
+            this dialog that saves itself as it goes — putting it between two form sections
+            would leave a reader unsure which half the Save button was for.
+          */}
+          <Section>Papers on file</Section>
+          <StaffDocuments userId={member.userId} memberName={member.fullName} />
 
           <Section>Anything else</Section>
           <TextField

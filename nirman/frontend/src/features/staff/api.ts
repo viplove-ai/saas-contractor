@@ -1,6 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../shared/apiClient';
-import type { EmploymentType, SalaryRevision, StaffDashboard, StaffProfile } from './types';
+import { compressPhoto } from '../../offline/uploads';
+import type {
+  EmploymentType,
+  SalaryRevision,
+  StaffDashboard,
+  StaffDocument,
+  StaffDocumentType,
+  StaffProfile,
+} from './types';
 
 export const staffKeys = {
   all: ['staff'] as const,
@@ -8,6 +16,8 @@ export const staffKeys = {
   dashboard: ['staff', 'dashboard'] as const,
   profile: (userId: string) => ['staff', 'profile', userId] as const,
   salary: (userId: string) => ['staff', 'salary', userId] as const,
+  documents: (userId: string) => ['staff', 'documents', userId] as const,
+  attachmentUrl: (attachmentId: string) => ['attachments', attachmentId, 'url'] as const,
 };
 
 export function useStaff() {
@@ -103,4 +113,89 @@ function blankToUndefined<T extends object>(input: T): T {
   return Object.fromEntries(
     Object.entries(input).map(([key, value]) => [key, value === '' ? undefined : value]),
   ) as T;
+}
+
+// ------------------------------------------------------------------ the papers
+
+export function useStaffDocuments(userId: string | undefined) {
+  return useQuery({
+    queryKey: staffKeys.documents(userId ?? ''),
+    queryFn: async () =>
+      (await apiClient.get<StaffDocument[]>(`/staff/${userId}/documents`)).data,
+    enabled: Boolean(userId),
+  });
+}
+
+/**
+ * The link behind one paper, signed fresh and short-lived.
+ *
+ * <p>Asked for per thumbnail rather than carried on the rows, exactly as the plant register
+ * does it: the server re-checks the caller before it signs, the link dies in minutes, and a
+ * record with six papers on it would otherwise mint six links for the one somebody opens.</p>
+ */
+export function useStaffDocumentUrl(attachmentId: string | undefined) {
+  return useQuery({
+    queryKey: staffKeys.attachmentUrl(attachmentId ?? ''),
+    queryFn: async () =>
+      (await apiClient.get<{ url: string; fileName: string }>(`/attachments/${attachmentId}/url`))
+        .data,
+    enabled: Boolean(attachmentId),
+    staleTime: 5 * 60_000,
+    gcTime: 5 * 60_000,
+  });
+}
+
+export interface AddStaffDocumentInput {
+  userId: string;
+  file: File;
+  docType: StaffDocumentType;
+  note?: string | undefined;
+}
+
+/**
+ * Two calls on the wire and one act to the person doing it: the file into storage, then the
+ * row that says whose it is and what it is. In that order, because a row pointing at a file
+ * that does not exist is a broken thumbnail on the office's screen, while a file nothing
+ * points at is only a stray file.
+ *
+ * <p>A photograph is shrunk on the way — a scan of a card off a modern phone is four
+ * megabytes of somebody's morning, and 1600 pixels on the long edge is enough to read an
+ * Aadhaar number off. A PDF passes through untouched; there is nothing to resize.</p>
+ */
+export function useAddStaffDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: AddStaffDocumentInput) => {
+      const photo = await compressPhoto(input.file);
+      const form = new FormData();
+      form.append('file', photo.blob, photo.fileName);
+      const uploaded = await apiClient.post<{ id: string }>('/attachments', form, {
+        params: { ownerEntityType: 'STAFF_DOCUMENT', kind: 'DOCUMENT' },
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return (
+        await apiClient.post<StaffDocument>(`/staff/${input.userId}/documents`, {
+          attachmentId: uploaded.data.id,
+          docType: input.docType,
+          note: input.note || undefined,
+        })
+      ).data;
+    },
+    onSuccess: (_document, input) => {
+      void queryClient.invalidateQueries({ queryKey: staffKeys.documents(input.userId) });
+    },
+  });
+}
+
+/** Off the record and out of storage together — see StaffDocumentService for why really. */
+export function useRemoveStaffDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { userId: string; documentId: string }) => {
+      await apiClient.delete(`/staff/${input.userId}/documents/${input.documentId}`);
+    },
+    onSuccess: (_void, input) => {
+      void queryClient.invalidateQueries({ queryKey: staffKeys.documents(input.userId) });
+    },
+  });
 }

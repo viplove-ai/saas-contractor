@@ -89,3 +89,47 @@ export interface StaffDashboard {
   monthlyPayroll: number;
   attentionNeeded: StaffAlert[];
 }
+
+/**
+ * What a paper on a staff record is.
+ *
+ * <p>A closed list because the office's question is countable — who has no PAN copy on file
+ * — and a caption spelled four ways answers it four times. The note beside it carries
+ * whatever the list cannot say.</p>
+ */
+export type StaffDocumentType =
+  | 'AADHAAR'
+  | 'PAN'
+  | 'BANK'
+  | 'APPOINTMENT'
+  | 'EDUCATION'
+  | 'POLICE_VERIFICATION'
+  | 'PHOTOGRAPH'
+  | 'OTHER';
+
+export const DOCUMENT_LABEL: Record<StaffDocumentType, string> = {
+  AADHAAR: 'Aadhaar card',
+  PAN: 'PAN card',
+  BANK: 'Bank passbook or cheque',
+  APPOINTMENT: 'Appointment or contract letter',
+  EDUCATION: 'Qualification certificate',
+  POLICE_VERIFICATION: 'Police verification',
+  PHOTOGRAPH: 'Photograph',
+  OTHER: 'Something else',
+};
+
+/** One paper on the record, as the register holds it. */
+export interface StaffDocument {
+  id: string;
+  userId: string;
+  attachmentId: string;
+  docType: StaffDocumentType;
+  note?: string;
+  /** What it was called on the device. Absent if the file behind the row has gone. */
+  fileName?: string;
+  contentType?: string;
+  /** Whether the browser can draw it: a scan is shown, a PDF is offered to be opened. */
+  image: boolean;
+  uploadedAt: string;
+  uploadedBy?: string;
+}

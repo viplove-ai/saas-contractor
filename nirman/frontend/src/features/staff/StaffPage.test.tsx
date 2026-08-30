@@ -4,11 +4,12 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StaffPage } from './StaffPage';
-import type { SalaryRevision, StaffDashboard, StaffProfile } from './types';
+import type { SalaryRevision, StaffDashboard, StaffDocument, StaffProfile } from './types';
 
 const get = vi.fn();
 const post = vi.fn();
 const put = vi.fn();
+const del = vi.fn();
 
 vi.mock('../../shared/apiClient', async () => {
   const actual = await vi.importActual<typeof import('../../shared/apiClient')>(
@@ -20,6 +21,7 @@ vi.mock('../../shared/apiClient', async () => {
       get: (...args: unknown[]) => get(...args),
       post: (...args: unknown[]) => post(...args),
       put: (...args: unknown[]) => put(...args),
+      delete: (...args: unknown[]) => del(...args),
     },
   };
 });
@@ -92,6 +94,31 @@ const DASHBOARD: StaffDashboard = {
   ],
 };
 
+/** A scan the browser can draw, and a signed letter it cannot. */
+const DOCUMENTS: StaffDocument[] = [
+  {
+    id: 'doc-1',
+    userId: 'u-1',
+    attachmentId: 'att-1',
+    docType: 'AADHAAR',
+    note: 'Front and back on one page',
+    fileName: 'aadhaar.jpg',
+    contentType: 'image/jpeg',
+    image: true,
+    uploadedAt: '2026-03-01T09:00:00Z',
+  },
+  {
+    id: 'doc-2',
+    userId: 'u-1',
+    attachmentId: 'att-2',
+    docType: 'APPOINTMENT',
+    fileName: 'letter.pdf',
+    contentType: 'application/pdf',
+    image: false,
+    uploadedAt: '2026-02-01T09:00:00Z',
+  },
+];
+
 const SALARY: SalaryRevision[] = [
   { id: 's1', monthlyAmount: 18000, effectiveFrom: '2026-02-01', reason: 'Joined on probation' },
 ];
@@ -115,10 +142,16 @@ describe('StaffPage', () => {
       if (url === '/staff') return Promise.resolve({ data: STAFF });
       if (url === '/staff/dashboard') return Promise.resolve({ data: DASHBOARD });
       if (url === '/staff/u-1/salary') return Promise.resolve({ data: SALARY });
+      if (url === '/staff/u-1/documents') return Promise.resolve({ data: DOCUMENTS });
+      if (url.endsWith('/documents')) return Promise.resolve({ data: [] });
+      if (url.startsWith('/attachments/')) {
+        return Promise.resolve({ data: { url: 'blob:signed', fileName: 'aadhaar.jpg' } });
+      }
       return Promise.reject(new Error(`unexpected GET ${url}`));
     });
-    post.mockResolvedValue({ data: {} });
+    post.mockResolvedValue({ data: { id: 'att-9' } });
     put.mockResolvedValue({ data: {} });
+    del.mockResolvedValue({ data: null });
   });
 
   it('names the payroll and the footing everybody is on', async () => {
@@ -195,6 +228,92 @@ describe('StaffPage', () => {
     const lastDay = screen.getByLabelText('Last day');
     await waitFor(() => expect(lastDay).toBeVisible());
     expect(lastDay).toHaveValue('');
+  });
+
+  /**
+   * The papers behind the figures. Every box above them was typed off one of these, and the
+   * documents themselves used to stay in a folder at head office.
+   */
+  it('shows a scan as a picture and a letter as something to open', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('Deepak Joshi');
+
+    const row = within(screen.getByRole('table')).getByText('deepak').closest('tr')!;
+    await user.click(within(row).getByRole('button', { name: 'Record' }));
+
+    // Drawn, because IMG_2026.jpg is the same nine characters whether it is the right man's
+    // card or a thumb over the lens.
+    expect(await screen.findByRole('img', { name: 'Aadhaar card' })).toBeInTheDocument();
+    expect(screen.getByText('Front and back on one page')).toBeInTheDocument();
+    // A PDF is offered rather than drawn: a broken image icon would say the file was lost.
+    expect(screen.getByText('Appointment or contract letter')).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'Appointment or contract letter' })).toBeNull();
+  });
+
+  /**
+   * What it is comes before the file. A register of eight scans all called "Something else"
+   * answers none of the questions it exists for, and nobody goes back to relabel them.
+   */
+  it('will not take a paper until somebody says what it is', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('Deepak Joshi');
+
+    const row = within(screen.getByRole('table')).getByText('deepak').closest('tr')!;
+    await user.click(within(row).getByRole('button', { name: 'Record' }));
+    await screen.findByRole('img', { name: 'Aadhaar card' });
+
+    expect(screen.getByLabelText('From device')).toBeDisabled();
+    expect(screen.getByLabelText('Photograph it')).toBeDisabled();
+  });
+
+  /** Two calls and one act: the file into storage, then the row that says whose it is. */
+  it('files a paper under what it is, in two calls', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('Deepak Joshi');
+
+    const row = within(screen.getByRole('table')).getByText('deepak').closest('tr')!;
+    await user.click(within(row).getByRole('button', { name: 'Record' }));
+    await screen.findByRole('img', { name: 'Aadhaar card' });
+
+    await user.click(screen.getByLabelText('What it is'));
+    await user.click(await screen.findByRole('option', { name: 'PAN card' }));
+    await user.upload(
+      screen.getByLabelText('From device'),
+      new File([new Uint8Array(64)], 'pan.jpg', { type: 'image/jpeg' }),
+    );
+
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    const [uploadUrl, , config] = post.mock.calls[0] as [
+      string,
+      FormData,
+      { params: { ownerEntityType: string } },
+    ];
+    expect(uploadUrl).toBe('/attachments');
+    expect(config.params.ownerEntityType).toBe('STAFF_DOCUMENT');
+
+    const [rowUrl, body] = post.mock.calls[1] as [string, { docType: string; attachmentId: string }];
+    expect(rowUrl).toBe('/staff/u-1/documents');
+    expect(body).toMatchObject({ docType: 'PAN', attachmentId: 'att-9' });
+  });
+
+  /** Asked before it goes, because the file goes with the row. */
+  it('asks before removing a paper, then removes it', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('Deepak Joshi');
+
+    const row = within(screen.getByRole('table')).getByText('deepak').closest('tr')!;
+    await user.click(within(row).getByRole('button', { name: 'Record' }));
+    await user.click(await screen.findByRole('button', { name: 'Remove Aadhaar card' }));
+
+    expect(await screen.findByText('Remove this paper?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => expect(del).toHaveBeenCalledOnce());
+    expect(del.mock.calls[0]![0]).toBe('/staff/u-1/documents/doc-1');
   });
 
   it('will not mark somebody as leaving without saying which day', async () => {

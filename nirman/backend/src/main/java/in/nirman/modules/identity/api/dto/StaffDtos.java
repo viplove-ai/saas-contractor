@@ -1,5 +1,6 @@
 package in.nirman.modules.identity.api.dto;
 
+import in.nirman.modules.identity.domain.StaffDocument;
 import in.nirman.modules.identity.domain.StaffProfile;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -11,6 +12,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -169,5 +171,45 @@ public final class StaffDtos {
             String fullName,
             String reason,
             LocalDate on) {
+    }
+
+    // ------------------------------------------------------------------ the papers
+
+    /**
+     * One paper on a member's record.
+     *
+     * @param image whether the browser can draw it. A scan is a JPEG and a signed
+     *              appointment letter is usually a PDF, and the screen shows the first as a
+     *              thumbnail and offers the second as something to open — a file name is not
+     *              evidence, and a broken image icon is worse than a button.
+     * @param fileName what it was called on the device it came off. Kept because it is
+     *              occasionally the only thing that distinguishes two scans of one kind,
+     *              and never shown in place of what the document is.
+     */
+    public record StaffDocumentResponse(
+            UUID id,
+            UUID userId,
+            UUID attachmentId,
+            StaffDocument.Type docType,
+            String note,
+            String fileName,
+            String contentType,
+            boolean image,
+            Instant uploadedAt,
+            UUID uploadedBy) {
+    }
+
+    /**
+     * Putting a paper on the record.
+     *
+     * <p>The file is uploaded first and named here: it is an attachment id, what the paper
+     * is, and a note if the type does not say enough. Nothing about the member is written —
+     * a scan of an Aadhaar card does not fill in the last four digits, because reading a
+     * number off a photograph is the office's act and not the upload's.</p>
+     */
+    public record AddStaffDocumentRequest(
+            @NotNull UUID attachmentId,
+            @NotNull StaffDocument.Type docType,
+            @Size(max = 200) String note) {
     }
 }
