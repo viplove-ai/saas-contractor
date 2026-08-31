@@ -2,7 +2,7 @@
 # Secrets (DATABASE_URL, JWT_SECRET, STORAGE_*) are set with `fly secrets set`,
 # never in this file — it is committed.
 
-app = "nirman-constructions-api"
+app = "shivadri-projects-api"
 primary_region = "sin"   # Singapore, colocated with the Neon project (ap-southeast-1).
                          # A request makes several DB round trips but only one trip to the
                          # user, so being next to Postgres beats being next to Mumbai.

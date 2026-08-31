@@ -67,7 +67,7 @@ jobs:
       - name: Smoke test
         run: |
           for i in $(seq 1 20); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' https://nirman-constructions-api.fly.dev/actuator/health || true)
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://shivadri-projects-api.fly.dev/actuator/health || true)
             if [ "$code" = "200" ]; then echo "healthy"; exit 0; fi
             echo "attempt $i: got $code"; sleep 6
           done
@@ -96,5 +96,5 @@ jobs:
 
       - name: Smoke test
         run: |
-          code=$(curl -s -o /dev/null -w '%{http_code}' https://nirman-constructions.fly.dev/)
+          code=$(curl -s -o /dev/null -w '%{http_code}' https://shivadri-projects.fly.dev/)
           test "$code" = "200" || { echo "frontend returned $code"; exit 1; }

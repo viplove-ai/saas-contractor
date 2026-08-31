@@ -20,8 +20,8 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-BACKEND_APP="nirman-constructions-api"
-FRONTEND_APP="nirman-constructions"
+BACKEND_APP="shivadri-projects-api"
+FRONTEND_APP="shivadri-projects"
 BACKEND_URL="https://${BACKEND_APP}.fly.dev"
 FRONTEND_URL="https://${FRONTEND_APP}.fly.dev"
 HEALTH_PATH="/actuator/health"

@@ -2,7 +2,7 @@
 # nginx also reverse-proxies /api/ to the backend over Fly's private network,
 # so the browser only ever talks to one origin and CORS stays out of the way.
 
-app = "nirman-constructions"
+app = "shivadri-projects"
 primary_region = "sin"   # Same region as the API — /api/ is proxied over 6PN, so the
                          # two apps should not sit on opposite ends of that hop.
 
@@ -11,11 +11,11 @@ primary_region = "sin"   # Same region as the API — /api/ is proxied over 6PN,
   build-target = "prod"
 
   [build.args]
-    # Relative base URL — nginx proxies /api/ to nirman-constructions-api.internal:8080.
+    # Relative base URL — nginx proxies /api/ to shivadri-projects-api.internal:8080.
     VITE_API_BASE_URL = "/api/v1"
 
 [env]
-  API_UPSTREAM = "nirman-constructions-api.internal:8080"
+  API_UPSTREAM = "shivadri-projects-api.internal:8080"
   DNS_RESOLVER = "[fdaa::3]"   # Fly's internal DNS, reachable over 6PN
 
 [http_service]
