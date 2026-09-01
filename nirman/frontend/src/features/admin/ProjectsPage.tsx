@@ -501,7 +501,7 @@ function formatDeletedAt(value: string | undefined): string {
  */
 function PortfolioQuickView({ summary }: { summary: PortfolioSummary }) {
   const tiles: { label: string; band: PortfolioBand; lead?: boolean }[] = [
-    { label: 'Work in hand', band: summary.running, lead: true },
+    { label: 'Work in-progress', band: summary.running, lead: true },
     { label: 'On hold', band: summary.onHold },
     { label: 'Yet to start', band: summary.planned },
     { label: 'Completed', band: summary.finished },

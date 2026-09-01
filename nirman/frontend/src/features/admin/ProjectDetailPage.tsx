@@ -402,6 +402,13 @@ function TenderCard({
 
       <FieldGrid
         fields={[
+          /*
+            The notice's own number leads, before anything it said. The Contract card above
+            carries the project's, which somebody may since have corrected or shortened; this
+            one is what the reader found on the paper, and where the two differ the difference
+            is worth seeing rather than hiding behind whichever was typed last.
+          */
+          ['NIT number', fields.nitNo],
           ['Work name', fields.workName],
           ['Location', fields.location],
           ['Division', fields.division],

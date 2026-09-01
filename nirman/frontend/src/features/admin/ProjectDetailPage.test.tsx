@@ -174,12 +174,52 @@ describe('ProjectDetailPage', () => {
     expect(screen.getByText('6 (Six) months')).toBeInTheDocument();
     expect(screen.getByText('DSR 2023, cost index 29%')).toBeInTheDocument();
     expect(screen.getByText('23/07/2026, 15:30')).toBeInTheDocument();
+    // The notice's own number, beside the project's copy of it in the Contract card above.
+    expect(screen.getAllByText('30/EE/ACD/CPWD/Almora/2026-27')).toHaveLength(2);
 
     await screen.findAllByText('C/1.1.1');
     expect(schedule().getByText('C/1.1.1')).toBeInTheDocument();
     expect(schedule().getByText('Vitrified tiles, size 600x600 mm')).toBeInTheDocument();
     // The unit is resolved from master data rather than shown as a uuid.
     expect(schedule().getByText('155 SQM')).toBeInTheDocument();
+  });
+
+  it('shows the number the notice carried, even where the project record disagrees', async () => {
+    get.mockImplementation((url: string) => {
+      if (url === '/projects/p1') return Promise.resolve({ data: PROJECT });
+      if (url === '/boq-items') return Promise.resolve({ data: BOQ });
+      if (url === '/units') return Promise.resolve({ data: UNITS });
+      if (url === '/nit-imports/projects/p1') {
+        // Somebody shortened the project's reference after the import; the paper did not change.
+        const fields = { ...NIT.fields, nitNo: '30/EE/ACD/CPWD/Almora/2026-27 (Corrigendum-I)' };
+        return Promise.resolve({ data: { ...NIT, fields } });
+      }
+      return Promise.reject(new Error(`unexpected ${url}`));
+    });
+    renderPage();
+
+    expect(await screen.findByText('Tender notice')).toBeInTheDocument();
+    expect(
+      screen.getByText('30/EE/ACD/CPWD/Almora/2026-27 (Corrigendum-I)'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('30/EE/ACD/CPWD/Almora/2026-27')).toBeInTheDocument();
+  });
+
+  it('says nothing where the reader could not find a number', async () => {
+    get.mockImplementation((url: string) => {
+      if (url === '/projects/p1') return Promise.resolve({ data: PROJECT });
+      if (url === '/boq-items') return Promise.resolve({ data: BOQ });
+      if (url === '/units') return Promise.resolve({ data: UNITS });
+      if (url === '/nit-imports/projects/p1') {
+        return Promise.resolve({ data: { ...NIT, fields: { ...NIT.fields, nitNo: null } } });
+      }
+      return Promise.reject(new Error(`unexpected ${url}`));
+    });
+    renderPage();
+
+    expect(await screen.findByText('Tender notice')).toBeInTheDocument();
+    // The project's own copy stands alone; the card shows no blank row beside it.
+    expect(screen.getAllByText('30/EE/ACD/CPWD/Almora/2026-27')).toHaveLength(1);
   });
 
   it('marks a reconciliation line as one', async () => {

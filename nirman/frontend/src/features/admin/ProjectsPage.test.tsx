@@ -124,7 +124,7 @@ describe('ProjectsPage', () => {
     await screen.findAllByText('P1');
 
     const strip = within(screen.getByRole('region', { name: 'Order book' }));
-    const inHand = strip.getByText('Work in hand').closest('div') as HTMLElement;
+    const inHand = strip.getByText('Work in-progress').closest('div') as HTMLElement;
     // The two running contracts added, and read as a contractor reads it.
     expect(within(inHand).getByText('\u20b92.12 Cr')).toBeInTheDocument();
     expect(within(inHand).getByText('2 projects')).toBeInTheDocument();
