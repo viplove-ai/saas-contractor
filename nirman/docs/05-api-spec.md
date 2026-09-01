@@ -45,8 +45,8 @@ as a 404: the screen's job is to collect what is missing and it cannot do that f
 `PUT` takes the record whole, with `version` null on the first save and required afterwards.
 
 `POST /staff/{userId}/salary` takes the **five components** — `basic` (required),
-`dearnessAllowance`, `hra`, `conveyance`, `otherAllowance` — plus `professionalTax`,
-`effectiveFrom` and a required `reason`. There is no gross field: it is derived, because a
+`dearnessAllowance`, `hra`, `conveyance`, `otherAllowance` — plus `effectiveFrom` and a
+required `reason`. There is no gross field: it is derived, because a
 total typed beside a breakdown is a total that can disagree with it. Appended and never edited;
 two revisions effective the same day are a 409. The response carries `statutoryWages` — basic
 and dearness allowance, raised to half the packet where the allowances exceed that — which is
@@ -76,7 +76,7 @@ date, no salary, or a salary with no breakdown. `staff:write`; no permission of 
 | POST | `/payroll/runs/{id}/redraw` | rebuilds the structure half against today's records and adds anybody now drawable. The typed figures are carried across |
 | POST | `/payroll/runs/{id}/finalise` | ends the month, once, with no way back. Refused on a run with no payslips |
 | DELETE | `/payroll/runs/{id}` | a draft only; a finalised run is a 409 |
-| PUT | `/payroll/payslips/{id}` | the figures no rule can know: `paidDays`, `overtimeHours`, an optional `overtimeAmount` override, `professionalTax`, `tds`, `salaryAdvance`, `otherDeduction` + note, `remarks`, `version`. Everything else is recomputed from them in the same call |
+| PUT | `/payroll/payslips/{id}` | the figures no rule can know: `paidDays`, `overtimeHours`, an optional `overtimeAmount` override, `tds`, `salaryAdvance`, `otherDeduction` + note, `remarks`, `version`. Everything else is recomputed from them in the same call |
 | DELETE | `/payroll/payslips/{id}` | takes somebody out of the month. Really removed rather than zeroed: a slip of zeroes says he was paid nothing, which is a different claim |
 | GET | `/payroll/members/{userId}/payslips` | one member's slips, newest month first |
 | GET | `/payroll/runs/{id}/register.pdf` | the office's landscape sheet — carries the employer's own contributions |

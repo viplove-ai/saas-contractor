@@ -49,6 +49,12 @@ export interface Payslip {
   pfEmployee: number;
   esiWages: number;
   esiEmployee: number;
+  /**
+   * Zero on every slip drawn now: the firm does not deduct professional tax and nothing can
+   * type one. It is still read, and the column still shown, on a month drawn while it did —
+   * a slip whose printed deductions stop coming to its own total is worse than one carrying
+   * a line nobody enters any more.
+   */
   professionalTax: number;
   /** Section 392 of the Income-tax Act 2025. Typed by the office, never computed here. */
   tds: number;
@@ -127,7 +133,6 @@ export interface PayslipInput {
   overtimeHours?: number | undefined;
   /** Sent only where the office has agreed a rate other than the statutory double. */
   overtimeAmount?: number | undefined;
-  professionalTax?: number | undefined;
   tds?: number | undefined;
   salaryAdvance?: number | undefined;
   otherDeduction?: number | undefined;

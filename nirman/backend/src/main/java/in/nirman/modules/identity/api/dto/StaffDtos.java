@@ -188,13 +188,6 @@ public final class StaffDtos {
             @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal hra,
             @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal conveyance,
             @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal otherAllowance,
-            /**
-             * What the State charges on a salary of this size. Typed rather than looked up:
-             * the slabs are twenty different state schedules amended by notification, and one
-             * hardcoded wrong would come out of somebody's pay every month with perfect
-             * confidence.
-             */
-            @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal professionalTax,
             @NotNull LocalDate effectiveFrom,
             @NotBlank @Size(max = 300) String reason) {
     }
@@ -220,7 +213,6 @@ public final class StaffDtos {
             BigDecimal hra,
             BigDecimal conveyance,
             BigDecimal otherAllowance,
-            BigDecimal professionalTax,
             BigDecimal statutoryWages,
             LocalDate effectiveFrom,
             String reason) {

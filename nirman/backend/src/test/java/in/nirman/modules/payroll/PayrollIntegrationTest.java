@@ -64,7 +64,7 @@ class PayrollIntegrationTest extends AbstractIntegrationTest {
         String userId = onboard(admin, "pay.drawn");
         // Basic 15,000 and other allowances 3,000 — the payslip in the specification.
         saveRecord(admin, userId, true, true);
-        recordStructure(admin, userId, "15000", "0", "0", "0", "3000", "200");
+        recordStructure(admin, userId, "15000", "0", "0", "0", "3000");
 
         JsonNode run = openRun(admin, 26);
         JsonNode slip = slipFor(run, userId);
@@ -77,13 +77,14 @@ class PayrollIntegrationTest extends AbstractIntegrationTest {
                 .isEqualByComparingTo("1800");
         assertThat(new BigDecimal(slip.get("esiEmployee").asText()))
                 .isEqualByComparingTo("135");
-        // Professional tax follows the structure rather than being typed on the month.
+        // The firm deducts no professional tax, so the two statutory contributions are the
+        // whole of what comes off a slip nobody has typed a figure on.
         assertThat(new BigDecimal(slip.get("professionalTax").asText()))
-                .isEqualByComparingTo("200");
+                .isEqualByComparingTo("0");
         assertThat(new BigDecimal(slip.get("totalDeductions").asText()))
-                .isEqualByComparingTo("2135");
+                .isEqualByComparingTo("1935");
         assertThat(new BigDecimal(slip.get("netAmount").asText()))
-                .isEqualByComparingTo("15865");
+                .isEqualByComparingTo("16065");
         // The employer's own contributions are outside the net, because they were never his.
         assertThat(new BigDecimal(slip.get("employerCost").asText()))
                 .isGreaterThan(new BigDecimal("18000"));
@@ -124,7 +125,7 @@ class PayrollIntegrationTest extends AbstractIntegrationTest {
         String admin = login("viplove");
         String userId = onboard(admin, "pay.redraw");
         saveRecord(admin, userId, true, false);
-        recordStructure(admin, userId, "20000", "0", "8000", "2000", "0", "200");
+        recordStructure(admin, userId, "20000", "0", "8000", "2000", "0");
 
         JsonNode run = openRun(admin, 30);
         JsonNode slip = slipFor(run, userId);
@@ -135,7 +136,7 @@ class PayrollIntegrationTest extends AbstractIntegrationTest {
 
         // A raise effective inside the month lands afterwards, and it is drawn again. The
         // structure in force on the last day of the month is the one a month is paid on.
-        recordStructure(admin, userId, "22000", "0", "8800", "2200", "0", "250", "2026-05-01");
+        recordStructure(admin, userId, "22000", "0", "8800", "2200", "0", "2026-05-01");
         MvcResult result = mockMvc.perform(post("/api/v1/payroll/runs/"
                         + run.get("id").asText() + "/redraw")
                         .header("Authorization", "Bearer " + admin))
@@ -170,7 +171,7 @@ class PayrollIntegrationTest extends AbstractIntegrationTest {
         String userId = onboard(admin, "pay.overtime");
         saveRecord(admin, userId, false, false);
         // 15,600 over 26 days of 8 hours is 75 an hour; twice that is 150.
-        recordStructure(admin, userId, "15600", "0", "0", "0", "0", "0");
+        recordStructure(admin, userId, "15600", "0", "0", "0", "0");
 
         JsonNode run = openRun(admin, 26);
         JsonNode slip = slipFor(run, userId);
@@ -209,7 +210,7 @@ class PayrollIntegrationTest extends AbstractIntegrationTest {
         String admin = login("viplove");
         String userId = onboard(admin, "pay.closed");
         saveRecord(admin, userId, true, false);
-        recordStructure(admin, userId, "20000", "0", "0", "0", "0", "0");
+        recordStructure(admin, userId, "20000", "0", "0", "0", "0");
 
         JsonNode run = openRun(admin, 30);
         String runId = run.get("id").asText();
@@ -252,7 +253,7 @@ class PayrollIntegrationTest extends AbstractIntegrationTest {
         String admin = login("viplove");
         String userId = onboard(admin, "pay.days");
         saveRecord(admin, userId, false, false);
-        recordStructure(admin, userId, "20000", "0", "0", "0", "0", "0");
+        recordStructure(admin, userId, "20000", "0", "0", "0", "0");
 
         JsonNode slip = slipFor(openRun(admin, 26), userId);
         mockMvc.perform(put("/api/v1/payroll/payslips/" + slip.get("id").asText())
@@ -270,7 +271,7 @@ class PayrollIntegrationTest extends AbstractIntegrationTest {
         String admin = login("viplove");
         String userId = onboard(admin, "pay.why");
         saveRecord(admin, userId, false, false);
-        recordStructure(admin, userId, "20000", "0", "0", "0", "0", "0");
+        recordStructure(admin, userId, "20000", "0", "0", "0", "0");
 
         JsonNode slip = slipFor(openRun(admin, 26), userId);
         mockMvc.perform(put("/api/v1/payroll/payslips/" + slip.get("id").asText())
@@ -308,7 +309,7 @@ class PayrollIntegrationTest extends AbstractIntegrationTest {
         String admin = login("viplove");
         String userId = onboard(admin, "pay.print");
         saveRecord(admin, userId, true, true);
-        recordStructure(admin, userId, "15000", "0", "0", "0", "3000", "200");
+        recordStructure(admin, userId, "15000", "0", "0", "0", "3000");
 
         JsonNode run = openRun(admin, 26);
         byte[] register = mockMvc.perform(get("/api/v1/payroll/runs/"
@@ -324,6 +325,21 @@ class PayrollIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray();
         assertThat(new String(slip, 0, 5)).startsWith("%PDF-");
+
+        // Neither document names a deduction the firm does not make. Both keep the ability to
+        // print one — a month drawn while professional tax was still deducted has to go on
+        // adding up — and neither exercises it, because nothing can put a figure there now.
+        assertThat(textOf(register)).doesNotContain("Prof.");
+        assertThat(textOf(slip)).doesNotContain("Professional tax");
+    }
+
+    /** The rendered document as one run of text, so a test can read what an office reads. */
+    private String textOf(byte[] pdf) throws Exception {
+        try (org.apache.pdfbox.pdmodel.PDDocument document =
+                     org.apache.pdfbox.pdmodel.PDDocument.load(pdf)) {
+            return new org.apache.pdfbox.text.PDFTextStripper().getText(document)
+                    .replaceAll("\\s+", " ");
+        }
     }
 
     // ------------------------------------------------------------------ helpers
@@ -368,22 +384,22 @@ class PayrollIntegrationTest extends AbstractIntegrationTest {
     }
 
     private void recordStructure(String token, String userId, String basic, String da,
-                                 String hra, String conveyance, String other, String ptax)
+                                 String hra, String conveyance, String other)
             throws Exception {
-        recordStructure(token, userId, basic, da, hra, conveyance, other, ptax, "2024-04-01");
+        recordStructure(token, userId, basic, da, hra, conveyance, other, "2024-04-01");
     }
 
     private void recordStructure(String token, String userId, String basic, String da,
-                                 String hra, String conveyance, String other, String ptax,
+                                 String hra, String conveyance, String other,
                                  String from) throws Exception {
         mockMvc.perform(post("/api/v1/staff/" + userId + "/salary")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"basic":%s,"dearnessAllowance":%s,"hra":%s,"conveyance":%s,
-                                 "otherAllowance":%s,"professionalTax":%s,
+                                 "otherAllowance":%s,
                                  "effectiveFrom":"%s","reason":"Terms agreed"}"""
-                                .formatted(basic, da, hra, conveyance, other, ptax, from)))
+                                .formatted(basic, da, hra, conveyance, other, from)))
                 .andExpect(status().isCreated());
     }
 

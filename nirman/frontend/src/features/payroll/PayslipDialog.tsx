@@ -60,7 +60,6 @@ export function PayslipDialog({ open, slip, onClose }: Props) {
         paidDays: Number(form.paidDays),
         overtimeHours: numberOrUndefined(form.overtimeHours),
         overtimeAmount: numberOrUndefined(form.overtimeAmount),
-        professionalTax: numberOrUndefined(form.professionalTax),
         tds: numberOrUndefined(form.tds),
         salaryAdvance: numberOrUndefined(form.salaryAdvance),
         otherDeduction: numberOrUndefined(form.otherDeduction),
@@ -134,14 +133,6 @@ export function PayslipDialog({ open, slip, onClose }: Props) {
           </Alert>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
-              label="Professional tax"
-              type="number"
-              fullWidth
-              value={form.professionalTax}
-              onChange={set('professionalTax')}
-              helperText="Follows the salary; a redraw resets it"
-            />
-            <TextField
               label="TDS (u/s 392)"
               type="number"
               fullWidth
@@ -194,7 +185,6 @@ function toForm(slip: Payslip) {
     paidDays: String(slip.paidDays),
     overtimeHours: String(slip.overtimeHours),
     overtimeAmount: '',
-    professionalTax: String(slip.professionalTax),
     tds: String(slip.tds),
     salaryAdvance: String(slip.salaryAdvance),
     otherDeduction: String(slip.otherDeduction),

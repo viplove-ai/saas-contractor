@@ -10,7 +10,7 @@
 
 -- ---------------------------------------------------------------- organisation
 INSERT INTO organisations (id, name, code, gstin, pan, address, contact_email, contact_phone)
-VALUES ('10000000-0000-0000-0000-000000000001', 'Nirman Constructions', 'NIRMAN',
+VALUES ('10000000-0000-0000-0000-000000000001', 'Shivadri Projects', 'NIRMAN',
         '05ABCDE1234F1Z5', 'ABCDE1234F', 'Bageshwar, Uttarakhand',
         'office@nirman.example', '+91-9800000000');
 

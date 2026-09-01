@@ -107,7 +107,6 @@ export interface SalaryRevisionInput {
   hra: number;
   conveyance: number;
   otherAllowance: number;
-  professionalTax: number;
   effectiveFrom: string;
   reason: string;
 }

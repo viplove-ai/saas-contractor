@@ -229,11 +229,9 @@ public class OfferLetterService {
                         .add(orZero(structure.getOtherAllowance())),
                 BigDecimal.ZERO, structure.getMonthlyAmount(), BigDecimal.ONE,
                 profile.isPfApplicable(), profile.isEsiApplicable(), profile.isPfOnFullWages());
-        BigDecimal professionalTax = orZero(structure.getProfessionalTax());
         context.setVariable("statutory", statutory);
-        context.setVariable("professionalTax", professionalTax);
-        context.setVariable("totalDeductions", statutory.pfEmployee()
-                .add(statutory.esiEmployee()).add(professionalTax));
+        context.setVariable("totalDeductions",
+                statutory.pfEmployee().add(statutory.esiEmployee()));
 
         // What the firm provides on top of the packet. Facilities rather than money, and
         // deliberately not components of it — see StaffProfile on why the statute keeps them

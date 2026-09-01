@@ -122,22 +122,22 @@
             <td>House rent allowance</td>
             <td class="num" th:text="${#numbers.formatDecimal(s.structHra(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
             <td class="num" th:text="${#numbers.formatDecimal(s.earnedHra(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
-            <td>Professional tax</td>
-            <td class="num" th:text="${#numbers.formatDecimal(s.professionalTax(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td>Tax deducted at source (u/s 392)</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.tds(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
         </tr>
         <tr>
             <td>Conveyance allowance</td>
             <td class="num" th:text="${#numbers.formatDecimal(s.structConveyance(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
             <td class="num" th:text="${#numbers.formatDecimal(s.earnedConveyance(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
-            <td>Tax deducted at source (u/s 392)</td>
-            <td class="num" th:text="${#numbers.formatDecimal(s.tds(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td>Salary advance recovered</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.salaryAdvance(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
         </tr>
         <tr>
             <td>Other allowances</td>
             <td class="num" th:text="${#numbers.formatDecimal(s.structOther(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
             <td class="num" th:text="${#numbers.formatDecimal(s.earnedOther(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
-            <td>Salary advance recovered</td>
-            <td class="num" th:text="${#numbers.formatDecimal(s.salaryAdvance(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td th:text="${s.otherDeductionNote()} ?: 'Other deductions'">Other deductions</td>
+            <td class="num" th:text="${#numbers.formatDecimal(s.otherDeduction(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
         </tr>
         <tr>
             <td>
@@ -148,8 +148,17 @@
             </td>
             <td class="num zero">—</td>
             <td class="num" th:text="${#numbers.formatDecimal(s.overtimeAmount(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
-            <td th:text="${s.otherDeductionNote()} ?: 'Other deductions'">Other deductions</td>
-            <td class="num" th:text="${#numbers.formatDecimal(s.otherDeduction(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <!--
+              The firm no longer deducts professional tax, so a slip drawn now leaves this last
+              pair of cells empty. A slip drawn while it did still prints it: that figure is
+              inside the total deductions printed below, and a document whose lines do not add
+              up to its own total is the one thing an issued payslip may not be.
+            -->
+            <td th:if="${s.professionalTax()} != 0">Professional tax</td>
+            <td class="num" th:if="${s.professionalTax()} != 0"
+                th:text="${#numbers.formatDecimal(s.professionalTax(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+            <td th:if="${s.professionalTax()} == 0"></td>
+            <td th:if="${s.professionalTax()} == 0"></td>
         </tr>
         <tr class="total">
             <th>Gross salary</th>

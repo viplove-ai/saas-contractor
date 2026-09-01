@@ -139,7 +139,6 @@ const SALARY: SalaryRevision[] = [
     hra: 0,
     conveyance: 0,
     otherAllowance: 3000,
-    professionalTax: 200,
     statutoryWages: 15000,
     effectiveFrom: '2026-02-01',
     reason: 'Joined on probation',

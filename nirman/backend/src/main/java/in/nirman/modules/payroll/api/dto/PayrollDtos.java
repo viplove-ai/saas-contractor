@@ -59,7 +59,6 @@ public final class PayrollDtos {
             @NotNull @DecimalMin("0") @Digits(integer = 3, fraction = 2) BigDecimal paidDays,
             @DecimalMin("0") @Digits(integer = 5, fraction = 2) BigDecimal overtimeHours,
             @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal overtimeAmount,
-            @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal professionalTax,
             @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal tds,
             @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal salaryAdvance,
             @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal otherDeduction,

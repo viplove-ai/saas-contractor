@@ -85,17 +85,6 @@ public class StaffSalaryRevision {
     @Column(name = "other_allowance", precision = 14, scale = 2, updatable = false)
     private BigDecimal otherAllowance;
 
-    /**
-     * A deduction, not a component, which is why it sits outside the sum that must come to
-     * {@code monthlyAmount}. It is on the revision rather than the profile because
-     * professional tax is charged on a slab of the salary and therefore moves when the salary
-     * moves. The slabs themselves are not modelled: they are twenty different state schedules
-     * amended by notification, and one hardcoded wrong would be deducted from somebody's pay
-     * every month with perfect confidence.
-     */
-    @Column(name = "professional_tax", precision = 14, scale = 2, updatable = false)
-    private BigDecimal professionalTax;
-
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -128,8 +117,7 @@ public class StaffSalaryRevision {
     public StaffSalaryRevision(UUID orgId, UUID userId, BigDecimal basic,
                                BigDecimal dearnessAllowance, BigDecimal hra,
                                BigDecimal conveyance, BigDecimal otherAllowance,
-                               BigDecimal professionalTax, LocalDate effectiveFrom,
-                               String reason) {
+                               LocalDate effectiveFrom, String reason) {
         this(orgId, userId,
                 zero(basic).add(zero(dearnessAllowance)).add(zero(hra))
                         .add(zero(conveyance)).add(zero(otherAllowance)),
@@ -139,7 +127,6 @@ public class StaffSalaryRevision {
         this.hra = zero(hra);
         this.conveyance = zero(conveyance);
         this.otherAllowance = zero(otherAllowance);
-        this.professionalTax = zero(professionalTax);
     }
 
     /**
@@ -226,9 +213,5 @@ public class StaffSalaryRevision {
 
     public BigDecimal getOtherAllowance() {
         return otherAllowance;
-    }
-
-    public BigDecimal getProfessionalTax() {
-        return professionalTax;
     }
 }

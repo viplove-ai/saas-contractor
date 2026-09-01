@@ -78,20 +78,26 @@
 <table class="reg" th:unless="${#lists.isEmpty(slips)}">
     <colgroup>
         <col style="width: 13%;" />
-        <col th:each="i : ${#numbers.sequence(1, 23)}" />
+        <col th:each="i : ${#numbers.sequence(1, anyProfessionalTax ? 23 : 22)}" />
     </colgroup>
     <tr>
         <th rowspan="2">Employee</th>
         <th class="grp" colspan="6">Salary structure (full month)</th>
         <th class="grp" colspan="8">Earned this month</th>
-        <th class="grp" colspan="7">Deductions</th>
+        <!--
+          Six deductions, or seven on a month drawn while professional tax was still being
+          deducted. The column is not kept for the sake of a row of zeroes; it is kept so that
+          such a month's deductions still come to the total printed at the end of the row.
+        -->
+        <th class="grp" th:colspan="${anyProfessionalTax} ? 7 : 6">Deductions</th>
         <th rowspan="2">Net<br />Amount</th>
     </tr>
     <tr>
         <th>Basic</th><th>DA</th><th>HRA</th><th>Convey.</th><th>Other</th><th>Gross</th>
         <th>Days</th><th>Basic</th><th>DA</th><th>HRA</th><th>Convey.</th><th>Other</th>
         <th>Overtime</th><th>Total<br />Earnings</th>
-        <th>EPF<br />@12%</th><th>ESI<br />@0.75%</th><th>Prof.<br />Tax</th>
+        <th>EPF<br />@12%</th><th>ESI<br />@0.75%</th>
+        <th th:if="${anyProfessionalTax}">Prof.<br />Tax</th>
         <th>TDS<br />u/s 392</th><th>Salary<br />Advance</th><th>Other</th>
         <th>Total<br />Deduct.</th>
     </tr>
@@ -129,7 +135,8 @@
 
         <td class="num" th:text="${#numbers.formatDecimal(s.pfEmployee(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
         <td class="num" th:text="${#numbers.formatDecimal(s.esiEmployee(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
-        <td class="num" th:text="${#numbers.formatDecimal(s.professionalTax(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="num" th:if="${anyProfessionalTax}"
+            th:text="${#numbers.formatDecimal(s.professionalTax(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
         <td class="num" th:text="${#numbers.formatDecimal(s.tds(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
         <td class="num" th:text="${#numbers.formatDecimal(s.salaryAdvance(), 1, 'COMMA', 2, 'POINT')}">0.00</td>
         <td class="num">

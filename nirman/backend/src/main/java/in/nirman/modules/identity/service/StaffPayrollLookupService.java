@@ -132,7 +132,6 @@ public class StaffPayrollLookupService implements StaffPayrollLookup {
                 structured ? zero(revision.getConveyance()) : null,
                 structured ? zero(revision.getOtherAllowance()) : null,
                 revision == null ? null : revision.getMonthlyAmount(),
-                structured ? zero(revision.getProfessionalTax()) : null,
                 revision == null ? null : revision.getEffectiveFrom());
     }
 

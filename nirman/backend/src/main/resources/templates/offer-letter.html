@@ -68,9 +68,13 @@
 <div class="letterhead">
     <h1 th:text="${employer.name}">Employer</h1>
     <div class="meta" th:if="${employer.address}" th:text="${employer.address}">Address</div>
+    <!--
+      The firm's telephone and its GSTIN, and deliberately not its contact email: that column
+      holds one person's address, and an offer signed by somebody else still went out over it.
+      A candidate replying to a letter replies to whoever sent it to him.
+    -->
     <div class="meta">
         <span th:if="${employer.contactPhone}" th:text="${employer.contactPhone}">phone</span>
-        <span th:if="${employer.contactEmail}" th:text="' · ' + ${employer.contactEmail}">email</span>
         <span th:if="${employer.gstin}" th:text="' · GSTIN ' + ${employer.gstin}">gstin</span>
     </div>
 </div>
@@ -306,11 +310,6 @@
             <td class="num" th:if="${esiApplicable}"
                 th:text="${#numbers.formatDecimal(statutory.esiEmployee() * 12, 1, 'COMMA', 2, 'POINT')}">0.00</td>
             <td class="na" colspan="2" th:unless="${esiApplicable}">Not applicable</td>
-        </tr>
-        <tr th:if="${professionalTax != 0}">
-            <td>Professional tax</td>
-            <td class="num" th:text="${#numbers.formatDecimal(professionalTax, 1, 'COMMA', 2, 'POINT')}">0.00</td>
-            <td class="num" th:text="${#numbers.formatDecimal(professionalTax * 12, 1, 'COMMA', 2, 'POINT')}">0.00</td>
         </tr>
         <tr class="total">
             <th>Total deductions (before tax)</th>

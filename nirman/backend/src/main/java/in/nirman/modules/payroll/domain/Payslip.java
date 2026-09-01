@@ -152,6 +152,16 @@ public class Payslip extends BaseEntity {
     @Column(name = "esi_employee", nullable = false, precision = 14, scale = 2)
     private BigDecimal esiEmployee = BigDecimal.ZERO;
 
+    /**
+     * Professional tax, which the firm no longer deducts.
+     *
+     * <p>The column stays and this field with it, for the reason the daily report kept its
+     * old observation columns when the questions behind them were dropped: slips drawn while
+     * the deduction existed carry a figure, and a document whose printed lines stop adding up
+     * to its own total is worse than one carrying a line nobody types any more. Nothing sets
+     * it except {@link #clearProfessionalTax()}, so every slip drawn from now on carries
+     * zero, and the templates print it only where it is not.</p>
+     */
     @Column(name = "professional_tax", nullable = false, precision = 14, scale = 2)
     private BigDecimal professionalTax = BigDecimal.ZERO;
 
@@ -325,8 +335,13 @@ public class Payslip extends BaseEntity {
         this.overtimeOverridden = false;
     }
 
-    public void setProfessionalTax(BigDecimal professionalTax) {
-        this.professionalTax = money(professionalTax);
+    /**
+     * Drops a professional tax figure a draft was carrying from before the deduction was
+     * removed. Called on every draw, so a month redrawn clears it; a finalised run is never
+     * redrawn, which is exactly why an issued slip keeps what it was issued with.
+     */
+    public void clearProfessionalTax() {
+        this.professionalTax = BigDecimal.ZERO;
     }
 
     public void setTds(BigDecimal tds) {

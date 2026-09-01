@@ -108,7 +108,6 @@ export interface SalaryRevision {
   hra?: number;
   conveyance?: number;
   otherAllowance?: number;
-  professionalTax?: number;
   statutoryWages?: number;
   effectiveFrom: string;
   reason: string;

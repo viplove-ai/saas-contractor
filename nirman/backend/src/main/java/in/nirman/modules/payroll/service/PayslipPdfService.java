@@ -68,6 +68,12 @@ public class PayslipPdfService {
         context.setVariable("slips", slips.stream()
                 .map(slip -> PayrollService.toResponse(slip, !run.isDraft()))
                 .toList());
+        // The firm does not deduct professional tax, so the column is not printed — except on
+        // a month drawn while it did, where the deductions have to come to the total beside
+        // them. Decided here rather than in the page because summing a column of records from
+        // a template is the kind of expression that works until somebody renames a field.
+        context.setVariable("anyProfessionalTax", slips.stream()
+                .anyMatch(slip -> slip.getProfessionalTax().signum() != 0));
         return new Rendered(toPdf(templates.process("payslip-register", context), "register"),
                 "payroll-register-" + FILE_MONTH.format(run.getPeriodMonth()) + ".pdf");
     }

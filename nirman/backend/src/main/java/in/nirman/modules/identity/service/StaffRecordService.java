@@ -195,7 +195,7 @@ public class StaffRecordService {
 
         StaffSalaryRevision revision = new StaffSalaryRevision(orgId(), userId,
                 request.basic(), request.dearnessAllowance(), request.hra(),
-                request.conveyance(), request.otherAllowance(), request.professionalTax(),
+                request.conveyance(), request.otherAllowance(),
                 request.effectiveFrom(), request.reason());
         salaries.save(revision);
         audit.record(ENTITY, userId, "SALARY_REVISED", null,
@@ -287,7 +287,7 @@ public class StaffRecordService {
         return new SalaryRevisionResponse(revision.getId(), revision.getMonthlyAmount(),
                 revision.isStructured(), revision.getBasic(), revision.getDearnessAllowance(),
                 revision.getHra(), revision.getConveyance(), revision.getOtherAllowance(),
-                revision.getProfessionalTax(), revision.statutoryWages(),
+                revision.statutoryWages(),
                 revision.getEffectiveFrom(), revision.getReason());
     }
 

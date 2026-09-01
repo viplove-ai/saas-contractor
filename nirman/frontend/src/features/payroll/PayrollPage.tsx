@@ -76,6 +76,12 @@ export function PayrollPage() {
   };
 
   const draft = run.data?.status === 'DRAFT';
+  /*
+    The firm does not deduct professional tax, so the column is not shown — except on a month
+    drawn while it did, whose deductions have to keep coming to the total beside them. The same
+    rule the register PDF follows, and the reason the figure is still on the response at all.
+  */
+  const anyProfessionalTax = (run.data?.payslips ?? []).some((slip) => slip.professionalTax !== 0);
 
   return (
     <Stack spacing={3}>
@@ -279,7 +285,7 @@ export function PayrollPage() {
                   <TableCell align="right">Earned</TableCell>
                   <TableCell align="right">EPF</TableCell>
                   <TableCell align="right">ESI</TableCell>
-                  <TableCell align="right">Prof. tax</TableCell>
+                  {anyProfessionalTax && <TableCell align="right">Prof. tax</TableCell>}
                   <TableCell align="right">TDS</TableCell>
                   <TableCell align="right">Advance</TableCell>
                   <TableCell align="right">Net</TableCell>
@@ -303,7 +309,9 @@ export function PayrollPage() {
                     <TableCell align="right">{formatAmount(slip.totalEarnings)}</TableCell>
                     <TableCell align="right">{formatAmount(slip.pfEmployee)}</TableCell>
                     <TableCell align="right">{formatAmount(slip.esiEmployee)}</TableCell>
-                    <TableCell align="right">{formatAmount(slip.professionalTax)}</TableCell>
+                    {anyProfessionalTax && (
+                      <TableCell align="right">{formatAmount(slip.professionalTax)}</TableCell>
+                    )}
                     <TableCell align="right">{formatAmount(slip.tds)}</TableCell>
                     <TableCell align="right">{formatAmount(slip.salaryAdvance)}</TableCell>
                     <TableCell align="right">

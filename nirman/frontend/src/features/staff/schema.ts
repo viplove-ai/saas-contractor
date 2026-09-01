@@ -166,7 +166,6 @@ export const salaryRevisionSchema = z.object({
   hra: component('A number, or leave it at zero'),
   conveyance: component('A number, or leave it at zero'),
   otherAllowance: component('A number, or leave it at zero'),
-  professionalTax: component('A number, or leave it at zero'),
   effectiveFrom: z.string().min(1, 'From which date?'),
   reason: z
     .string()

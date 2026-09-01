@@ -196,10 +196,11 @@ public class PayrollService {
                     member.esicNumber());
             slip.takeStructure(member.basic(), member.dearnessAllowance(), member.hra(),
                     member.conveyance(), member.otherAllowance());
-            // Professional tax follows the structure, so a redraw picks up a corrected slab;
-            // an office that typed a different figure on the slip has it overwritten here,
-            // which is right — the figure belongs to the salary and not to the month.
-            slip.setProfessionalTax(member.professionalTax());
+            // The firm does not deduct professional tax. A draft drawn while it did keeps the
+            // figure until the month is drawn again, and this is where it goes: a redraw is
+            // refused on a finalised run, so what is cleared here is only ever a working
+            // figure and never one already issued to somebody.
+            slip.clearProfessionalTax();
             slip.recompute(run.getPayableDays(), member.pfApplicable(), member.esiApplicable(),
                     member.pfOnFullWages(), null, OVERTIME_WAGE_DAYS);
             payslips.save(slip);
@@ -301,7 +302,6 @@ public class PayrollService {
 
         slip.setPaidDays(request.paidDays());
         slip.setOvertimeHours(orZero(request.overtimeHours()));
-        slip.setProfessionalTax(orZero(request.professionalTax()));
         slip.setTds(orZero(request.tds()));
         slip.setSalaryAdvance(orZero(request.salaryAdvance()));
         slip.setOtherDeduction(orZero(request.otherDeduction()),

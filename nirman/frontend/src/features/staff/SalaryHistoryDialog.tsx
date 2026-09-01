@@ -243,17 +243,6 @@ export function SalaryHistoryDialog({ open, member, onClose }: Props) {
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
-              label="Professional tax a month"
-              type="number"
-              fullWidth
-              inputMode="decimal"
-              error={!!errors.professionalTax}
-              helperText={
-                errors.professionalTax?.message ?? "What your State charges at this salary"
-              }
-              {...register('professionalTax')}
-            />
-            <TextField
               label="From"
               type="date"
               fullWidth
@@ -295,7 +284,6 @@ function emptyRevision(): SalaryRevisionForm {
     hra: 0,
     conveyance: 0,
     otherAllowance: 0,
-    professionalTax: 0,
     effectiveFrom: new Date().toISOString().slice(0, 10),
     reason: '',
   };

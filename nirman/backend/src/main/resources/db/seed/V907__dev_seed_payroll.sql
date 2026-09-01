@@ -50,25 +50,25 @@ SELECT gen_random_uuid(), u.org_id, u.id, s.employee_number, s.designation, s.ua
 -- payroll picks the one in force rather than the newest.
 INSERT INTO staff_salary_revisions (
     id, org_id, user_id, monthly_amount, basic, dearness_allowance, hra, conveyance,
-    other_allowance, professional_tax, effective_from, reason)
+    other_allowance, effective_from, reason)
 SELECT gen_random_uuid(), u.org_id, u.id,
        s.basic + s.da + s.hra + s.conveyance + s.other,
-       s.basic, s.da, s.hra, s.conveyance, s.other, s.ptax, s.from_date, s.reason
+       s.basic, s.da, s.hra, s.conveyance, s.other, s.from_date, s.reason
   FROM users u
   JOIN (VALUES
         -- Allowances well under half: the wage is basic plus dearness allowance as written.
-        ('viplove', 60000.00, 6000.00, 18000.00,  3000.00,  3000.00, 200.00,
+        ('viplove', 60000.00, 6000.00, 18000.00,  3000.00,  3000.00,
          DATE '2024-04-01', 'Terms agreed on joining'),
         -- 40% basic. The rule lifts the wage to half the packet, and the provident fund is
         -- charged on the ceiling either way — which is the point worth being able to show.
-        ('uttam',   18000.00,     0.00, 14000.00,  5000.00,  8000.00, 200.00,
+        ('uttam',   18000.00,     0.00, 14000.00,  5000.00,  8000.00,
          DATE '2024-04-01', 'Terms agreed on joining'),
-        ('uttam',   20000.00,     0.00, 15000.00,  5500.00,  9500.00, 200.00,
+        ('uttam',   20000.00,     0.00, 15000.00,  5500.00,  9500.00,
          DATE '2026-04-01', 'Annual revision'),
         -- Gross 18,000: inside the ₹21,000 ceiling, so the insurance lines are live.
-        ('vivek',   10000.00,  1000.00,  4000.00,  1500.00,  1500.00, 150.00,
+        ('vivek',   10000.00,  1000.00,  4000.00,  1500.00,  1500.00,
          DATE '2024-04-01', 'Terms agreed on joining')
-       ) AS s(username, basic, da, hra, conveyance, other, ptax, from_date, reason)
+       ) AS s(username, basic, da, hra, conveyance, other, from_date, reason)
     ON s.username = u.username
  WHERE u.org_id = '10000000-0000-0000-0000-000000000001'
    AND NOT EXISTS (SELECT 1 FROM staff_salary_revisions r

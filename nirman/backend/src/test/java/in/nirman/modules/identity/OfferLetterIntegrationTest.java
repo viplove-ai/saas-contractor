@@ -120,6 +120,30 @@ class OfferLetterIntegrationTest extends AbstractIntegrationTest {
         assertThat(letter).contains("Total deductions (before tax)");
         // And the one line that stops the total being read as a take-home.
         assertThat(letter).contains("Tax is not included above");
+        // The firm deducts no professional tax, so the annexure does not state one — a letter
+        // naming a deduction the first payslip will not show is the disagreement the annexure
+        // exists to prevent.
+        assertThat(letter).doesNotContain("Professional tax");
+    }
+
+    /**
+     * The letterhead carries the firm, not the person who happens to hold the contact address.
+     *
+     * <p>{@code organisations.contact_email} holds one individual's address, and an offer
+     * signed by somebody else still went out over it. A candidate replying to a letter replies
+     * to whoever sent it to him.</p>
+     */
+    @Test
+    @DisplayName("the letterhead carries no email address")
+    void theLetterheadCarriesNoEmail() throws Exception {
+        String admin = login("viplove");
+        String userId = onboard(admin, "offer.letterhead");
+        saveRecord(admin, userId);
+        recordStructure(admin, userId);
+
+        // The seeded organisation's contact address. The rates on the annexure are written
+        // "@ 12%", so the address itself is what this looks for rather than the character.
+        assertThat(textOf(preview(admin, userId, "{}"))).doesNotContain("office@nirman.example");
     }
 
     /**
@@ -318,7 +342,7 @@ class OfferLetterIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"basic":15000,"otherAllowance":3000,"professionalTax":200,
+                                {"basic":15000,"otherAllowance":3000,
                                  "effectiveFrom":"2026-09-01","reason":"Terms offered"}"""))
                 .andExpect(status().isCreated());
     }

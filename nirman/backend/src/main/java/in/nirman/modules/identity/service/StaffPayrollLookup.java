@@ -53,7 +53,6 @@ public interface StaffPayrollLookup {
             BigDecimal conveyance,
             BigDecimal otherAllowance,
             BigDecimal gross,
-            BigDecimal professionalTax,
             LocalDate structureFrom) {
     }
 
