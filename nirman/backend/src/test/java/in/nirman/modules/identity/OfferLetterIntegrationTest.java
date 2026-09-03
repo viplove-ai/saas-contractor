@@ -83,7 +83,7 @@ class OfferLetterIntegrationTest extends AbstractIntegrationTest {
         assertThat(papers).hasSize(1);
         assertThat(papers.get(0).get("docType").asText()).isEqualTo("OFFER_LETTER");
         // The reference is on the note, so the filing cabinet and the register agree.
-        assertThat(papers.get(0).get("note").asText()).contains("NIRMAN/HR/");
+        assertThat(papers.get(0).get("note").asText()).contains("SHIVADRI/HR/");
         assertThat(papers.get(0).get("fileName").asText()).endsWith(".pdf");
 
         // And it is a real file behind a signed link, like any other paper on the record.
