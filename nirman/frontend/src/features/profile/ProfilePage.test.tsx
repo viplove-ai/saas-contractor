@@ -105,7 +105,8 @@ describe('ProfilePage', () => {
     renderPage();
 
     expect(screen.getByText(/No signature on file yet/)).toBeInTheDocument();
-    expect(screen.getByText('Upload signature')).toBeInTheDocument();
+    expect(screen.getByText('Photograph signature')).toBeInTheDocument();
+    expect(screen.getByText('Choose a photo')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
   });
 
@@ -118,7 +119,7 @@ describe('ProfilePage', () => {
       'src',
       'https://storage.test/sig.png',
     );
-    expect(screen.getByText('Replace signature')).toBeInTheDocument();
+    expect(screen.getByText('Photograph again')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
   });
 

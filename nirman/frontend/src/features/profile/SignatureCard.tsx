@@ -1,6 +1,7 @@
 import { Alert, Box, Button, Paper, Skeleton, Stack, Typography } from '@mui/material';
 import { useState } from 'react';
 import { apiErrorDetail } from '../../shared/apiClient';
+import { PickFileButtons } from '../../shared/PickFileButtons';
 import { SignatureCropDialog } from '../../shared/SignatureCropDialog';
 import { useAuth } from '../auth/AuthContext';
 import { useClearSignature, useSetSignature, useSignatureUrl } from './api';
@@ -20,6 +21,12 @@ export const SIGNATURE_SECTION_ID = 'signature';
  * <p>The picture is cropped before it is sent, in {@link SignatureCropDialog}, to the one
  * shape every document prints it in. What this card shows back is what the documents will
  * draw: the same box, the same proportions, on white.</p>
+ *
+ * <p><b>The camera first, the gallery second.</b> A gallery pick on an Android site phone
+ * goes through the photo picker, and a picture that lives only in cloud backup fails there
+ * with "Can't load some photos" — the picker's words, not ours, and on a handset with no
+ * signal the ordinary state of the afternoon. Photographing the signature opens the rear
+ * lens directly and never touches the picker, so it is the button offered first.</p>
  */
 export function SignatureCard() {
   const { user, updateUser } = useAuth();
@@ -106,35 +113,26 @@ export function SignatureCard() {
           </Box>
         )}
 
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-          {/* 48px: the app's floor for anything meant to be hit with a glove on. */}
-          <Button
-            component="label"
-            variant={has ? 'outlined' : 'contained'}
-            color="secondary"
-            disabled={busy}
-            sx={{ minHeight: 48 }}
-          >
-            {busy ? 'Saving…' : has ? 'Replace signature' : 'Upload signature'}
-            <input
-              type="file"
-              accept="image/*"
-              hidden
-              disabled={busy}
-              data-testid="signature-file"
-              onChange={(event) => {
-                const file = event.target.files?.[0] ?? null;
-                event.target.value = '';
-                if (file) setPicked(file);
-              }}
-            />
-          </Button>
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          <PickFileButtons
+            label={busy ? 'Saving…' : has ? 'Photograph again' : 'Photograph signature'}
+            deviceLabel="Choose a photo"
+            busy={busy}
+            onPick={(files) => {
+              const file = files[0];
+              if (file) setPicked(file);
+            }}
+          />
           {has && (
-            <Button color="error" disabled={busy} onClick={() => void remove()} sx={{ minHeight: 48 }}>
+            <Button color="error" disabled={busy} onClick={() => void remove()} sx={{ minHeight: 40 }}>
               Remove
             </Button>
           )}
         </Stack>
+        <Typography variant="caption" color="text.secondary">
+          If the gallery says it can&apos;t load a photo, that picture is only in cloud backup
+          and the phone cannot fetch it here — photograph the signature with the camera instead.
+        </Typography>
       </Stack>
 
       <SignatureCropDialog
