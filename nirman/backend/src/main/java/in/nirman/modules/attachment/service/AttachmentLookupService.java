@@ -102,6 +102,18 @@ public class AttachmentLookupService implements AttachmentLookup {
         attachments.save(attachment);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.Optional<String> dataUri(UUID attachmentId) {
+        return attachments.findByIdAndOrgIdAndDeletedAtIsNull(attachmentId,
+                        currentUser.currentOrgId())
+                .map(attachment -> {
+                    byte[] bytes = storage.get(attachment.getObjectKey());
+                    return bytes == null ? null : "data:" + attachment.getContentType()
+                            + ";base64," + java.util.Base64.getEncoder().encodeToString(bytes);
+                });
+    }
+
     private Attachment load(UUID attachmentId) {
         return attachments.findByIdAndOrgIdAndDeletedAtIsNull(attachmentId,
                         currentUser.currentOrgId())

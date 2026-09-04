@@ -14,6 +14,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { apiErrorDetail } from '../../shared/apiClient';
+import { useAuth } from '../auth/AuthContext';
 import { downloadBlob, useIssueOfferLetter, usePreviewOfferLetter } from './api';
 import { offerLetterSchema, type OfferLetterForm } from './schema';
 import { EMPLOYMENT_LABEL, type StaffProfile } from './types';
@@ -32,7 +33,13 @@ interface Props {
  * the letter reads them and this asks for none of them. A screen that collected the terms
  * again would be a second place to state them, and the letter and the payroll would disagree
  * about the man they both describe inside a year. What is left is what belongs to the letter
- * alone: where he is posted, whom he reports to, by when he must answer, and who signs.</p>
+ * alone: where he is posted and by when he must answer.</p>
+ *
+ * <p><b>Who signs is not asked either.</b> It used to be two boxes, a name and a post, which
+ * is a letter that can go out over any name somebody types. It is now the administrator
+ * issuing it — his name off the session and his signature off his account — and the dialog
+ * says so, and says when the signature is missing, because the server refuses to issue an
+ * unsigned letter and the sentence that explains why belongs next to the button.</p>
  *
  * <p><b>Two buttons, and the difference matters.</b> Previewing renders the letter and keeps
  * nothing, because a letter is read before it is sent. Issuing renders it again on the server
@@ -41,6 +48,8 @@ interface Props {
  * disputed.</p>
  */
 export function OfferLetterDialog({ open, member, onClose }: Props) {
+  const { user } = useAuth();
+  const signed = Boolean(user?.signatureAttachmentId);
   const preview = usePreviewOfferLetter();
   const issue = useIssueOfferLetter();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -154,16 +163,6 @@ export function OfferLetterDialog({ open, member, onClose }: Props) {
               {...register('placeOfPosting')}
             />
             <TextField
-              label="Reporting to"
-              fullWidth
-              error={!!errors.reportingTo}
-              helperText={errors.reportingTo?.message}
-              {...register('reportingTo')}
-            />
-          </Stack>
-
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField
               label="Reply by"
               type="date"
               fullWidth
@@ -172,21 +171,16 @@ export function OfferLetterDialog({ open, member, onClose }: Props) {
               helperText={errors.respondBy?.message ?? 'How long the offer stands'}
               {...register('respondBy')}
             />
-            <TextField
-              label="Signed by"
-              fullWidth
-              error={!!errors.signatoryName}
-              helperText={errors.signatoryName?.message}
-              {...register('signatoryName')}
-            />
-            <TextField
-              label="Their post"
-              fullWidth
-              error={!!errors.signatoryDesignation}
-              helperText={errors.signatoryDesignation?.message}
-              {...register('signatoryDesignation')}
-            />
           </Stack>
+
+          <Alert severity={signed ? 'info' : 'warning'}>
+            <Typography variant="body2">
+              Signed by <strong>{user?.fullName ?? 'you'}</strong>, for the firm.{' '}
+              {signed
+                ? 'Your signature on file is printed over the line.'
+                : 'There is no signature on your account yet — upload it on your account screen before issuing. A preview prints the line blank.'}
+            </Typography>
+          </Alert>
         </Stack>
       </DialogContent>
       {/*
@@ -230,10 +224,7 @@ function empty(member: StaffProfile): OfferLetterForm {
     letterDate: new Date().toISOString().slice(0, 10),
     reference: '',
     placeOfPosting: '',
-    reportingTo: '',
     respondBy: '',
-    signatoryName: '',
-    signatoryDesignation: '',
   };
 }
 

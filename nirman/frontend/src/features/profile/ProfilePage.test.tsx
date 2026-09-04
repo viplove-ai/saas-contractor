@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -7,11 +8,31 @@ import type { SessionUser } from '../../shared/session';
 import { ProfilePage } from './ProfilePage';
 
 const changePassword = vi.fn();
+const updateUser = vi.fn();
 let currentUser: SessionUser;
 
 vi.mock('../auth/AuthContext', () => ({
-  useAuth: () => ({ user: currentUser, changePassword }),
+  useAuth: () => ({ user: currentUser, changePassword, updateUser }),
 }));
+
+/*
+  The signature card asks for a signed link to the picture on file. Answered here so the test
+  never reaches for a network, and so the card renders the image rather than the not-loading line.
+*/
+vi.mock('../../shared/apiClient', async () => {
+  const actual = await vi.importActual<typeof import('../../shared/apiClient')>(
+    '../../shared/apiClient',
+  );
+  return {
+    ...actual,
+    apiClient: {
+      get: vi.fn(async () => ({ data: { url: 'https://storage.test/sig.png', fileName: 'sig.png' } })),
+      post: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+    },
+  };
+});
 
 const check = vi.fn();
 const install = vi.fn();
@@ -36,10 +57,13 @@ function sessionUser(overrides: Partial<SessionUser> = {}): SessionUser {
 }
 
 function renderPage() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter>
-      <ProfilePage />
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <ProfilePage />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -75,6 +99,27 @@ describe('ProfilePage', () => {
 
     expect(await screen.findByText('The two passwords do not match')).toBeInTheDocument();
     expect(changePassword).not.toHaveBeenCalled();
+  });
+
+  it('offers to collect the signature the account is missing', () => {
+    renderPage();
+
+    expect(screen.getByText(/No signature on file yet/)).toBeInTheDocument();
+    expect(screen.getByText('Upload signature')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+  });
+
+  it('shows the signature on file and offers to replace or remove it', async () => {
+    currentUser = sessionUser({ signatureAttachmentId: 'att-sig', outstanding: [] });
+    renderPage();
+
+    expect(screen.queryByText(/No signature on file yet/)).not.toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: 'Your signature' })).toHaveAttribute(
+      'src',
+      'https://storage.test/sig.png',
+    );
+    expect(screen.getByText('Replace signature')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
   });
 
   it('says why a member on an admin-issued password has been sent here', async () => {

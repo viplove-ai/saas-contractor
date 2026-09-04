@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.nirman.AbstractIntegrationTest;
 import in.nirman.InMemoryStorageConfig;
 import in.nirman.MovementEvidence;
+import in.nirman.SignatureImages;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +22,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -855,6 +857,60 @@ class DprWorkflowIntegrationTest extends AbstractIntegrationTest {
         assertThat(new String(body, 0, 5)).isEqualTo("%PDF-");
         assertThat(result.getResponse().getHeader("Content-Disposition"))
                 .contains("DPR-2025-9001");
+    }
+
+    /**
+     * The signatures are drawn where the names are, once each act has happened.
+     *
+     * <p>The seeded report was prepared by Vivek and verified by Uttam. Neither has a
+     * signature on file, so the sheet prints two names over two blank lines; the moment Uttam
+     * uploads one, the verified line carries his hand and the prepared line still does not —
+     * a picture is never borrowed from one signer for another.</p>
+     */
+    @Test
+    @DisplayName("the printed report draws the signatures of the people who signed it")
+    void theReportDrawsTheSignatures() throws Exception {
+        String uttam = loginToken("uttam");
+        assertThat(imagesOnFirstPage(printed(uttam))).isZero();
+
+        String attachmentId = objectMapper.readTree(mockMvc.perform(multipart("/api/v1/attachments")
+                        .file(new org.springframework.mock.web.MockMultipartFile("file",
+                                "signature.png", "image/png", SignatureImages.png()))
+                        .param("ownerEntityType", "USER_SIGNATURE")
+                        .param("kind", "PHOTO")
+                        .header("Authorization", "Bearer " + uttam))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString()).get("id").asText();
+        mockMvc.perform(put("/api/v1/auth/me/signature")
+                        .header("Authorization", "Bearer " + uttam)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"attachmentId\":\"" + attachmentId + "\"}"))
+                .andExpect(status().isOk());
+        try {
+            assertThat(imagesOnFirstPage(printed(uttam))).isEqualTo(1);
+        } finally {
+            // Back to the state the deployment is in: nobody has a signature yet.
+            jdbc.update("UPDATE users SET signature_attachment_id = NULL WHERE username = 'uttam'");
+        }
+    }
+
+    private byte[] printed(String token) throws Exception {
+        return mockMvc.perform(get("/api/v1/dprs/" + VERIFIED_DPR + "/pdf")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+    }
+
+    /** The report lists its photographs by caption, so the only pictures drawn are signatures. */
+    private static int imagesOnFirstPage(byte[] pdf) throws Exception {
+        try (org.apache.pdfbox.pdmodel.PDDocument document =
+                     org.apache.pdfbox.pdmodel.PDDocument.load(pdf)) {
+            int total = 0;
+            for (org.apache.pdfbox.pdmodel.PDPage page : document.getPages()) {
+                total += SignatureImages.countImages(page);
+            }
+            return total;
+        }
     }
 
     /**

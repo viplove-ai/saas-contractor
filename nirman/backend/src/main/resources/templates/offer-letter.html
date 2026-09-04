@@ -58,7 +58,15 @@
         .sign { margin-top: 14mm; }
         .sign td { border: none; vertical-align: bottom; font-size: 10pt; }
         .sign .line { border-top: 0.3mm solid #444; padding-top: 1.5mm; width: 60mm;
-                      margin-top: 16mm; }
+                      margin-top: 3mm; }
+        /*
+          The signature sits in a box of one fixed size, whoever signs. The picture was cropped
+          to this shape on the device before it was uploaded, so it scales into the box without
+          being squashed; the box is the same height empty, so an unsigned preview and the
+          issued letter lay out identically and the line does not move when the picture arrives.
+        */
+        .sign .signature { height: 14mm; width: 42mm; margin-top: 8mm; }
+        .sign .signature img { height: 14mm; width: 42mm; display: block; }
         .accept { margin-top: 10mm; border: 0.3mm solid #666; padding: 4mm; font-size: 9.5pt; }
         .page-two { page-break-before: always; }
     </style>
@@ -114,11 +122,6 @@
         <span th:text="${placeOfPosting}">place</span>. As our work is carried on at project
         sites, you may be transferred to any other site or office of the firm as the work
         requires.
-    </td></tr>
-
-    <tr th:if="${reportingTo}"><td class="n" th:text="${termNo.reporting} + '.'">1.</td><td>
-        <strong>Reporting.</strong> You will report to
-        <span th:text="${reportingTo}">person</span>.
     </td></tr>
 
     <tr th:if="${employmentType.name() == 'PROBATION'}"><td class="n" th:text="${termNo.probation} + '.'">1.</td><td>
@@ -209,10 +212,11 @@
     <tr>
         <td>
             Yours sincerely,
+            <div class="signature">
+                <img th:if="${signatureDataUri}" th:src="${signatureDataUri}" alt="" />
+            </div>
             <div class="line">
-                <span th:text="${signatoryName} ?: 'Authorised signatory'">signatory</span>
-                <div th:if="${signatoryDesignation}" style="font-size: 9pt; color: #444;"
-                     th:text="${signatoryDesignation}">post</div>
+                <span th:text="${signatoryName}">signatory</span>
                 <div style="font-size: 9pt; color: #444;" th:text="'For ' + ${employer.name}">firm</div>
             </div>
         </td>

@@ -3,6 +3,7 @@ package in.nirman.modules.attachment.service;
 import in.nirman.common.BusinessException;
 import in.nirman.modules.attachment.StorageProperties;
 import io.minio.BucketExistsArgs;
+import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
@@ -66,6 +67,25 @@ public class MinioStorageClient implements StorageClient {
                     .build());
         } catch (Exception e) {
             log.error("Presigned URL failed for key {}", objectKey, e);
+            throw storeUnavailable();
+        }
+    }
+
+    @Override
+    public byte[] get(String objectKey) {
+        try (InputStream in = client.getObject(GetObjectArgs.builder()
+                .bucket(properties.bucket())
+                .object(objectKey)
+                .build())) {
+            return in.readAllBytes();
+        } catch (io.minio.errors.ErrorResponseException e) {
+            if ("NoSuchKey".equals(e.errorResponse().code())) {
+                return null;
+            }
+            log.error("Object store get failed for key {}", objectKey, e);
+            throw storeUnavailable();
+        } catch (Exception e) {
+            log.error("Object store get failed for key {}", objectKey, e);
             throw storeUnavailable();
         }
     }

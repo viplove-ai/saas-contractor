@@ -26,7 +26,9 @@ Base path `/api/v1`. JSON only. OpenAPI served at `/swagger-ui.html`.
 | POST | `/auth/refresh` | rotates refresh token; reuse revokes family |
 | POST | `/auth/logout` | revokes current refresh family |
 | POST | `/auth/password/change` | requires current password |
-| GET | `/auth/me` | profile, roles, permissions, assigned sites |
+| GET | `/auth/me` | profile, roles, permissions, assigned sites, `signatureAttachmentId`, `outstanding` |
+| PUT | `/auth/me/signature` | `{attachmentId}` of an uploaded picture — the caller's own signature; returns the profile |
+| DELETE | `/auth/me/signature` | takes the caller's signature off and discards the file; returns the profile |
 
 ### /users, /roles
 `GET|POST /users` (`?q`, `?active`, `?role`), `GET|PUT /users/{id}`, `PATCH /users/{id}/status`, `POST /users/{id}/password/reset`, `GET|PUT /users/{id}/sites`, `GET|PUT /users/{id}/roles`, `GET /roles`, `GET /permissions`.
@@ -62,9 +64,20 @@ components of the salary, so neither reaches the structure or a payslip.
 `POST /staff/{userId}/offer-letter` renders it **again on the server** and files it on the
 record as a `staff_documents` row of type `OFFER_LETTER`, returning that row. Both take only
 what belongs to the letter — `joiningOn`, `letterDate`, `reference`, `placeOfPosting`,
-`reportingTo`, `respondBy`, `signatoryName`, `signatoryDesignation` — because every term it
-states is already on the record. Refused with a sentence where there is no record, no joining
-date, no salary, or a salary with no breakdown. `staff:write`; no permission of its own.
+`respondBy` — because every term it states is already on the record. **The signatory is the
+administrator issuing it** (V60): the name comes off the session and the signature off his own
+account, so an accountant holding `staff:write` is refused (403), and issuing is refused (422)
+while the administrator has no signature on file — a preview prints the line blank. Refused
+with a sentence where there is no record, no joining date, no salary, or a salary with no
+breakdown. `staff:write`; no permission of its own.
+
+`/auth/me/signature` is the member's own and takes no user id: a picture (never a PDF) uploaded
+under `ownerEntityType=USER_SIGNATURE`, claimed to the user id, replaced by discarding the old
+file. `MeResponse.outstanding` lists what the member still has to supply — today `SIGNATURE`
+for everybody, because every role signs something — and the shell prompts for it at sign-in
+until the list is empty. The daily report's PDF draws the preparer's and the verifier's
+signatures over their names once each act has happened, from what each holds on the day it is
+printed.
 
 ### /payroll
 | Method | Path | Notes |

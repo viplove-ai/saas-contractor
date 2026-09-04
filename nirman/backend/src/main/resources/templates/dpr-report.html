@@ -33,8 +33,11 @@
         .omitted { border: 0.4mm solid #333; color: #222; padding: 2mm; margin-top: 6mm; }
         .narrative td { height: 34px; }
         .sign { margin-top: 18px; }
-        .sign td { border: none; padding-top: 26px; }
+        .sign td { border: none; padding-top: 6px; }
         .sign .line { border-top: 1px solid #444; padding-top: 3px; width: 58mm; }
+        /* One fixed box for every signature, empty or not, so the lines never move. */
+        .sign .signature { height: 14mm; width: 42mm; }
+        .sign .signature img { height: 14mm; width: 42mm; display: block; }
         .draft { color: #b00; font-weight: bold; }
         .empty { color: #777; font-style: italic; }
         /*
@@ -365,6 +368,9 @@
 <table class="sign">
     <tr>
         <td>
+            <div class="signature">
+                <img th:if="${preparedBySignature}" th:src="${preparedBySignature}" alt="" />
+            </div>
             <div class="line">
                 Prepared by
                 <span th:text="${dpr.preparedByName()} ?: '—'">—</span>
@@ -372,6 +378,9 @@
             <div class="meta" th:text="${submittedAt} ?: 'not yet submitted'">—</div>
         </td>
         <td>
+            <div class="signature">
+                <img th:if="${verifiedBySignature}" th:src="${verifiedBySignature}" alt="" />
+            </div>
             <div class="line">
                 Verified by
                 <span th:text="${dpr.verifiedByName()} ?: '—'">—</span>

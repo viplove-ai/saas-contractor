@@ -195,6 +195,11 @@ public class AuthService {
         return meResponse(user, buildPrincipal(user));
     }
 
+    /** The profile as it stands after a change to it — the same shape {@link #me()} returns. */
+    public MeResponse meFor(User user) {
+        return meResponse(user, buildPrincipal(user));
+    }
+
     // ------------------------------------------------------------------ internals
 
     /** Works on a detached user: roles and permissions are eager, sites are queried fresh. */
@@ -251,7 +256,19 @@ public class AuthService {
                 principal.roles().stream().sorted().toList(),
                 principal.permissions().stream().sorted().toList(),
                 principal.siteIds().stream().sorted().toList(),
-                principal.allSites());
+                principal.allSites(),
+                user.getSignatureAttachmentId(),
+                outstanding(user));
+    }
+
+    /**
+     * What the member has not yet supplied. Every role signs something — the administrator the
+     * offer letter, the supervisor and the engineer the daily report — so a missing signature
+     * is outstanding for everybody, and the screen offers to collect it at sign-in and stops
+     * asking the moment it is there.
+     */
+    private static List<String> outstanding(User user) {
+        return user.getSignatureAttachmentId() == null ? List.of("SIGNATURE") : List.of();
     }
 
     private static BusinessException invalidCredentials() {

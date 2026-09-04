@@ -32,7 +32,7 @@ import { EMPLOYMENT_LABEL, type StaffProfile } from './types';
  * file is one the payroll total is silently lying about. Neither shows up anywhere else.</p>
  */
 export function StaffPage() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const dashboard = useStaffDashboard();
   const staff = useStaff();
   const [editing, setEditing] = useState<StaffProfile | null>(null);
@@ -40,6 +40,8 @@ export function StaffPage() {
   const [offering, setOffering] = useState<StaffProfile | null>(null);
 
   const canWrite = hasPermission('staff:write');
+  // The letter goes out over the administrator's own signature, so nobody else is offered it.
+  const canOffer = canWrite && (user?.roles?.includes('ADMIN') ?? false);
 
   return (
     <Stack spacing={3}>
@@ -125,9 +127,11 @@ export function StaffPage() {
                     <Button size="small" onClick={() => setShowingSalary(member)}>
                       Salary
                     </Button>
-                    <Button size="small" onClick={() => setOffering(member)}>
-                      Offer letter
-                    </Button>
+                    {canOffer && (
+                      <Button size="small" onClick={() => setOffering(member)}>
+                        Offer letter
+                      </Button>
+                    )}
                   </Stack>
                 )}
               </Stack>
@@ -185,9 +189,11 @@ export function StaffPage() {
                         <Button size="small" onClick={() => setShowingSalary(member)}>
                           Salary
                         </Button>
-                        <Button size="small" onClick={() => setOffering(member)}>
-                          Offer letter
-                        </Button>
+                        {canOffer && (
+                          <Button size="small" onClick={() => setOffering(member)}>
+                            Offer letter
+                          </Button>
+                        )}
                       </Stack>
                     </TableCell>
                   )}

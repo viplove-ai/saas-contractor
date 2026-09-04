@@ -78,4 +78,18 @@ public interface AttachmentLookup {
      * @throws in.nirman.common.BusinessException 409 if the file belongs to another record
      */
     void discardFor(UUID attachmentId, UUID ownerEntityId);
+
+    /**
+     * The file's bytes as a {@code data:} URI, for drawing a picture into a PDF this server
+     * is rendering.
+     *
+     * <p>The one read of an object's content that crosses the boundary, and it exists because
+     * a signed link is the wrong shape for it: the renderer runs inside the server and has no
+     * business fetching its own URLs through the object store's front door. Only for the
+     * small pictures the documents carry — a signature — and never for a photograph, which
+     * stays a caption and a link on the printed page.</p>
+     *
+     * @return empty when no such file belongs to this organisation, or the store has lost it
+     */
+    java.util.Optional<String> dataUri(UUID attachmentId);
 }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.nirman.AbstractIntegrationTest;
 import in.nirman.InMemoryStorageConfig;
+import in.nirman.SignatureImages;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,12 +12,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -47,6 +50,9 @@ class OfferLetterIntegrationTest extends AbstractIntegrationTest {
 
     @AfterEach
     void clear() {
+        // The administrator's signature is put on by the tests and taken off again, so every
+        // test starts from the state the deployment is in: nobody has one yet.
+        jdbc.update("UPDATE users SET signature_attachment_id = NULL WHERE username = 'viplove'");
         String made = "SELECT id FROM users WHERE username LIKE 'offer.%'";
         jdbc.update("DELETE FROM staff_documents WHERE user_id IN (" + made + ")");
         jdbc.update("DELETE FROM staff_salary_revisions WHERE user_id IN (" + made + ")");
@@ -60,12 +66,13 @@ class OfferLetterIntegrationTest extends AbstractIntegrationTest {
         String userId = onboard(admin, "offer.filed");
         saveRecord(admin, userId);
         recordStructure(admin, userId);
+        signAs(admin);
 
         // Previewing keeps nothing: a letter is read before it is sent.
         byte[] preview = mockMvc.perform(post("/api/v1/staff/" + userId + "/offer-letter/preview")
                         .header("Authorization", "Bearer " + admin)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"placeOfPosting\":\"Kausani\",\"reportingTo\":\"Uttam Rana\"}"))
+                        .content("{\"placeOfPosting\":\"Kausani\"}"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray();
         assertThat(new String(preview, 0, 5)).startsWith("%PDF-");
@@ -74,7 +81,7 @@ class OfferLetterIntegrationTest extends AbstractIntegrationTest {
         MvcResult issued = mockMvc.perform(post("/api/v1/staff/" + userId + "/offer-letter")
                         .header("Authorization", "Bearer " + admin)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"placeOfPosting\":\"Kausani\",\"signatoryName\":\"V Chaudhary\"}"))
+                        .content("{\"placeOfPosting\":\"Kausani\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.docType").value("OFFER_LETTER"))
                 .andReturn();
@@ -269,7 +276,118 @@ class OfferLetterIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+    /**
+     * The signatory is the administrator issuing it, and the letter carries his hand.
+     *
+     * <p>It used to be two boxes on the form, and a letter that goes out over whatever name
+     * somebody typed is not the firm's letter. The name now comes off the session and the
+     * picture off his account, and the reporting clause — a name typed for the letter alone,
+     * which no record held — is gone with them.</p>
+     */
+    @Test
+    @DisplayName("the letter is signed by the administrator issuing it, with his signature drawn")
+    void theAdministratorSignsIt() throws Exception {
+        String admin = login("viplove");
+        String userId = onboard(admin, "offer.signed");
+        saveRecord(admin, userId);
+        recordStructure(admin, userId);
+
+        // Before a signature is on file the preview prints the name over a blank line, and no
+        // picture is drawn anywhere on the letter.
+        byte[] unsigned = preview(admin, userId, "{\"reportingTo\":\"Uttam Rana\"}");
+        assertThat(textOf(unsigned)).contains("Viplove Chaudhary").contains("For Shivadri")
+                .doesNotContain("Reporting.").doesNotContain("Uttam Rana");
+        assertThat(imagesIn(unsigned)).isZero();
+
+        signAs(admin);
+        byte[] signed = preview(admin, userId, "{}");
+        assertThat(textOf(signed)).contains("Viplove Chaudhary");
+        assertThat(imagesIn(signed)).isEqualTo(1);
+    }
+
+    /** An offer that goes out unsigned is what the picture exists to prevent. */
+    @Test
+    @DisplayName("issuing is refused until the administrator has a signature on file")
+    void noSignatureNoIssue() throws Exception {
+        String admin = login("viplove");
+        String userId = onboard(admin, "offer.unsigned");
+        saveRecord(admin, userId);
+        recordStructure(admin, userId);
+
+        mockMvc.perform(post("/api/v1/staff/" + userId + "/offer-letter")
+                        .header("Authorization", "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.detail").value(containsString("your signature")));
+        assertThat(documents(admin, userId)).isEmpty();
+    }
+
+    /**
+     * {@code staff:write} is the accountant's too since V54, and the accountant keeps the
+     * record without thereby being the person whose name goes at the foot of the firm's offer.
+     */
+    @Test
+    @DisplayName("an accountant holding staff:write still cannot sign an offer letter")
+    void anAccountantIsRefused() throws Exception {
+        String admin = login("viplove");
+        String userId = onboard(admin, "offer.accountant");
+        saveRecord(admin, userId);
+        recordStructure(admin, userId);
+        String accountant = login(onboardWithRole(admin, "offer.acct", "ACCOUNTANT"));
+
+        mockMvc.perform(post("/api/v1/staff/" + userId + "/offer-letter/preview")
+                        .header("Authorization", "Bearer " + accountant)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    /** Puts a signature on the caller's own account, the way the profile screen does. */
+    private void signAs(String token) throws Exception {
+        String attachmentId = read(mockMvc.perform(multipart("/api/v1/attachments")
+                        .file(new MockMultipartFile("file", "signature.png", "image/png",
+                                SignatureImages.png()))
+                        .param("ownerEntityType", "USER_SIGNATURE")
+                        .param("kind", "PHOTO")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andReturn()).get("id").asText();
+        mockMvc.perform(put("/api/v1/auth/me/signature")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"attachmentId\":\"" + attachmentId + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.signatureAttachmentId").value(attachmentId));
+    }
+
+    /** How many pictures the letter draws — the signature is the only one it has. */
+    private int imagesIn(byte[] pdf) throws Exception {
+        try (org.apache.pdfbox.pdmodel.PDDocument document =
+                     org.apache.pdfbox.pdmodel.PDDocument.load(pdf)) {
+            int total = 0;
+            for (org.apache.pdfbox.pdmodel.PDPage page : document.getPages()) {
+                total += SignatureImages.countImages(page);
+            }
+            return total;
+        }
+    }
+
+    private String onboardWithRole(String adminToken, String username, String role)
+            throws Exception {
+        read(mockMvc.perform(post("/api/v1/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"%s","fullName":"%s","mobile":"9800000000",
+                                 "temporaryPassword":"%s","roleCodes":["%s"]}"""
+                                .formatted(username, username, PASSWORD, role)))
+                .andExpect(status().isCreated())
+                .andReturn());
+        return username;
+    }
 
     private JsonNode documents(String token, String userId) throws Exception {
         return read(mockMvc.perform(get("/api/v1/staff/" + userId + "/documents")

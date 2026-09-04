@@ -42,6 +42,8 @@ public final class StaffDtos {
             String email,
             boolean active,
             List<String> roles,
+            /** The member's own signature, or null until he has uploaded one on his account. */
+            UUID signatureAttachmentId,
 
             String alternateMobile,
             LocalDate dateOfBirth,
@@ -315,9 +317,6 @@ public final class StaffDtos {
             LocalDate letterDate,
             @Size(max = 60) String reference,
             @Size(max = 200) String placeOfPosting,
-            @Size(max = 150) String reportingTo,
-            LocalDate respondBy,
-            @Size(max = 150) String signatoryName,
-            @Size(max = 150) String signatoryDesignation) {
+            LocalDate respondBy) {
     }
 }

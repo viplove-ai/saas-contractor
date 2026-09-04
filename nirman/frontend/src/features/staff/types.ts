@@ -23,6 +23,8 @@ export interface StaffProfile {
   email?: string;
   active: boolean;
   roles: string[];
+  /** The member's own signature, or null until he has uploaded one on his account. */
+  signatureAttachmentId?: string | null;
 
   alternateMobile?: string;
   dateOfBirth?: string;
@@ -195,8 +197,5 @@ export interface OfferLetterInput {
   letterDate?: string | undefined;
   reference?: string | undefined;
   placeOfPosting?: string | undefined;
-  reportingTo?: string | undefined;
   respondBy?: string | undefined;
-  signatoryName?: string | undefined;
-  signatoryDesignation?: string | undefined;
 }

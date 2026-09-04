@@ -65,7 +65,18 @@ export interface SessionUser {
   permissions: string[];
   siteIds: string[];
   allSites: boolean;
+  /** The member's own signature, once uploaded. Absent on profiles cached before V60. */
+  signatureAttachmentId?: string | null;
+  /**
+   * What the member still has to supply — today only 'SIGNATURE'. The prompt on the shell
+   * reads this and nothing else, so the next requirement is a word here and a card on the
+   * profile screen.
+   */
+  outstanding?: string[];
 }
+
+/** The one requirement the app asks for at sign-in so far. */
+export const OUTSTANDING_SIGNATURE = 'SIGNATURE';
 
 /** Mirrors TokenResponse on the server. */
 export interface TokenResponse {

@@ -21,6 +21,10 @@ public final class AuthDtos {
     public record RefreshRequest(@NotBlank String refreshToken) {
     }
 
+    /** An uploaded picture to put on the caller's account as his signature. */
+    public record SetSignatureRequest(@jakarta.validation.constraints.NotNull UUID attachmentId) {
+    }
+
     /** BCrypt reads at most 72 bytes, so longer passwords would silently truncate. */
     public record ChangePasswordRequest(
             @NotBlank String currentPassword,
@@ -51,6 +55,15 @@ public final class AuthDtos {
             List<String> roles,
             List<String> permissions,
             List<UUID> siteIds,
-            boolean allSites) {
+            boolean allSites,
+            /** The member's own signature, or null until he uploads one. */
+            UUID signatureAttachmentId,
+            /**
+             * What the member still has to supply before the app is complete for him — today
+             * only {@code SIGNATURE}. A list rather than a flag so the next requirement is a
+             * word added here and a card added on the screen, not a second field and a second
+             * prompt.
+             */
+            List<String> outstanding) {
     }
 }

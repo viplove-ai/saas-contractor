@@ -15,6 +15,7 @@ import in.nirman.modules.identity.repository.OrganisationRepository;
 import in.nirman.modules.identity.repository.StaffProfileRepository;
 import in.nirman.modules.identity.repository.StaffSalaryRevisionRepository;
 import in.nirman.modules.identity.repository.UserRepository;
+import in.nirman.modules.attachment.service.AttachmentLookup;
 import in.nirman.security.CurrentUserProvider;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -40,8 +41,17 @@ import java.util.UUID;
  * them again at letter time would be a second place to state the same terms, and the letter
  * and the payroll would then disagree about what was agreed with the man they both describe.
  * So this reads them and refuses to be told them; what the request carries is only what
- * belongs to the letter and to nothing else — where he is posted, whom he reports to, and by
- * when he must answer.</p>
+ * belongs to the letter and to nothing else — where he is posted and by when he must
+ * answer.</p>
+ *
+ * <p><b>The administrator signs it, and the letter knows who he is.</b> The signatory used to
+ * be two boxes on the form — a name and a post — which is a letter that can go out over any
+ * name at all, typed by whoever held {@code staff:write} that afternoon. It is now the person
+ * issuing it: only an administrator may, his name is read off the session, and his signature
+ * — the picture he uploaded on his own account, V60 — is drawn over the line. A letter is
+ * refused issue while he has none, because an offer that goes out unsigned is what the picture
+ * exists to prevent; a preview is allowed to show the line blank, since a letter is read before
+ * it is signed.</p>
  *
  * <p><b>It is filed on his record, not merely downloaded.</b> V51 already holds the papers a
  * staff record was typed off, and a letter the firm itself wrote is exactly such a paper —
@@ -86,6 +96,7 @@ public class OfferLetterService {
     private final StaffSalaryRevisionRepository salaries;
     private final OrganisationRepository organisations;
     private final StaffDocumentService staffDocuments;
+    private final AttachmentLookup attachments;
     private final SpringTemplateEngine templates;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
@@ -94,6 +105,7 @@ public class OfferLetterService {
                               StaffSalaryRevisionRepository salaries,
                               OrganisationRepository organisations,
                               StaffDocumentService staffDocuments,
+                              AttachmentLookup attachments,
                               SpringTemplateEngine templates, CurrentUserProvider currentUser,
                               AuditService audit) {
         this.users = users;
@@ -101,6 +113,7 @@ public class OfferLetterService {
         this.salaries = salaries;
         this.organisations = organisations;
         this.staffDocuments = staffDocuments;
+        this.attachments = attachments;
         this.templates = templates;
         this.currentUser = currentUser;
         this.audit = audit;
@@ -115,7 +128,7 @@ public class OfferLetterService {
     @Transactional(readOnly = true)
     @PreAuthorize("hasAuthority('staff:write')")
     public Rendered preview(UUID userId, OfferLetterRequest request) {
-        return render(userId, request);
+        return render(userId, request, false);
     }
 
     /**
@@ -127,7 +140,7 @@ public class OfferLetterService {
      */
     @PreAuthorize("hasAuthority('staff:write')")
     public StaffDocumentResponse issue(UUID userId, OfferLetterRequest request) {
-        Rendered rendered = render(userId, request);
+        Rendered rendered = render(userId, request, true);
         // Filed through the ordinary register, so a letter the firm wrote sits beside the
         // Aadhaar card the candidate brought and is found by the same query.
         StaffDocumentResponse document = staffDocuments.attachGenerated(userId,
@@ -142,8 +155,29 @@ public class OfferLetterService {
 
     // ------------------------------------------------------------------ internals
 
-    private Rendered render(UUID userId, OfferLetterRequest request) {
+    /**
+     * @param issuing whether the letter is going out. An issued letter must carry the
+     *                signatory's signature; a preview may show the line blank.
+     */
+    private Rendered render(UUID userId, OfferLetterRequest request, boolean issuing) {
         UUID orgId = currentUser.currentOrgId();
+        // The signatory: the administrator issuing it, and only an administrator. staff:write
+        // is the accountant's too since V54, and the accountant keeps the record without
+        // thereby being the person whose name goes at the foot of the firm's offer.
+        if (!currentUser.isAdmin()) {
+            throw BusinessException.forbidden(
+                    "Only an administrator signs an offer letter.");
+        }
+        User signatory = users.findByIdAndOrgId(currentUser.currentUserIdOrNull(), orgId)
+                .orElseThrow(() -> BusinessException.forbidden("Sign in to issue a letter."));
+        String signature = signatory.getSignatureAttachmentId() == null ? null
+                : attachments.dataUri(signatory.getSignatureAttachmentId()).orElse(null);
+        if (issuing && signature == null) {
+            throw new BusinessException("staff.offer-needs-your-signature",
+                    "The letter goes out over your signature, and there is none on your "
+                            + "account yet. Upload it on your account screen and issue the "
+                            + "letter again.");
+        }
         User user = users.findById(userId)
                 .filter(candidate -> candidate.getOrgId().equals(orgId))
                 .orElseThrow(() -> BusinessException.notFound("User", userId));
@@ -201,11 +235,10 @@ public class OfferLetterService {
                 : profile.getContractEndsOn().format(LONG_DATE));
         context.setVariable("noticePeriodDays", profile.getNoticePeriodDays());
         context.setVariable("placeOfPosting", blankToNull(request.placeOfPosting()));
-        context.setVariable("reportingTo", blankToNull(request.reportingTo()));
         context.setVariable("respondBy", request.respondBy() == null ? null
                 : request.respondBy().format(LONG_DATE));
-        context.setVariable("signatoryName", blankToNull(request.signatoryName()));
-        context.setVariable("signatoryDesignation", blankToNull(request.signatoryDesignation()));
+        context.setVariable("signatoryName", signatory.getFullName());
+        context.setVariable("signatureDataUri", signature);
 
         context.setVariable("structure", structure);
         context.setVariable("annual", structure.getMonthlyAmount()
@@ -268,9 +301,6 @@ public class OfferLetterService {
         termNo.put("joining", n++);
         if (blankToNull(request.placeOfPosting()) != null) {
             termNo.put("posting", n++);
-        }
-        if (blankToNull(request.reportingTo()) != null) {
-            termNo.put("reporting", n++);
         }
         if (profile.getEmploymentType() == StaffProfile.EmploymentType.PROBATION) {
             termNo.put("probation", n++);

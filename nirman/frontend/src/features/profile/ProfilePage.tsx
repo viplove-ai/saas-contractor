@@ -1,14 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Alert, Button, Chip, Paper, Stack, TextField, Typography } from '@mui/material';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { apiErrorDetail } from '../../shared/apiClient';
 import { useAppUpdate, type UpdateCheck } from '../../shared/appUpdate';
 import { useAuth } from '../auth/AuthContext';
 import { SignOutButton } from '../auth/SignOutButton';
 import { roleLabels } from '../../shared/roles';
 import { changePasswordSchema, type ChangePasswordForm } from './schema';
+import { SIGNATURE_SECTION_ID, SignatureCard } from './SignatureCard';
 
 /** "2 days ago", for a timestamp whose exact minute nobody needs. */
 function describeAge(iso: string): string {
@@ -32,9 +33,17 @@ export function ProfilePage() {
   const { user, changePassword, unverified, verifiedAt } = useAuth();
   const { ready: updateReady, install, check, lastCheck } = useAppUpdate();
   const navigate = useNavigate();
+  const { hash } = useLocation();
   const [serverError, setServerError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const forced = user?.mustChangePassword ?? false;
+
+  // Sent here by the sign-in prompt: land on the card it was talking about, not the top.
+  useEffect(() => {
+    if (hash === `#${SIGNATURE_SECTION_ID}`) {
+      document.getElementById(SIGNATURE_SECTION_ID)?.scrollIntoView({ block: 'start' });
+    }
+  }, [hash]);
 
   const {
     register,
@@ -106,6 +115,12 @@ export function ProfilePage() {
           )}
         </Stack>
       </Paper>
+
+      {/*
+        Before the password, unless the password is being forced: the one thing that comes
+        before a signature is replacing a password somebody else knows.
+      */}
+      {!forced && <SignatureCard />}
 
       <Paper elevation={0} sx={{ p: 3, border: 1, borderColor: 'divider' }}>
         <form onSubmit={onSubmit} noValidate>

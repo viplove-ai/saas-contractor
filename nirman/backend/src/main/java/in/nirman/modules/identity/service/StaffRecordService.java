@@ -358,6 +358,7 @@ public class StaffRecordService {
             // needs to be able to say so and then collect it.
             return new StaffProfileResponse(user.getId(), user.getUsername(), user.getFullName(),
                     user.getMobile(), user.getEmail(), user.isActive(), roles,
+                    user.getSignatureAttachmentId(),
                     null, null, null, null, null, null, null, null, null, null, null, null,
                     null,
                     null, null, null, null, false, false, false, null,
@@ -367,6 +368,7 @@ public class StaffRecordService {
         }
         return new StaffProfileResponse(user.getId(), user.getUsername(), user.getFullName(),
                 user.getMobile(), user.getEmail(), user.isActive(), roles,
+                user.getSignatureAttachmentId(),
                 profile.getAlternateMobile(), profile.getDateOfBirth(), profile.getAadhaarLast4(),
                 profile.getPan(), profile.getCurrentAddress(), profile.getPermanentAddress(),
                 profile.getEmergencyContactName(), profile.getEmergencyContactMobile(),

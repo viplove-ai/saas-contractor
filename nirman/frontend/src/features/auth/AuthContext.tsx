@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import type { SessionUser } from '../../shared/session';
+import { writeCachedSession, type SessionUser } from '../../shared/session';
 import {
   changePassword as apiChangePassword,
   login as apiLogin,
@@ -37,6 +37,12 @@ interface AuthContextValue {
   signOut: () => Promise<void>;
   /** Changes the signed-in user's own password and keeps them signed in. */
   changePassword: (currentPassword: string, newPassword: string) => Promise<SessionUser>;
+  /**
+   * Replaces the profile with what the server just returned for a change the member made to
+   * his own account — a signature uploaded or removed. Written to the cache as well, so the
+   * next offline start does not re-ask for what he has already supplied.
+   */
+  updateUser: (user: SessionUser) => void;
   hasPermission: (code: string) => boolean;
 }
 
@@ -176,6 +182,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
+  const updateUser = useCallback((refreshed: SessionUser) => {
+    writeCachedSession(refreshed);
+    setUser(refreshed);
+    setUnverified(false);
+    setVerifiedAt(new Date().toISOString());
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -186,9 +199,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signOut,
       changePassword,
+      updateUser,
       hasPermission: (code: string) => user?.permissions.includes(code) ?? false,
     }),
-    [user, initialising, unverified, verifiedAt, signedOutReason, signIn, signOut, changePassword],
+    [
+      user,
+      initialising,
+      unverified,
+      verifiedAt,
+      signedOutReason,
+      signIn,
+      signOut,
+      changePassword,
+      updateUser,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

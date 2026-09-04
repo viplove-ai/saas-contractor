@@ -405,6 +405,28 @@ if the tests pass:
   **Nothing about the member is written**: a scan of an Aadhaar card does not fill in the last
   four digits, since reading a number off a photograph is the office's act and a screen that did
   it silently would put a figure on the payroll nobody had looked at.
+- **A member's signature is his own, and the documents draw it.** Three documents print a
+  name over a line — the offer letter over the administrator's, the daily report over the
+  supervisor's ("Prepared by") and the engineer's ("Verified by") — and every one went out with
+  the line blank. `users.signature_attachment_id` (V60) holds one picture per member, uploaded
+  through `PUT /auth/me/signature` and **by nobody else**: the path carries no user id, because
+  an administrator who could upload a signature for a supervisor could put that supervisor's
+  name on a report he never saw, which is what a signature exists to rule out. So it carries
+  **no permission** — being signed in is the whole authorisation. It hangs off the login and not
+  the staff record for V51's reason (a member exists as a login on the day he starts). The
+  picture is cropped **on the device** to one fixed 3:1 shape (`shared/signatureImage.ts`) so
+  every signature prints in the same 42 × 14 mm box, and the server stores no size. The offer
+  letter no longer asks who signs or whom the candidate reports to: the signatory is the
+  administrator issuing it, an accountant holding `staff:write` is refused, and issue is refused
+  until he has a signature on file (a preview may print the line blank). The report draws each
+  signature **only once the act has happened** — a submitted report carries the preparer's, a
+  verified one the verifier's — and draws what each holds on the day it is printed, since the
+  report has no filed copy; the issued letter is a filed PDF and keeps the hand it went out with.
+  `MeResponse.outstanding` names what a member still has to supply (today `SIGNATURE`, for every
+  role) and `SignaturePrompt` on the shell asks for it once per sitting, dismissable, keyed to
+  the member because a handset changes hands. Reading a signature into a PDF is
+  `AttachmentLookup.dataUri`, the one read of an object's bytes that crosses the module boundary,
+  and `SignatureLookup` is how the report module asks for it without touching the user.
 - **Plant is held, not consumed.** A mixer is at the site in March and in June, so
   `site_equipment` is its own register and no equipment row ever reaches
   `stock_transactions` — a posting would report the mixer as used up by the slab it poured
@@ -869,6 +891,11 @@ carried across into it, and `site_equipment.photo_attachment_id` dropped afterwa
 "the first picture" it would have been a second version of the truth, the one that stops matching
 the day somebody deletes that picture, which is why V19 dropped the two site staffing columns
 rather than keeping them as a summary of the list that replaced them. **No new permission.**
+
+`V60` is the member's own signature: `users.signature_attachment_id`, nullable, the file in
+`attachments` claimed to the user id. **No new permission** — see the rule above for why nobody
+but the member may write it. `StorageClient` gains `get`, because drawing a picture into a PDF
+the server is rendering is the one case a signed link is the wrong shape for.
 
 **A note on JPQL and optional parameters.** `(:param IS NULL OR column = :param)` expands to two
 placeholders, and Postgres cannot infer a type for the one standing alone in `? IS NULL` — it

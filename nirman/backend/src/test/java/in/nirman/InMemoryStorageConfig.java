@@ -49,6 +49,7 @@ public class InMemoryStorageConfig {
             return "https://storage.test/" + objectKey + "?expires=" + expiryMinutes;
         }
 
+        @Override
         public byte[] get(String objectKey) {
             return objects.get(objectKey);
         }

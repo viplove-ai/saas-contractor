@@ -2,6 +2,7 @@ import { Box, Stack, Typography } from '@mui/material';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../features/auth/AuthContext';
 import { SignOutButton } from '../features/auth/SignOutButton';
+import { SignaturePrompt } from '../features/profile/SignaturePrompt';
 import { useSync } from '../offline/SyncProvider';
 import { OfflineBanner } from '../shared/OfflineBanner';
 import { BottomNav, Initials, SideRail, Wordmark } from './AppNav';
@@ -43,6 +44,12 @@ export function RootLayout({ signoffCount = 0 }: { signoffCount?: number }) {
 
       <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
         <OfflineBanner offline={offline} />
+        {/*
+          Inside the layout rather than beside the other prompts in App.tsx, because it sends
+          somebody to a screen and so needs the router — and because it is about the person
+          signed in, which the prompts outside AuthProvider cannot know.
+        */}
+        <SignaturePrompt />
 
         {/*
           Phone only, and deliberately not an AppBar: no elevation, no fixed position, nothing

@@ -182,10 +182,7 @@ export const offerLetterSchema = z.object({
   letterDate: optionalDate,
   reference: optionalText(60),
   placeOfPosting: optionalText(200),
-  reportingTo: optionalText(150),
   respondBy: optionalDate,
-  signatoryName: optionalText(150),
-  signatoryDesignation: optionalText(150),
 });
 
 export type OfferLetterForm = z.infer<typeof offerLetterSchema>;

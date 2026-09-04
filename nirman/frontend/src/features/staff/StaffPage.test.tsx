@@ -30,7 +30,8 @@ let permissions = ['staff:read', 'staff:write'];
 
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
-    user: { id: 'u-admin', permissions },
+    user: { id: 'u-admin', fullName: 'Viplove Chaudhary', roles: ['ADMIN'], permissions,
+      signatureAttachmentId: 'att-sig' },
     hasPermission: (code: string) => permissions.includes(code),
   }),
 }));

@@ -166,3 +166,19 @@ export async function fetchMe(): Promise<SessionUser> {
   const { data } = await apiClient.get<SessionUser>('/auth/me');
   return data;
 }
+
+/**
+ * Puts an already-uploaded picture on the caller's own account as his signature.
+ *
+ * <p>Two calls on the wire, the file and then the link, in that order for the reason the staff
+ * papers give: a row pointing at a file that is not there is a broken picture on a letter.</p>
+ */
+export async function setSignature(attachmentId: string): Promise<SessionUser> {
+  const { data } = await apiClient.put<SessionUser>('/auth/me/signature', { attachmentId });
+  return data;
+}
+
+export async function clearSignature(): Promise<SessionUser> {
+  const { data } = await apiClient.delete<SessionUser>('/auth/me/signature');
+  return data;
+}

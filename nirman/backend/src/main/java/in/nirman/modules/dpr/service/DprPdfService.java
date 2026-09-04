@@ -4,6 +4,7 @@ import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import in.nirman.common.BusinessException;
 import in.nirman.modules.dpr.api.dto.DprDtos.DprResponse;
 import in.nirman.modules.dpr.domain.DailyProgressReport;
+import in.nirman.modules.identity.service.SignatureLookup;
 import in.nirman.modules.inventory.service.InventoryLookup;
 import in.nirman.modules.project.repository.ProjectRepository;
 import org.springframework.stereotype.Service;
@@ -72,10 +73,13 @@ public class DprPdfService {
     private final DprResponses responses;
     private final ProjectRepository projects;
     private final InventoryLookup inventory;
+    private final SignatureLookup signatures;
     private final SpringTemplateEngine templates;
 
     public DprPdfService(DprService dprs, DprResponses responses, ProjectRepository projects,
-                         InventoryLookup inventory, SpringTemplateEngine templates) {
+                         InventoryLookup inventory, SignatureLookup signatures,
+                         SpringTemplateEngine templates) {
+        this.signatures = signatures;
         this.dprs = dprs;
         this.responses = responses;
         this.projects = projects;
@@ -165,6 +169,18 @@ public class DprPdfService {
         // A draft's figures are still moving, so the page says so across itself. A DPR that
         // looks final and is not is worse than no PDF at all.
         context.setVariable("draft", !dto.snapshotFrozen());
+        /*
+          The two signatures, drawn where the two names are — and only once each act has
+          happened. A supervisor's signature over a report he has not handed over, or an
+          engineer's over one he has not verified, would be the document claiming an act that
+          has not taken place, which is the one thing a printed signature must never do. Each
+          is the signer's picture as he holds it today: the report is drawn afresh whenever it
+          is printed, and there is no frozen copy to keep an older hand on.
+        */
+        context.setVariable("preparedBySignature", dto.submittedAt() == null ? null
+                : signatures.signatureDataUri(dto.preparedBy()).orElse(null));
+        context.setVariable("verifiedBySignature", dto.verifiedAt() == null ? null
+                : signatures.signatureDataUri(dto.verifiedBy()).orElse(null));
 
         String html = templates.process("dpr-report", context);
         return new Rendered(toPdf(html, dto.dprNumber()), fileNameFor(dto));

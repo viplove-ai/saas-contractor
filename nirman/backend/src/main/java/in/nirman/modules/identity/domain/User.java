@@ -55,6 +55,14 @@ public class User extends BaseEntity {
     @Column(name = "session_epoch", nullable = false)
     private long sessionEpoch;
 
+    /**
+     * The member's own signature, as a claimed attachment. Null until he uploads one. Drawn
+     * onto the documents that carry his name — see V60 for why it hangs off the login and not
+     * the staff record, and why nobody else may set it.
+     */
+    @Column(name = "signature_attachment_id")
+    private UUID signatureAttachmentId;
+
     // Eager on purpose: the principal (roles → permissions) is assembled outside any
     // transaction on every login and refresh, and the sets are a handful of rows.
     @ManyToMany(fetch = FetchType.EAGER)
@@ -175,6 +183,14 @@ public class User extends BaseEntity {
      */
     public void endAllSessions() {
         this.sessionEpoch++;
+    }
+
+    public UUID getSignatureAttachmentId() {
+        return signatureAttachmentId;
+    }
+
+    public void setSignatureAttachmentId(UUID signatureAttachmentId) {
+        this.signatureAttachmentId = signatureAttachmentId;
     }
 
     public Set<Role> getRoles() {
