@@ -15,6 +15,7 @@ import {
   clampCrop,
   initialCrop,
   loadImage,
+  releaseImage,
   renderSignature,
   SIGNATURE_ASPECT,
   type CropRect,
@@ -57,17 +58,24 @@ export function SignatureCropDialog({ file, onCancel, onCropped }: Props) {
       return;
     }
     let cancelled = false;
+    let shown: HTMLImageElement | null = null;
     loadImage(file)
       .then((loaded) => {
-        if (cancelled) return;
+        if (cancelled) {
+          releaseImage(loaded);
+          return;
+        }
+        shown = loaded;
         setImage(loaded);
         setCrop(initialCrop(loaded.naturalWidth, loaded.naturalHeight));
       })
       .catch(() => {
         if (!cancelled) setError('That picture could not be read. Take it again.');
       });
+    // The URL lives exactly as long as this file is the one on screen.
     return () => {
       cancelled = true;
+      if (shown) releaseImage(shown);
     };
   }, [file]);
 

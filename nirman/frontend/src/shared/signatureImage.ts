@@ -55,21 +55,33 @@ export function clampCrop(crop: CropRect, imageWidth: number, imageHeight: numbe
   };
 }
 
-/** Loads a picked file as an image the canvas can draw. The URL is revoked either way. */
+/**
+ * Loads a picked file as an image the canvas can draw and the screen can show.
+ *
+ * <p>The object URL behind it stays alive: the caller shows the same picture in the crop
+ * dialog through {@code image.src}, and a URL revoked on load is a URL the dialog's own
+ * {@code <img>} cannot fetch — a desktop browser served it from memory cache and a phone
+ * showed nothing at all. The caller revokes it with {@link releaseImage} when the dialog
+ * closes. Only a failed load revokes here, since there is then nothing to show.</p>
+ */
 export function loadImage(file: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(image);
-    };
+    image.onload = () => resolve(image);
     image.onerror = () => {
       URL.revokeObjectURL(url);
       reject(new Error('That picture could not be read.'));
     };
     image.src = url;
   });
+}
+
+/** Frees the object URL {@link loadImage} made, once nothing shows the picture any more. */
+export function releaseImage(image: HTMLImageElement): void {
+  if (image.src.startsWith('blob:')) {
+    URL.revokeObjectURL(image.src);
+  }
 }
 
 /**
