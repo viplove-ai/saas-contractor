@@ -165,6 +165,12 @@ export const router = createBrowserRouter([
           screen('projects/:projectId/planning', async () => ({
             Component: (await import('../features/planning/PlanningPage')).PlanningPage,
           })),
+          // One contract's photographs, read off its daily reports. Lives in the dpr feature
+          // because that is whose rows they are; its own route for the reason the two above
+          // have one.
+          screen('projects/:projectId/gallery', async () => ({
+            Component: (await import('../features/dpr/ProjectGalleryPage')).ProjectGalleryPage,
+          })),
           // One contract's deposits. Its own route rather than a panel on the project page,
           // for the reason planning has one: features do not import from one another.
           screen('projects/:projectId/securities', async () => ({

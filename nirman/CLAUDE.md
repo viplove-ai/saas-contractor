@@ -268,6 +268,17 @@ if the tests pass:
   why beside it — the alert is next to the button rather than only next to the camera, because
   an engineer writing the whole report himself hands it over from the observations step, three
   scrolls from the photograph card.
+- **A project's gallery is its reports, read the other way round.** The report is where a site
+  is photographed — it is refused at handover without one — so every picture of the work was
+  already on file, one report at a time, findable only by knowing the day. `GET /dprs/photos`
+  (`DprGalleryService`) reads them by project instead, newest day first, each naming its
+  report and its site, and the project page links to it. **Nothing is stored for it and no
+  file is copied**: a gallery with rows of its own is a second list of the same files, and it
+  stops matching the first the day a report is deleted. A draft's photograph is shown with its
+  status beside it — the picture is of the site whether or not the day has been handed over.
+  **No new permission**: whoever may open the day may see what it was a report of. The query
+  takes typed flags beside always-bound values rather than `(:x IS NULL OR …)` — see the JPQL
+  note under Database changes.
 - **The day's account stays with the site until the report is signed; the figures freeze at the
   handover.** Two different promises, and only the second one is about the snapshot. Whoever
   holds `dpr:draft` at that site may still correct the weather, the operational status and the

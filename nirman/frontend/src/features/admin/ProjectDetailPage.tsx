@@ -2,6 +2,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import InsightsIcon from '@mui/icons-material/Insights';
 import DescriptionIcon from '@mui/icons-material/Description';
+import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 import {
   Alert,
   AlertTitle,
@@ -233,6 +234,19 @@ export function ProjectDetailPage() {
             sx={{ whiteSpace: 'nowrap' }}
           >
             Deposits &amp; guarantees
+          </Button>
+          {/*
+            Every picture of the work, off every daily report of every site — the one place
+            the whole job can be looked at rather than read about.
+          */}
+          <Button
+            component={Link}
+            to={`/projects/${p.id}/gallery`}
+            variant="outlined"
+            startIcon={<PhotoLibraryIcon />}
+            sx={{ whiteSpace: 'nowrap' }}
+          >
+            Photographs
           </Button>
         </Stack>
       </Stack>

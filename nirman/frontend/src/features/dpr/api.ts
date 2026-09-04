@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../shared/apiClient';
 import { compressPhoto } from '../../offline/uploads';
 import type {
@@ -9,6 +9,7 @@ import type {
   DprMaterial,
   DprPrefill,
   DprWorkflow,
+  GalleryPhoto,
   LabourCountLine,
   PageResponse,
   PlantRateInput,
@@ -26,6 +27,8 @@ export const dprKeys = {
   list: (siteId: string, status: string) => ['dprs', 'list', siteId, status] as const,
   one: (id: string) => ['dprs', id] as const,
   all: ['dprs'] as const,
+  gallery: (projectId: string, siteId: string, from: string, to: string) =>
+    ['dprs', 'gallery', projectId, siteId, from, to] as const,
 };
 
 const REFERENCE_STALE_TIME = 15 * 60_000;
@@ -251,6 +254,34 @@ export function useDprPhotoUrl(attachmentId: string | undefined) {
     enabled: Boolean(attachmentId),
     staleTime: 5 * 60_000,
     gcTime: 5 * 60_000,
+  });
+}
+
+/**
+ * A project's photographs, a page of days at a time. Newest day first, as the server orders
+ * them; a project a year in has hundreds and the reader wants this week before last spring.
+ * Not cached offline: a gallery is read at a desk, and a stale one is a wall that has since
+ * been plastered.
+ */
+export function useProjectGallery(projectId: string | undefined, siteId = '', from = '', to = '') {
+  return useInfiniteQuery({
+    queryKey: dprKeys.gallery(projectId ?? '', siteId, from, to),
+    queryFn: async ({ pageParam }) =>
+      (
+        await apiClient.get<PageResponse<GalleryPhoto>>('/dprs/photos', {
+          params: {
+            projectId,
+            siteId: siteId || undefined,
+            from: from || undefined,
+            to: to || undefined,
+            page: pageParam,
+            size: 60,
+          },
+        })
+      ).data,
+    initialPageParam: 0,
+    getNextPageParam: (last) => (last.last ? undefined : last.page + 1),
+    enabled: Boolean(projectId),
   });
 }
 

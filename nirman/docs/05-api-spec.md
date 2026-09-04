@@ -227,7 +227,12 @@ beside it and a `scopeComplete` flag saying whether the figure is the whole stor
 `GET|POST /dprs` (`?siteId&status&from&to`), `GET|PUT /dprs/{id}`,
 `GET /dprs/prefill?siteId&date` → labour, material, expense rollup for the day,
 `POST /dprs/{id}/submit`, `POST /dprs/{id}/verify`, `POST /dprs/{id}/approval`,
-`POST /dprs/{id}/photos`, `GET /dprs/{id}/pdf`.
+`POST /dprs/{id}/photos`, `GET /dprs/{id}/pdf`,
+`GET /dprs/photos?projectId&siteId&from&to&page&size` → a project's gallery: every photograph
+on every live report of the project, newest day first and in report order within a day, each
+naming its report (`dprId`, `dprNumber`, `reportDate`, `workflowStatus`) and its site. Behind
+`dpr:draft`, `dpr:verify` or `dpr:approve` — reading a report's pictures is reading the
+report — and narrowed to the caller's sites as the register is. Nothing is stored for it.
 
 `PUT /dprs/{id}` writes whichever half the caller owns. Work items and the narrative need
 `dpr:verify`; the day's account — the operational status, the conditions and the plant — is

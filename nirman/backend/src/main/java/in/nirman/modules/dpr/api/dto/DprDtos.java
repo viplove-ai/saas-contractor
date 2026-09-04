@@ -355,6 +355,26 @@ public final class DprDtos {
     }
 
     /**
+     * One photograph in a project's gallery: the picture and the day and place it stands for.
+     * The report is named so a reader who finds the wrong wall can open the day it was said
+     * to be; the site is named because a project is several of them.
+     */
+    public record GalleryPhotoResponse(
+            UUID id,
+            UUID attachmentId,
+            String caption,
+            Instant takenAt,
+            String fileName,
+            UUID dprId,
+            String dprNumber,
+            LocalDate reportDate,
+            Workflow workflowStatus,
+            UUID siteId,
+            String siteCode,
+            String siteName) {
+    }
+
+    /**
      * @param snapshotFrozen true once the report has been submitted. From then on the rolled-up
      *                       figures are the document's own and are never recomputed — a
      *                       correction to an underlying record shows up as a difference, not by

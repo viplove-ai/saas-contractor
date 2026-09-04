@@ -409,6 +409,25 @@ export interface PhotoResponse {
   sortOrder: number;
 }
 
+/**
+ * One photograph in a project's gallery, with the day and the place it stands for. Read off
+ * the reports and stored nowhere else — see {@code DprGalleryService}.
+ */
+export interface GalleryPhoto {
+  id: string;
+  attachmentId: string;
+  caption?: string;
+  takenAt?: string;
+  fileName?: string;
+  dprId: string;
+  dprNumber: string;
+  reportDate: string;
+  workflowStatus: DprWorkflow;
+  siteId: string;
+  siteCode?: string;
+  siteName?: string;
+}
+
 export interface Dpr {
   id: string;
   dprNumber: string;

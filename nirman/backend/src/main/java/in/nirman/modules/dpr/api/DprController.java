@@ -10,6 +10,8 @@ import in.nirman.modules.dpr.api.dto.DprDtos.DprResponse;
 import in.nirman.modules.dpr.api.dto.DprDtos.UpdateDprRequest;
 import in.nirman.modules.dpr.api.dto.DprDtos.VerifyDprRequest;
 import in.nirman.modules.dpr.domain.DailyProgressReport;
+import in.nirman.modules.dpr.api.dto.DprDtos.GalleryPhotoResponse;
+import in.nirman.modules.dpr.service.DprGalleryService;
 import in.nirman.modules.dpr.service.DprPdfService;
 import in.nirman.modules.dpr.service.DprPrefillService;
 import in.nirman.modules.dpr.service.DprService;
@@ -45,11 +47,14 @@ public class DprController {
     private final DprService dprs;
     private final DprPrefillService prefill;
     private final DprPdfService pdf;
+    private final DprGalleryService gallery;
 
-    public DprController(DprService dprs, DprPrefillService prefill, DprPdfService pdf) {
+    public DprController(DprService dprs, DprPrefillService prefill, DprPdfService pdf,
+                         DprGalleryService gallery) {
         this.dprs = dprs;
         this.prefill = prefill;
         this.pdf = pdf;
+        this.gallery = gallery;
     }
 
     @GetMapping
@@ -64,6 +69,22 @@ public class DprController {
         return dprs.list(siteId, status, from, to,
                 PageRequest.of(page, Math.min(size, 200),
                         Sort.by(Sort.Direction.DESC, "reportDate")));
+    }
+
+    /**
+     * Literal path, so it is matched before {@code /{id}}: Spring prefers the more specific
+     * pattern, and "photos" is not a UUID in any case.
+     */
+    @GetMapping("/photos")
+    @Operation(summary = "A project's photographs, read off its daily reports, newest day first")
+    public PageResponse<GalleryPhotoResponse> gallery(
+            @RequestParam UUID projectId,
+            @RequestParam(required = false) UUID siteId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "60") int size) {
+        return gallery.gallery(projectId, siteId, from, to, PageRequest.of(page, Math.min(size, 200)));
     }
 
     @GetMapping("/prefill")
