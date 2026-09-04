@@ -114,6 +114,16 @@ public class StaffRecordService {
         }
         assertTermsMakeSense(request);
 
+        // The email is the login's, and is checked the way the user screen checks it rather
+        // than left to the unique index: a constraint violation is a 500 with no sentence.
+        String email = blankToNull(request.email());
+        if (email != null && users.existsByOrgIdAndEmailIgnoreCaseAndIdNot(orgId(), email,
+                user.getId())) {
+            throw BusinessException.conflict("staff.email-taken",
+                    "Another member already signs in with " + email + ".");
+        }
+        user.setEmail(email);
+
         profile.setAlternateMobile(blankToNull(request.alternateMobile()));
         profile.setDateOfBirth(request.dateOfBirth());
         profile.setAadhaarLast4(blankToNull(request.aadhaarLast4()));

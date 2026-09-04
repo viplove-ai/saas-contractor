@@ -373,6 +373,15 @@ export function StaffProfileDialog({ open, member, onClose }: Props) {
           </Alert>
 
           <Section>How you reach them</Section>
+          <TextField
+            label="Email"
+            type="email"
+            inputMode="email"
+            autoComplete="off"
+            error={!!errors.email}
+            helperText={errors.email?.message ?? 'The address they sign in with; changing it here changes it there'}
+            {...register('email')}
+          />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
               label="Alternate mobile"
@@ -586,6 +595,7 @@ function Section({ children }: { children: string }) {
 /** An empty string, not undefined: a controlled box handed undefined goes uncontrolled. */
 function fromProfile(member: StaffProfile): StaffProfileForm {
   return {
+    email: member.email ?? '',
     alternateMobile: member.alternateMobile ?? '',
     dateOfBirth: member.dateOfBirth ?? '',
     aadhaarLast4: member.aadhaarLast4 ?? '',

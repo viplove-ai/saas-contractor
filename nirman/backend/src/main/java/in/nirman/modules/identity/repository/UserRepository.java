@@ -25,6 +25,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     boolean existsByOrgIdAndUsernameIgnoreCase(UUID orgId, String username);
 
+    /** Whether another member already signs in with this address — the unique index, asked politely. */
+    boolean existsByOrgIdAndEmailIgnoreCaseAndIdNot(UUID orgId, String email, UUID id);
+
     /** Every login in the organisation. A contractor's staff is a dozen people, unpaged. */
     List<User> findByOrgIdOrderByUsername(UUID orgId);
 

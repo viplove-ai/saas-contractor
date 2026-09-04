@@ -27,6 +27,13 @@ const optionalAmount = z
  */
 export const staffProfileSchema = z
   .object({
+    email: z
+      .string()
+      .trim()
+      .max(150, 'At most 150 characters')
+      .email('That is not an email address')
+      .optional()
+      .or(z.literal('')),
     alternateMobile: z
       .string()
       .trim()

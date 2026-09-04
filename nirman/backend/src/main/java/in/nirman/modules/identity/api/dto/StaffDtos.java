@@ -108,6 +108,13 @@ public final class StaffDtos {
      * filling the first one in impossible.</p>
      */
     public record SaveStaffProfileRequest(
+            /**
+             * The one field here that lives on the login rather than the record. It is on the
+             * form because the office collects it with the address and the next of kin, and
+             * a member with a record and no email had to be found again under Users. Written
+             * onto {@code users.email}, where the sign-in screens already read it.
+             */
+            @jakarta.validation.constraints.Email @Size(max = 150) String email,
             @Size(max = 20) @Pattern(regexp = "[0-9+\\-\\s]*",
                     message = "Digits, spaces, + and - only") String alternateMobile,
             LocalDate dateOfBirth,

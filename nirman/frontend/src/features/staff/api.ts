@@ -46,6 +46,8 @@ export function useSalaryHistory(userId: string | undefined) {
 
 export interface StaffProfileInput {
   userId: string;
+  /** The login's address, collected on the record and written through to the user. */
+  email?: string | undefined;
   alternateMobile?: string | undefined;
   dateOfBirth?: string | undefined;
   aadhaarLast4?: string | undefined;

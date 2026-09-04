@@ -252,6 +252,40 @@ class StaffRecordIntegrationTest extends AbstractIntegrationTest {
 
     // ------------------------------------------------------------------ helpers
 
+    /**
+     * The email is the login's and is collected on the record, where the office is already
+     * writing the address and the next of kin. Written through to the user, so the sign-in
+     * screens read the same address; refused with a sentence when another member has it.
+     */
+    @Test
+    @DisplayName("the record collects the email and writes it onto the login")
+    void theRecordCarriesTheEmail() throws Exception {
+        String admin = login("viplove");
+        String userId = onboard(admin, "staff.email");
+
+        JsonNode saved = save(admin, userId, """
+                {"employmentType":"PERMANENT","email":"Deepak.Joshi@example.com"}""");
+        assertThat(saved.get("email").asText()).isEqualTo("Deepak.Joshi@example.com");
+        assertThat(jdbc.queryForObject("SELECT email FROM users WHERE id = ?::uuid",
+                String.class, userId)).isEqualTo("Deepak.Joshi@example.com");
+
+        // Somebody else's address, case aside, is a conflict rather than a constraint error.
+        String other = onboard(admin, "staff.email2");
+        mockMvc.perform(put("/api/v1/staff/" + other)
+                        .header("Authorization", "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"employmentType":"PERMANENT","email":"deepak.joshi@example.com"}"""))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(containsString("already signs in")));
+
+        // And blank takes it off, the way every other box on the record does.
+        JsonNode cleared = save(admin, userId, """
+                {"employmentType":"PERMANENT","email":"","version":%d}"""
+                .formatted(saved.get("version").asLong()));
+        assertThat(cleared.has("email")).isFalse();
+    }
+
     private JsonNode save(String token, String userId, String body) throws Exception {
         MvcResult result = mockMvc.perform(put("/api/v1/staff/" + userId)
                         .header("Authorization", "Bearer " + token)
