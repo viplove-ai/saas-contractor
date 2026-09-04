@@ -24,11 +24,15 @@ import in.nirman.modules.labour.domain.LabourSettings;
 import in.nirman.modules.labour.domain.WageRate;
 import in.nirman.modules.labour.domain.WorkflowStatus;
 import in.nirman.modules.labour.domain.Worker;
+import in.nirman.modules.labour.domain.WorkerSiteAllocation;
 import in.nirman.modules.labour.repository.AttendanceCorrectionRepository;
 import in.nirman.modules.labour.repository.AttendanceRecordRepository;
 import in.nirman.modules.labour.repository.LabourSettingsRepository;
 import in.nirman.modules.labour.repository.WageRateRepository;
 import in.nirman.modules.labour.repository.WorkerRepository;
+import in.nirman.modules.labour.repository.WorkerSiteAllocationRepository;
+import in.nirman.modules.dpr.service.DprLookup;
+import in.nirman.modules.project.service.ProjectLookup;
 import in.nirman.modules.project.service.SiteLookup;
 import in.nirman.security.CurrentUserProvider;
 import in.nirman.security.SiteAccessGuard;
@@ -44,6 +48,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +75,15 @@ import java.util.stream.Collectors;
  *   <li><b>Verifying twice cannot pay twice.</b> The ledger posting is idempotent, so a
  *       double click, a retried request or a re-verification after a correction all leave
  *       the worker owed exactly what he earned.</li>
+ *   <li><b>The muster reaches back for a man taken on late.</b> A posting begins the day
+ *       somebody typed it, which is rarely the day the man first stood on the site — men
+ *       are onboarded on a Monday for the week they have already worked, and a transfer is
+ *       recorded when the office hears of it. So a day before his posting here still offers
+ *       him, back to the site's start (else the project's), and refuses him only where the
+ *       office has approved that day's report: the head count on an approved report is a
+ *       figure the department has been given. What the posting used to guarantee — one man,
+ *       one site, one morning — is checked directly instead, against the marks he already
+ *       carries elsewhere that day. See {@link #backdatingOn} and {@link #assertMayMark}.</li>
  * </ul>
  */
 @Service
@@ -88,6 +102,9 @@ public class AttendanceService {
     private final AttendanceCorrectionRepository corrections;
     private final CurrentUserProvider currentUser;
     private final AuditService audit;
+    private final WorkerSiteAllocationRepository allocations;
+    private final ProjectLookup projects;
+    private final DprLookup reports;
 
     public AttendanceService(AttendanceRecordRepository records, WorkerRepository workers,
                              WageRateRepository wageRates, LabourSettingsRepository labourSettings,
@@ -95,7 +112,12 @@ public class AttendanceService {
                              SiteAccessGuard siteAccessGuard, PeriodLockGuard periodLockGuard,
                              PeriodLockService periodLockService,
                              AttendanceCorrectionRepository corrections,
-                             CurrentUserProvider currentUser, AuditService audit) {
+                             CurrentUserProvider currentUser, AuditService audit,
+                             WorkerSiteAllocationRepository allocations, ProjectLookup projects,
+                             DprLookup reports) {
+        this.allocations = allocations;
+        this.projects = projects;
+        this.reports = reports;
         this.records = records;
         this.workers = workers;
         this.wageRates = wageRates;
@@ -116,6 +138,11 @@ public class AttendanceService {
      * The muster roll for a site and day: everyone posted there, with whatever has already
      * been marked prefilled. One screen, one call — a supervisor on 2G cannot afford a
      * request per worker.
+     *
+     * <p>Below the day's roll come the men posted here <em>later</em>, each labelled with the
+     * day his posting begins, when the day is one the muster may still reach back into. They
+     * are listed after rather than merged in so the roll of the day reads as it did and the
+     * late men sit under it.</p>
      */
     @Transactional(readOnly = true)
     @PreAuthorize("hasAuthority('attendance:create')")
@@ -124,26 +151,124 @@ public class AttendanceService {
         SiteLookup.SiteInfo site = sites.require(siteId);
 
         List<Worker> roster = workers.findRoster(orgId(), siteId, date);
+        Backdating backdating = backdatingOn(site, date);
+        Map<UUID, LocalDate> postedLater = backdating.allowed()
+                ? postedLater(siteId, date, roster) : Map.of();
+        List<Worker> late = postedLater.isEmpty() ? List.of()
+                : workers.findByIdInAndOrgIdAndDeletedAtIsNull(postedLater.keySet(), orgId()).stream()
+                        .filter(Worker::isActive)
+                        .sorted(Comparator.comparing(Worker::getWorkerCode))
+                        .toList();
+
         Map<UUID, AttendanceRecord> existing = records.findLiveForDay(siteId, date).stream()
                 .collect(Collectors.toMap(AttendanceRecord::getWorkerId, Function.identity()));
-        Map<UUID, WageRate> rates = ratesFor(roster.stream().map(Worker::getId).toList(), date);
+        List<UUID> everyone = new ArrayList<>(roster.stream().map(Worker::getId).toList());
+        late.forEach(worker -> everyone.add(worker.getId()));
+        Map<UUID, WageRate> rates = ratesFor(everyone, date);
 
-        List<RosterEntry> entries = roster.stream()
-                .map(worker -> {
-                    WageRate rate = rates.get(worker.getId());
-                    AttendanceRecord record = existing.get(worker.getId());
-                    return new RosterEntry(worker.getId(), worker.getWorkerCode(),
-                            worker.getFullName(), worker.getSkillCategoryId(),
-                            worker.getLabourSupplierId(),
-                            rate == null ? null : rate.getNormalRate(),
-                            rate == null ? null : rate.getOvertimeRate(),
-                            record == null ? null : toResponse(record, worker.getFullName()));
-                })
-                .toList();
+        Function<Worker, RosterEntry> toEntry = worker -> {
+            WageRate rate = rates.get(worker.getId());
+            AttendanceRecord record = existing.get(worker.getId());
+            return new RosterEntry(worker.getId(), worker.getWorkerCode(),
+                    worker.getFullName(), worker.getSkillCategoryId(),
+                    worker.getLabourSupplierId(),
+                    rate == null ? null : rate.getNormalRate(),
+                    rate == null ? null : rate.getOvertimeRate(),
+                    record == null ? null : toResponse(record, worker.getFullName()),
+                    postedLater.get(worker.getId()));
+        };
+        List<RosterEntry> entries = new ArrayList<>(roster.stream().map(toEntry).toList());
+        entries.addAll(late.stream().map(toEntry).toList());
 
         return new RosterResponse(siteId, date, site.standardShiftHours(),
                 settings().getOvertimeReasonRequiredAboveHours(),
-                isPeriodLocked(siteId, date), entries);
+                isPeriodLocked(siteId, date), backdating.reportApproved(), backdating.from(),
+                entries);
+    }
+
+    // ------------------------------------------------------------------ reaching back
+
+    /**
+     * Whether, and how far, the muster for this day may reach back for a man posted later.
+     *
+     * @param from           the earliest day it reaches to: the site's start, else the
+     *                       project's, else nothing stops it
+     * @param reportApproved the office has countersigned the day's report
+     */
+    record Backdating(boolean allowed, LocalDate from, boolean reportApproved) {
+    }
+
+    private Backdating backdatingOn(SiteLookup.SiteInfo site, LocalDate date) {
+        LocalDate from = site.startDate() != null ? site.startDate()
+                : projects.contract(site.projectId())
+                        .map(ProjectLookup.ProjectContract::startDate).orElse(null);
+        boolean approved = reports.approvedOn(site.id(), date);
+        // Reaching *forward* is not the same act: a man posted from next Monday has no
+        // business on tomorrow's roll, and the posting's own date already covers today.
+        boolean allowed = !approved && !date.isAfter(LocalDate.now())
+                && (from == null || !date.isBefore(from));
+        return new Backdating(allowed, from, approved);
+    }
+
+    /**
+     * The men whose posting to the site begins after the day, keyed to the day it begins —
+     * the earliest one where a man has been posted here more than once — less anyone already
+     * on the day's roll.
+     */
+    private Map<UUID, LocalDate> postedLater(UUID siteId, LocalDate date, Collection<Worker> onRoll) {
+        Set<UUID> present = onRoll.stream().map(Worker::getId).collect(Collectors.toSet());
+        Map<UUID, LocalDate> later = new HashMap<>();
+        for (WorkerSiteAllocation posting : allocations.findBySiteIdAndEffectiveFromAfter(siteId, date)) {
+            if (present.contains(posting.getWorkerId())) {
+                continue;
+            }
+            later.merge(posting.getWorkerId(), posting.getEffectiveFrom(),
+                    (a, b) -> a.isBefore(b) ? a : b);
+        }
+        return later;
+    }
+
+    /**
+     * Refuses a mark for a man who was not on the site's roll that day unless the muster may
+     * reach back for him. Called for a <em>new</em> row only: a row that already exists was
+     * admitted once, and editing or replaying it is not a second admission.
+     */
+    private void assertMayMark(Worker worker, BulkAttendanceRequest request,
+                               Map<UUID, WorkerSiteAllocation> postingsOnDay,
+                               Map<UUID, LocalDate> postedLater, Backdating backdating,
+                               Map<UUID, List<AttendanceRecord>> marksElsewhere) {
+        WorkerSiteAllocation onDay = postingsOnDay.get(worker.getId());
+        if (onDay != null && onDay.getSiteId().equals(request.siteId())) {
+            return;
+        }
+        LocalDate postedFrom = postedLater.get(worker.getId());
+        if (postedFrom == null) {
+            throw new BusinessException("attendance.not-posted",
+                    worker.getFullName() + " was not posted to this site on " + request.date()
+                            + " or afterwards, so he cannot be marked here.");
+        }
+        if (backdating.reportApproved()) {
+            throw new BusinessException("attendance.day-approved",
+                    "The daily report for " + request.date() + " at this site has been approved "
+                            + "by the office, so " + worker.getFullName() + " (posted here from "
+                            + postedFrom + ") cannot be added to that day.");
+        }
+        if (backdating.from() != null && request.date().isBefore(backdating.from())) {
+            throw new BusinessException("attendance.before-site-start",
+                    "The site started on " + backdating.from() + "; nothing can be marked before it.");
+        }
+        if (!backdating.allowed()) {
+            throw new BusinessException("attendance.not-yet-posted",
+                    worker.getFullName() + " is posted here from " + postedFrom
+                            + " and cannot be marked here before then on a day still to come.");
+        }
+        for (AttendanceRecord mark : marksElsewhere.getOrDefault(worker.getId(), List.of())) {
+            if (!mark.getSiteId().equals(request.siteId())) {
+                throw BusinessException.conflict("attendance.marked-elsewhere",
+                        worker.getFullName() + " is already marked at another site on "
+                                + request.date() + "; a man is on one roll a morning.");
+            }
+        }
     }
 
     // ------------------------------------------------------------------ entry
@@ -166,6 +291,24 @@ public class AttendanceService {
         Map<UUID, WageRate> rates = ratesFor(workerIds, request.date());
         BigDecimal otThreshold = settings().getOvertimeReasonRequiredAboveHours();
 
+        // Who was on this roll that morning, and who joined it later. The second question
+        // is asked only when the first has a gap in it — on an ordinary day it costs nothing.
+        Map<UUID, WorkerSiteAllocation> postingsOnDay = workerIds.isEmpty() ? Map.of()
+                : allocations.findEffectiveOnFor(workerIds, request.date()).stream()
+                        .collect(Collectors.toMap(WorkerSiteAllocation::getWorkerId,
+                                Function.identity(), (a, b) -> a));
+        boolean gap = workerIds.stream().anyMatch(id -> {
+            WorkerSiteAllocation onDay = postingsOnDay.get(id);
+            return onDay == null || !onDay.getSiteId().equals(request.siteId());
+        });
+        Backdating backdating = gap ? backdatingOn(site, request.date()) : null;
+        Map<UUID, LocalDate> postedLater = gap ? postedLater(request.siteId(), request.date(), List.of())
+                : Map.of();
+        Map<UUID, List<AttendanceRecord>> marksElsewhere = gap
+                ? records.findLiveOnDayFor(workerIds, request.date()).stream()
+                        .collect(Collectors.groupingBy(AttendanceRecord::getWorkerId))
+                : Map.of();
+
         List<EntryOutcome> outcomes = new ArrayList<>();
         int accepted = 0;
         int unchanged = 0;
@@ -173,7 +316,9 @@ public class AttendanceService {
 
         for (AttendanceEntry entry : request.entries()) {
             try {
-                Outcome outcome = saveOne(entry, request, site, workersById, rates, otThreshold);
+                Outcome outcome = saveOne(entry, request, site, workersById, rates, otThreshold,
+                        worker -> assertMayMark(worker, request, postingsOnDay, postedLater,
+                                backdating, marksElsewhere));
                 outcomes.add(new EntryOutcome(entry.id(), entry.workerId(), outcome, null));
                 if (outcome == Outcome.UNCHANGED) {
                     unchanged++;
@@ -195,7 +340,8 @@ public class AttendanceService {
 
     private Outcome saveOne(AttendanceEntry entry, BulkAttendanceRequest request,
                             SiteLookup.SiteInfo site, Map<UUID, Worker> workersById,
-                            Map<UUID, WageRate> rates, BigDecimal otThreshold) {
+                            Map<UUID, WageRate> rates, BigDecimal otThreshold,
+                            java.util.function.Consumer<Worker> admission) {
         Worker worker = workersById.get(entry.workerId());
         if (worker == null) {
             throw BusinessException.notFound("Worker", entry.workerId());
@@ -223,6 +369,7 @@ public class AttendanceService {
                     worker.getFullName() + " is already marked for " + request.date()
                             + " at this site.");
         });
+        admission.accept(worker);
 
         AttendanceRecord record = new AttendanceRecord(entry.id(), orgId(), site.projectId(),
                 site.id(), entry.workerId(), request.date(), entry.status());
@@ -472,7 +619,7 @@ public class AttendanceService {
     private void freezeAndPost(AttendanceRecord record, Instant now, UUID by) {
         Worker worker = requireWorker(record.getWorkerId());
         SiteLookup.SiteInfo site = sites.require(record.getSiteId());
-        WageRate rate = wageRates.findEffectiveOn(record.getWorkerId(), record.getAttendanceDate())
+        WageRate rate = rateOn(record.getWorkerId(), record.getAttendanceDate())
                 .orElseThrow(() -> new BusinessException("attendance.no-wage-rate",
                         worker.getFullName() + " has no wage rate effective on "
                                 + record.getAttendanceDate() + ", so his pay cannot be computed."));
@@ -582,13 +729,36 @@ public class AttendanceService {
                 site.monthlyWageDays()));
     }
 
+    /**
+     * The rate each man is paid on a date. A day before his first rate — which the muster
+     * reaching back for a man taken on late produces — is priced at that first rate, the one
+     * he was taken on at: it is the only figure anybody agreed with him, and once frozen
+     * onto the row at verification it is as fixed as any other. A day <em>after</em> his last
+     * rate ended is a different thing and stays unpriced.
+     */
     private Map<UUID, WageRate> ratesFor(Collection<UUID> workerIds, LocalDate date) {
         if (workerIds.isEmpty()) {
             return Map.of();
         }
-        return wageRates.findEffectiveOnFor(workerIds, date).stream()
+        Map<UUID, WageRate> rates = wageRates.findEffectiveOnFor(workerIds, date).stream()
                 .collect(Collectors.toMap(WageRate::getWorkerId, Function.identity(),
                         (a, b) -> a));
+        List<UUID> unpriced = workerIds.stream().filter(id -> !rates.containsKey(id)).toList();
+        if (!unpriced.isEmpty()) {
+            Set<UUID> seen = new java.util.HashSet<>();
+            for (WageRate rate : wageRates.findByWorkerIdInOrderByEffectiveFromAsc(unpriced)) {
+                // Earliest first, so the first row seen for a man is his first rate.
+                if (seen.add(rate.getWorkerId()) && rate.getEffectiveFrom().isAfter(date)) {
+                    rates.put(rate.getWorkerId(), rate);
+                }
+            }
+        }
+        return rates;
+    }
+
+    /** One man's form of {@link #ratesFor}, with the same reach back to his first rate. */
+    private Optional<WageRate> rateOn(UUID workerId, LocalDate date) {
+        return Optional.ofNullable(ratesFor(List.of(workerId), date).get(workerId));
     }
 
     private boolean isPeriodLocked(UUID siteId, LocalDate date) {

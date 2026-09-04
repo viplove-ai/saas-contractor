@@ -78,6 +78,12 @@ export interface RosterEntry {
   overtimeRate?: number;
   /** Absent from the payload entirely when the worker has not been marked yet. */
   attendance?: AttendanceRecord;
+  /**
+   * Absent for a man on the site's roll that day. Otherwise the day his posting here
+   * begins: the muster reaches back for a man taken on or transferred late, and the row
+   * says so beside his name.
+   */
+  postedFrom?: string;
 }
 
 export interface Roster {
@@ -86,6 +92,10 @@ export interface Roster {
   standardShiftHours: number;
   overtimeReasonRequiredAboveHours: number;
   periodLocked: boolean;
+  /** The office has approved this day's report; men posted later are not offered on it. */
+  reportApproved: boolean;
+  /** How far back the muster reaches for a man posted later; absent when nobody recorded a start. */
+  markableFrom?: string;
   entries: RosterEntry[];
 }
 

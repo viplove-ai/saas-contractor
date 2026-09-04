@@ -305,6 +305,23 @@ if the tests pass:
   who knows. Only the work item is refused, because it is the row that reaches the measurement
   book. And the refusal runs both ways: a day already carrying measured work cannot be turned
   into a day nobody worked, because if a quantity was measured the site worked.
+- **The muster reaches back for a man taken on late, and stops at an approved report.** A
+  posting begins the day somebody typed it, which is rarely the day the man first stood on the
+  site: men are onboarded on a Monday for the week they have already worked, and a transfer is
+  recorded when the office hears of it. So the roster for a day offers, below the men posted
+  there that morning, everyone whose posting to the site begins *after* it — labelled with the
+  day it begins — back to the site's start (else the project's), and never forward of today.
+  The one day it may not reach into is one whose daily report the office has `APPROVED`
+  (`DprLookup.approvedOn`, the report module's one lookup): the head count on an approved
+  report is a figure the department has been given. Short of that the muster and the document
+  may differ, which docs/09 already calls information. Two things follow. What the posting
+  used to guarantee — one man, one roll, one morning — is now checked directly, against the
+  live marks he carries at any other site that day, because the posting no longer says where he
+  was. And a day before his first wage rate is priced at that first rate, the one he was taken
+  on at, frozen onto the row at verification exactly like any other; a day *after* his last
+  rate ended stays unpriced. The admission check runs on a **new** row only: an existing row
+  was admitted once, and editing or replaying it is not a second admission. **No new
+  permission** — marking a man is `attendance:create` whichever day it is for.
 - **A head count is not attendance.** On a site flagged `uses_outsourced_labour`, the day is
   recorded as counts per trade in `site_labour_counts` — no worker, no wage rate, no ledger
   posting, because the supplier bills for the work. Hours are recorded (per man, nullable,

@@ -506,7 +506,7 @@ public class SiteService implements SiteLookup {
         Site site = requireSite(siteId);
         return new SiteInfo(site.getId(), site.getProjectId(), site.getOrgId(), site.getCode(),
                 site.getName(), site.getStandardShiftHours(), site.getMonthlyWageDays(),
-                site.isUsesOutsourcedLabour());
+                site.isUsesOutsourcedLabour(), site.getStartDate());
     }
 
     /**
@@ -523,7 +523,8 @@ public class SiteService implements SiteLookup {
                         currentUser.currentOrgId(), projectId).stream()
                 .map(site -> new SiteInfo(site.getId(), site.getProjectId(), site.getOrgId(),
                         site.getCode(), site.getName(), site.getStandardShiftHours(),
-                        site.getMonthlyWageDays(), site.isUsesOutsourcedLabour()))
+                        site.getMonthlyWageDays(), site.isUsesOutsourcedLabour(),
+                        site.getStartDate()))
                 .toList();
     }
 

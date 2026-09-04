@@ -75,6 +75,10 @@ export function MarkAttendancePage() {
   const entries = useMemo(() => roster.data?.entries ?? [], [roster.data]);
   const locked = roster.data?.periodLocked ?? false;
   const standardShiftHours = roster.data?.standardShiftHours ?? 0;
+  const lateCount = useMemo(
+    () => entries.filter((entry) => entry.postedFrom != null).length,
+    [entries],
+  );
 
   const counts = useMemo(() => {
     let marked = 0;
@@ -181,6 +185,17 @@ export function MarkAttendancePage() {
           This month is closed for attendance. Nothing can be entered or changed.
         </Alert>
       )}
+      {/*
+        The muster reaches back for a man taken on late, and the one day it may not reach
+        into is one whose report the office has approved. Said once at the top rather than
+        discovered as a missing name.
+      */}
+      {roster.data?.reportApproved && !locked && (
+        <Alert severity="info">
+          The office has approved this day&apos;s report. Men posted to the site later cannot be
+          added to it.
+        </Alert>
+      )}
 
       {/*
         An empty muster is not an error and not a dead end — it is a supervisor one screen
@@ -195,7 +210,12 @@ export function MarkAttendancePage() {
             <Typography color="text.secondary">
               No worker is posted to {site ? `${site.code} — ${site.name}` : 'this site'} on{' '}
               {date}. Take your men on under Workers and they appear on this muster the same
-              day.
+              day
+              {roster.data.reportApproved
+                ? '.'
+                : roster.data.markableFrom
+                  ? `, and on every earlier day back to ${roster.data.markableFrom}.`
+                  : ', and on every earlier day.'}
             </Typography>
             <Button
               variant="contained"
@@ -215,6 +235,14 @@ export function MarkAttendancePage() {
           <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
             <Chip label={`${counts.marked} of ${counts.total} marked`} />
             <Chip label={`${counts.present} present`} color="success" variant="outlined" />
+            {lateCount > 0 && (
+              <Chip
+                label={`${lateCount} posted here later`}
+                color="info"
+                variant="outlined"
+                title="Taken on or transferred to this site after this day. Marking them here is allowed back to the site's start."
+              />
+            )}
             <Button onClick={markAllPresent} disabled={locked} sx={{ minHeight: 48 }}>
               Mark all present
             </Button>
@@ -254,6 +282,14 @@ export function MarkAttendancePage() {
                           <> · {hours} h worked</>
                         )}
                         {overtime > 0 && <> · {round2(overtime)} h OT</>}
+                        {entry.postedFrom && (
+                          <>
+                            {' · '}
+                            <Box component="span" sx={{ color: 'info.main' }}>
+                              posted here from {entry.postedFrom}
+                            </Box>
+                          </>
+                        )}
                       </Typography>
                     </Box>
 

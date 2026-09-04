@@ -45,6 +45,19 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
     List<AttendanceRecord> findLiveForDay(@Param("siteId") UUID siteId,
                                           @Param("date") LocalDate date);
 
+    /**
+     * Every live mark the given workers carry on a day, at any site. The roll reaching back
+     * for a man posted late has to know whether some other site already has him that
+     * morning — the one thing the posting used to guarantee and no longer can.
+     */
+    @Query("""
+            SELECT a FROM AttendanceRecord a
+            WHERE a.workerId IN :workerIds AND a.attendanceDate = :date
+              AND a.workflowStatus <> 'CANCELLED'
+            """)
+    List<AttendanceRecord> findLiveOnDayFor(@Param("workerIds") Collection<UUID> workerIds,
+                                            @Param("date") LocalDate date);
+
     List<AttendanceRecord> findByIdInAndOrgId(Collection<UUID> ids, UUID orgId);
 
     @Query("""

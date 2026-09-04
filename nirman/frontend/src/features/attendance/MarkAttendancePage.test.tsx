@@ -35,6 +35,8 @@ const ROSTER: Roster = {
   standardShiftHours: 7,
   overtimeReasonRequiredAboveHours: 4,
   periodLocked: false,
+  reportApproved: false,
+  markableFrom: '2024-12-01',
   entries: [
     {
       workerId: 'w1',

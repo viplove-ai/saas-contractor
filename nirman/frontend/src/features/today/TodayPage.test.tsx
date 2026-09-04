@@ -56,6 +56,7 @@ function rosterOf(...entries: RosterEntry[]): Roster {
     standardShiftHours: 8,
     overtimeReasonRequiredAboveHours: 9,
     periodLocked: false,
+    reportApproved: false,
     entries,
   };
 }

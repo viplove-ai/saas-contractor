@@ -1,6 +1,7 @@
 package in.nirman.modules.project.service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -28,6 +29,9 @@ public interface SiteLookup {
      *                             suppliers. The labour module asks before it offers the
      *                             counts screen, and the DPR asks before it prints the
      *                             section.
+     * @param startDate          the day work began here, or null when nobody has said. The
+     *                           muster reaches back to it for a man taken on late: nothing
+     *                           happened at the site before it, so nothing can be marked.
      */
     record SiteInfo(
             UUID id,
@@ -37,7 +41,8 @@ public interface SiteLookup {
             String name,
             BigDecimal standardShiftHours,
             int monthlyWageDays,
-            boolean usesOutsourcedLabour) {
+            boolean usesOutsourcedLabour,
+            LocalDate startDate) {
     }
 
     /**

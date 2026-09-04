@@ -30,6 +30,12 @@ public final class AttendanceDtos {
      * One line of the muster roll. {@code attendance} is null for a worker not yet marked,
      * which is what lets the screen render the whole roster in one pass.
      */
+    /**
+     * @param postedFrom null for a man on the site's roll that day. Otherwise the day his
+     *                   posting here begins: he is offered for a day before it because the
+     *                   muster reaches back for a man taken on or transferred late, and the
+     *                   screen says so beside his name.
+     */
     public record RosterEntry(
             UUID workerId,
             String workerCode,
@@ -38,9 +44,16 @@ public final class AttendanceDtos {
             UUID labourSupplierId,
             BigDecimal normalRate,
             BigDecimal overtimeRate,
-            AttendanceResponse attendance) {
+            AttendanceResponse attendance,
+            LocalDate postedFrom) {
     }
 
+    /**
+     * @param reportApproved the office has countersigned this day's report, so men posted
+     *                       later are not offered and cannot be added to it
+     * @param markableFrom   how far back the muster reaches for a man posted later — the
+     *                       site's start, else the project's; null when neither is recorded
+     */
     public record RosterResponse(
             UUID siteId,
             LocalDate date,
@@ -48,6 +61,8 @@ public final class AttendanceDtos {
             /** Above this many overtime hours the entry screen demands a reason. */
             BigDecimal overtimeReasonRequiredAboveHours,
             boolean periodLocked,
+            boolean reportApproved,
+            LocalDate markableFrom,
             List<RosterEntry> entries) {
     }
 

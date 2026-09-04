@@ -125,7 +125,7 @@ an issue, a transfer or a stock count has ever named; a store that is finished w
 ### /attendance
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/attendance/roster?siteId&date` | workers assigned to the site with any existing record prefilled |
+| GET | `/attendance/roster?siteId&date` | workers posted to the site that day with any existing record prefilled; below them, men posted there *later* (each with `postedFrom`) when the day is on or after the site's start and its report is not `APPROVED` — `reportApproved` and `markableFrom` say why the list is what it is |
 | POST | `/attendance/bulk` | idempotent; array of records, one client UUID each |
 | PUT | `/attendance/{id}` | draft only |
 | POST | `/attendance/submit` | `{siteId,date}` → Draft → Submitted |

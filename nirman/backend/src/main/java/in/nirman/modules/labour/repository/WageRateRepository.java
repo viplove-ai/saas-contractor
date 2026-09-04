@@ -36,4 +36,11 @@ public interface WageRateRepository extends JpaRepository<WageRate, UUID> {
             """)
     List<WageRate> findEffectiveOnFor(@Param("workerIds") Collection<UUID> workerIds,
                                       @Param("onDate") LocalDate onDate);
+
+    /**
+     * Every rate the given workers have ever had, earliest first. A day marked before a
+     * man's first rate is priced at that first rate — the one he was taken on at — and this
+     * is how the service finds it in one query for a whole roster.
+     */
+    List<WageRate> findByWorkerIdInOrderByEffectiveFromAsc(Collection<UUID> workerIds);
 }
