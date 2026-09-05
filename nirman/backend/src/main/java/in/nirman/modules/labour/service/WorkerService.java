@@ -170,7 +170,8 @@ public class WorkerService {
                         "You can add the worker, but his rate has to be set by the office.");
             }
             wageRates.save(new WageRate(org, worker.getId(), request.normalRate(),
-                    overtimeRate(request, wageType), from));
+                    overtimeRate(request.overtimeRate(), request.normalRate(), wageType,
+                            request.siteId()), from));
         }
         if (request.siteId() != null) {
             siteAccessGuard.assertCanAccess(request.siteId());
@@ -309,15 +310,21 @@ public class WorkerService {
             wageRates.saveAndFlush(open);
         });
 
+        // The site he stands on the day the rate begins is what prices his overtime hour.
+        UUID siteOnThatDay = allocations.findEffectiveOn(workerId, request.effectiveFrom())
+                .map(WorkerSiteAllocation::getSiteId)
+                .orElse(null);
+        BigDecimal overtimeRate = overtimeRate(request.overtimeRate(), request.normalRate(),
+                worker.getWageType(), siteOnThatDay);
         WageRate revised = new WageRate(worker.getOrgId(), workerId, request.normalRate(),
-                request.overtimeRate(), request.effectiveFrom());
+                overtimeRate, request.effectiveFrom());
         revised.setRemarks(request.remarks());
         wageRates.save(revised);
 
         audit.record("WAGE_RATE", revised.getId(), "REVISE", null,
                 Map.of("workerId", workerId.toString(),
                         "normalRate", request.normalRate(),
-                        "overtimeRate", request.overtimeRate(),
+                        "overtimeRate", overtimeRate,
                         "effectiveFrom", request.effectiveFrom().toString()),
                 request.remarks());
         return toResponse(revised);
@@ -462,21 +469,25 @@ public class WorkerService {
      *
      * <p>Only a daily wage can be divided this way. An hourly worker is already paid by the
      * hour, and a monthly one needs the site's {@code monthlyWageDays} before the division
-     * means anything — neither is a guess worth making here, so both wait for the office to
+     * means anything — neither is a guess worth making here, so both wait for somebody to
      * state a rate.</p>
+     *
+     * <p>Shared by onboarding and revision, so a man repriced later is repriced by the same
+     * arithmetic he was taken on with.</p>
      */
-    private BigDecimal overtimeRate(CreateWorkerRequest request, WageType wageType) {
-        if (request.overtimeRate() != null) {
-            return request.overtimeRate();
+    private BigDecimal overtimeRate(BigDecimal stated, BigDecimal normalRate, WageType wageType,
+                                    UUID siteId) {
+        if (stated != null) {
+            return stated;
         }
         if (wageType == WageType.HOURLY) {
-            return request.normalRate();
+            return normalRate;
         }
-        if (wageType != WageType.DAILY || request.siteId() == null) {
+        if (wageType != WageType.DAILY || siteId == null) {
             return BigDecimal.ZERO;
         }
-        BigDecimal shiftHours = sites.require(request.siteId()).standardShiftHours();
-        return request.normalRate().divide(shiftHours, 4, RoundingMode.HALF_UP);
+        BigDecimal shiftHours = sites.require(siteId).standardShiftHours();
+        return normalRate.divide(shiftHours, 4, RoundingMode.HALF_UP);
     }
 
     private UUID orgId() {

@@ -19,6 +19,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useDeleteWorker, useMySites, useSiteDirectory, useWorkers } from './api';
 import { EditWorkerDialog } from './EditWorkerDialog';
 import { OnboardWorkerDialog } from './OnboardWorkerDialog';
+import { ReviseWageDialog } from './ReviseWageDialog';
 import { TransferWorkerDialog } from './TransferWorkerDialog';
 import { WAGE_TYPE_LABEL, type Worker, type WorkerStatusFilter } from './types';
 
@@ -44,6 +45,7 @@ export function WorkersPage() {
   const [onboarding, setOnboarding] = useState(false);
   const [transferring, setTransferring] = useState<Worker | null>(null);
   const [editing, setEditing] = useState<Worker | null>(null);
+  const [repricing, setRepricing] = useState<Worker | null>(null);
   const [deleting, setDeleting] = useState<Worker | null>(null);
 
   const mySites = useMySites();
@@ -53,6 +55,9 @@ export function WorkersPage() {
   const workers = useWorkers(siteId, search, status);
   const removeWorker = useDeleteWorker();
   const canWrite = hasPermission('worker:write');
+  // Setting pay is its own permission, granted to every role since V61 — a rate agreed at
+  // the gate and typed there is a truer record than a week of days that cost nothing.
+  const canSetPay = hasPermission('wage:write');
   // The engineer and the office, never the supervisor: he corrects what he typed, but taking
   // a name off the roll is not a decision made at a gate.
   const canDelete = hasPermission('worker:delete');
@@ -98,10 +103,10 @@ export function WorkersPage() {
             </Typography>
           </Stack>
         ) : (
-          // Not an error, but it does mean his days will carry no money until the office
+          // Not an error, but it does mean his days will carry no money until somebody
           // sets one — worth saying rather than showing a dash.
           <Typography variant="body2" color="text.secondary">
-            Not set by office
+            No rate yet
           </Typography>
         ),
     },
@@ -118,7 +123,7 @@ export function WorkersPage() {
         />
       ),
     },
-    ...(canWrite || canDelete
+    ...(canWrite || canSetPay || canDelete
       ? [
           {
             key: 'actions',
@@ -140,6 +145,11 @@ export function WorkersPage() {
                       Transfer
                     </Button>
                   </>
+                )}
+                {canSetPay && (
+                  <Button size="small" onClick={() => setRepricing(worker)}>
+                    {worker.currentWageRate ? 'Revise rate' : 'Set rate'}
+                  </Button>
                 )}
                 {canDelete && (
                   <Button size="small" color="error" onClick={() => setDeleting(worker)}>
@@ -257,6 +267,7 @@ export function WorkersPage() {
         onClose={() => setOnboarding(false)}
       />
       <EditWorkerDialog worker={editing} onClose={() => setEditing(null)} />
+      <ReviseWageDialog worker={repricing} onClose={() => setRepricing(null)} />
       <TransferWorkerDialog worker={transferring} onClose={() => setTransferring(null)} />
       <DeleteRecordDialog
         open={deleting !== null}

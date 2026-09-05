@@ -117,6 +117,7 @@ describe('WorkersPage', () => {
       if (url === '/sites') return Promise.resolve({ data: MY_SITES });
       if (url === '/sites/directory') return Promise.resolve({ data: DIRECTORY });
       if (url === '/skill-categories') return Promise.resolve({ data: [] });
+      if (url.endsWith('/wage-rates')) return Promise.resolve({ data: [] });
       if (url === '/labour-contractors')
         return Promise.resolve({ data: { ...WORKERS, content: [] } });
       return Promise.reject(new Error(`unexpected GET ${url}`));
@@ -141,18 +142,18 @@ describe('WorkersPage', () => {
     expect(screen.getByRole('button', { name: 'Take on a worker' })).toBeDisabled();
   });
 
-  it('says plainly when the office has not set a rate yet', async () => {
+  it('says plainly when nobody has set a rate yet', async () => {
     renderPage();
     await screen.findAllByText('Naya Mazdoor');
     const unpaid = table().getByText('Naya Mazdoor').closest('tr') as HTMLElement;
     const paid = table().getByText('Karam Singh').closest('tr') as HTMLElement;
 
-    expect(within(unpaid).getByText('Not set by office')).toBeInTheDocument();
+    expect(within(unpaid).getByText('No rate yet')).toBeInTheDocument();
     expect(within(paid).getByText(/625/)).toBeInTheDocument();
 
     // And the same two facts on the card the phone gets.
     const unpaidCard = cards().getByText('Naya Mazdoor').closest('li') as HTMLElement;
-    expect(within(unpaidCard).getByText('Not set by office')).toBeInTheDocument();
+    expect(within(unpaidCard).getByText('No rate yet')).toBeInTheDocument();
   });
 
   it('onboards a man onto the supervisor’s own site without touching pay', async () => {
@@ -196,6 +197,47 @@ describe('WorkersPage', () => {
 
     expect(await screen.findByText('Enter his mobile number')).toBeInTheDocument();
     expect(post).not.toHaveBeenCalled();
+  });
+
+  it('offers no rate button to someone who may not set pay', async () => {
+    renderPage();
+    await screen.findAllByText('Karam Singh');
+    expect(screen.queryByRole('button', { name: 'Revise rate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Set rate' })).not.toBeInTheDocument();
+  });
+
+  /*
+    A revision, never an edit: the dialog posts a new rate from a date and the server closes
+    the old one the day before. Only the day's wage is typed; the overtime hour is derived on
+    the server from the site's shift, so it travels only when somebody states it.
+  */
+  it('sets a rate on a man who has none, sending no overtime rate unless typed', async () => {
+    permissions = ['worker:read', 'worker:write', 'wage:write'];
+    post.mockResolvedValue({ data: { id: 'r-new' } });
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    await screen.findAllByText('Naya Mazdoor');
+    const unpaid = table().getByText('Naya Mazdoor').closest('tr') as HTMLElement;
+    const paid = table().getByText('Karam Singh').closest('tr') as HTMLElement;
+    expect(within(paid).getByRole('button', { name: 'Revise rate' })).toBeInTheDocument();
+    await user.click(within(unpaid).getByRole('button', { name: 'Set rate' }));
+
+    expect(await screen.findByText(/no rate yet, so his days carry no amount/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Rate (per day)'), '650');
+    const from = screen.getByLabelText('From');
+    await user.clear(from);
+    await user.type(from, '2025-03-01');
+    await user.click(screen.getByRole('button', { name: 'Set rate' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    const [url, body] = post.mock.calls[0] as [
+      string,
+      { normalRate: number; overtimeRate?: number; effectiveFrom: string },
+    ];
+    expect(url).toBe('/workers/w2/wage-rates');
+    expect(body.normalRate).toBe(650);
+    expect(body.overtimeRate).toBeUndefined();
+    expect(body.effectiveFrom).toBe('2025-03-01');
   });
 
   it('offers the day’s wage to someone who may set pay, and asks no overtime rate', async () => {
@@ -283,6 +325,7 @@ describe('WorkersPage', () => {
       if (url === '/sites') return Promise.resolve({ data: MY_SITES });
       if (url === '/sites/directory') return Promise.resolve({ data: DIRECTORY });
       if (url === '/skill-categories') return Promise.resolve({ data: [] });
+      if (url.endsWith('/wage-rates')) return Promise.resolve({ data: [] });
       if (url === '/labour-contractors')
         return Promise.resolve({ data: { ...WORKERS, content: [] } });
       return Promise.reject(new Error(`unexpected GET ${url}`));

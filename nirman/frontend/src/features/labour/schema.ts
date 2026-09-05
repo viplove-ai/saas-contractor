@@ -81,3 +81,21 @@ export const transferSchema = z.object({
 });
 
 export type TransferForm = z.infer<typeof transferSchema>;
+
+/**
+ * Revising what a man is paid. The day's wage is the one thing asked for; the overtime hour
+ * is derived on the server from the site's shift unless somebody states it, and the date it
+ * begins defaults to today. The server refuses a date on or before the rate in force.
+ */
+export const reviseWageSchema = z.object({
+  normalRate: z
+    .string()
+    .trim()
+    .regex(/^\d{1,14}(\.\d{1,4})?$/, 'A number')
+    .min(1, 'Enter the rate'),
+  overtimeRate: optionalAmount,
+  effectiveFrom: z.string().min(1, 'Choose the date it begins'),
+  remarks: z.string().trim().max(500, 'At most 500 characters').optional(),
+});
+
+export type ReviseWageForm = z.infer<typeof reviseWageSchema>;

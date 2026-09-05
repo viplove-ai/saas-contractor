@@ -6,6 +6,7 @@ import type {
   PageResponse,
   SiteDirectoryEntry,
   SkillCategory,
+  WageRate,
   WageType,
   Worker,
   WorkerStatusFilter,
@@ -16,6 +17,7 @@ export const labourKeys = {
     ['labour', 'workers', siteId, q, status] as const,
   allWorkers: ['labour', 'workers'] as const,
   allocations: (workerId: string) => ['labour', 'allocations', workerId] as const,
+  wageHistory: (workerId: string) => ['labour', 'wage-rates', workerId] as const,
   directory: ['labour', 'site-directory'] as const,
   skills: ['labour', 'skill-categories'] as const,
   /** The sites the signed-in user actually works at, as opposed to the whole directory. */
@@ -193,6 +195,46 @@ export function useTransferWorker() {
       // He leaves this user's roster on the same date, so both lists are now wrong.
       void queryClient.invalidateQueries({ queryKey: labourKeys.allWorkers });
       void queryClient.invalidateQueries({ queryKey: labourKeys.allocations(input.workerId) });
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'roster'] });
+    },
+  });
+}
+
+export function useWageHistory(workerId: string | undefined) {
+  return useQuery({
+    queryKey: labourKeys.wageHistory(workerId ?? ''),
+    queryFn: async () =>
+      (await apiClient.get<WageRate[]>(`/workers/${workerId}/wage-rates`)).data,
+    enabled: Boolean(workerId),
+  });
+}
+
+/**
+ * What the revision sends. No overtime rate unless one was typed: left out, the server
+ * derives it from the day's wage and the shift length of the site he stands on that day,
+ * exactly as it does when he is taken on.
+ */
+export interface ReviseWageInput {
+  workerId: string;
+  normalRate: number;
+  overtimeRate?: number | undefined;
+  effectiveFrom: string;
+  remarks?: string | undefined;
+}
+
+/**
+ * A revision, never an edit: the server closes the rate in force the day before the new one
+ * begins and opens the new one. Days already verified keep the rate frozen onto them.
+ */
+export function useReviseWage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ workerId, ...body }: ReviseWageInput) =>
+      (await apiClient.post<WageRate>(`/workers/${workerId}/wage-rates`, body)).data,
+    onSuccess: (_result, input) => {
+      void queryClient.invalidateQueries({ queryKey: labourKeys.allWorkers });
+      void queryClient.invalidateQueries({ queryKey: labourKeys.wageHistory(input.workerId) });
+      // The roster carries each man's rate in force, and it is cached offline.
       void queryClient.invalidateQueries({ queryKey: ['attendance', 'roster'] });
     },
   });

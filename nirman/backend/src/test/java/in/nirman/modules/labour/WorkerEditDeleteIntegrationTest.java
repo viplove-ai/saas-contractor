@@ -135,9 +135,12 @@ class WorkerEditDeleteIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("the engineer holds worker:delete and the supervisor does not")
     void engineerHoldsTheGrant() throws Exception {
         assertThat(rolesHolding("worker:delete")).containsExactlyInAnyOrder("ADMIN", "ENGINEER");
-        // The other half of the pair: editing stays with the field, as V6 arranged.
+        // The other half of the pair: since V61 every role edits a man and sets his rate.
+        // Deleting him is still not a field decision.
         assertThat(rolesHolding("worker:write"))
-                .containsExactlyInAnyOrder("ADMIN", "ENGINEER", "SUPERVISOR");
+                .containsExactlyInAnyOrder("ADMIN", "ENGINEER", "SUPERVISOR", "ACCOUNTANT");
+        assertThat(rolesHolding("wage:write"))
+                .containsExactlyInAnyOrder("ADMIN", "ENGINEER", "SUPERVISOR", "ACCOUNTANT");
     }
 
     @Test

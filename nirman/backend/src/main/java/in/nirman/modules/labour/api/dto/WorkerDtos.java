@@ -127,7 +127,13 @@ public final class WorkerDtos {
      */
     public record ReviseWageRequest(
             @NotNull @DecimalMin("0") @Digits(integer = 14, fraction = 4) BigDecimal normalRate,
-            @NotNull @DecimalMin("0") @Digits(integer = 14, fraction = 4) BigDecimal overtimeRate,
+            /**
+             * Optional, exactly as at onboarding: left out, it is derived from the new day's
+             * wage and the shift length of the site he is posted to on the day the rate
+             * begins. A man moved from a seven-hour site to an eight-hour one is therefore
+             * repriced on the site he is actually standing on.
+             */
+            @DecimalMin("0") @Digits(integer = 14, fraction = 4) BigDecimal overtimeRate,
             @NotNull LocalDate effectiveFrom,
             @Size(max = 500) String remarks) {
     }

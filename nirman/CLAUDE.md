@@ -920,6 +920,15 @@ carried across into it, and `site_equipment.photo_attachment_id` dropped afterwa
 the day somebody deletes that picture, which is why V19 dropped the two site staffing columns
 rather than keeping them as a summary of the list that replaced them. **No new permission.**
 
+`V61` hands the worker register to every role: `worker:read`, `worker:write`, `wage:read` and
+`wage:write` go to ENGINEER, SUPERVISOR and ACCOUNTANT wherever V2 and V6 had not already put
+them. It reverses V6's decision to keep `wage:write` with the office, on the firm's instruction
+that the rate is agreed at the gate by whoever takes the man on, and a week of days costing
+nothing is the worse record. Nothing about the rate's shape changes: it is still a revision
+(`POST /workers/{id}/wage-rates`, now with the overtime rate optional and derived from the
+shift of the site he stands on that day, exactly as at onboarding), still audited, and still
+frozen onto every day already verified. **No new permission.**
+
 `V60` is the member's own signature: `users.signature_attachment_id`, nullable, the file in
 `attachments` claimed to the user id. **No new permission** — see the rule above for why nobody
 but the member may write it. `StorageClient` gains `get`, because drawing a picture into a PDF

@@ -164,8 +164,8 @@ export function OnboardWorkerDialog({ open, defaultSiteId, onClose }: Props) {
             />
           ) : (
             <Alert severity="info">
-              Add him now and mark his attendance today. The office sets what he is paid —
-              until they do, his days are recorded but carry no amount.
+              Add him now and mark his attendance today. His rate can be set afterwards from
+              the register — until it is, his days are recorded but carry no amount.
             </Alert>
           )}
         </Stack>

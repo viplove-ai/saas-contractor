@@ -94,9 +94,14 @@ class LabourTransferIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+    /**
+     * V6 kept wage:write with the office; V61 hands it to whoever takes the man on. The
+     * revision asks no overtime rate: left out, it is the hourly figure the day's wage works
+     * out to on the site he stands on that day — KSN-A runs a seven-hour shift.
+     */
     @Test
-    @DisplayName("setting pay stays with the office, even at onboarding")
-    void supervisorCannotSetTheRate() throws Exception {
+    @DisplayName("the supervisor sets the rate at the gate and revises it later, overtime derived")
+    void supervisorSetsAndRevisesTheRate() throws Exception {
         String vivek = loginToken("vivek");
         mockMvc.perform(post("/api/v1/workers")
                         .header("Authorization", "Bearer " + vivek)
@@ -104,19 +109,45 @@ class LabourTransferIntegrationTest extends AbstractIntegrationTest {
                         .content("""
                                 {"workerCode":"TW-003","fullName":"Rich Mazdoor","mobile":"+91-98000",
                                  "employmentType":"CONTRACT","wageType":"DAILY","siteId":"%s",
-                                 "normalRate":5000,"overtimeRate":700}"""
+                                 "normalRate":500}"""
                                 .formatted(SITE_A)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.currentWageRate.normalRate").value(500));
 
-        // The admin sets it afterwards, on the man the supervisor added.
         String workerId = onboard(vivek, "TW-004", "Paid Later", SITE_A);
         mockMvc.perform(post("/api/v1/workers/" + workerId + "/wage-rates")
-                        .header("Authorization", "Bearer " + loginToken("viplove"))
+                        .header("Authorization", "Bearer " + vivek)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"normalRate":650,"overtimeRate":92.85,"effectiveFrom":"%s"}"""
+                                {"normalRate":650,"effectiveFrom":"%s"}"""
                                 .formatted(LocalDate.now())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.normalRate").value(650))
+                .andExpect(jsonPath("$.overtimeRate").value(92.8571));
+
+        // A second revision must begin after the first, and closes it the day before.
+        mockMvc.perform(post("/api/v1/workers/" + workerId + "/wage-rates")
+                        .header("Authorization", "Bearer " + vivek)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"normalRate":700,"overtimeRate":100,"effectiveFrom":"%s"}"""
+                                .formatted(LocalDate.now())))
+                .andExpect(status().isUnprocessableEntity());
+        mockMvc.perform(post("/api/v1/workers/" + workerId + "/wage-rates")
+                        .header("Authorization", "Bearer " + vivek)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"normalRate":700,"overtimeRate":100,"effectiveFrom":"%s"}"""
+                                .formatted(LocalDate.now().plusDays(1))))
                 .andExpect(status().isCreated());
+
+        MvcResult rates = mockMvc.perform(get("/api/v1/workers/" + workerId + "/wage-rates")
+                        .header("Authorization", "Bearer " + vivek))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode history = objectMapper.readTree(rates.getResponse().getContentAsString());
+        assertThat(history).hasSize(2);
+        assertThat(history.get(1).get("effectiveTo").asText()).isEqualTo(LocalDate.now().toString());
     }
 
     /**
