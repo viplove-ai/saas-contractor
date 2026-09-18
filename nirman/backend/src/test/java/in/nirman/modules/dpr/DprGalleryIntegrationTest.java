@@ -35,10 +35,15 @@ class DprGalleryIntegrationTest extends AbstractIntegrationTest {
     private static final String PROJECT = "30000000-0000-0000-0000-000000000001";
     private static final String SITE_A = "31000000-0000-0000-0000-000000000001";
     private static final String SITE_B = "31000000-0000-0000-0000-000000000002";
-    /** March 2025: clear of V903's June reports and of the April days the workflow test writes. */
-    private static final LocalDate DAY_A = LocalDate.of(2025, 3, 3);
-    private static final LocalDate DAY_A2 = LocalDate.of(2025, 3, 4);
-    private static final LocalDate DAY_B = LocalDate.of(2025, 3, 3);
+    /**
+     * May 2025: clear of V903's June reports, of the April days the workflow test writes, and
+     * of March, which the deletion suite hands out from the 1st onwards — its soft-deleted
+     * reports stay on the site, so the day it reaches depends on how many tests ran before
+     * this one, and it was reaching the 4th.
+     */
+    private static final LocalDate DAY_A = LocalDate.of(2025, 5, 12);
+    private static final LocalDate DAY_A2 = LocalDate.of(2025, 5, 13);
+    private static final LocalDate DAY_B = LocalDate.of(2025, 5, 12);
 
     @Autowired
     private MockMvc mockMvc;
