@@ -184,11 +184,14 @@ public class WorkerAdvanceService {
         List<LedgerEntryResponse> entries = ledgerEntries.findForWorker(workerId, from, to).stream()
                 .map(WorkerAdvanceService::toResponse)
                 .toList();
+        BigDecimal openAdvances = advances.findOpenForRecovery(workerId).stream()
+                .map(WorkerAdvance::outstanding)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return new SettlementResponse(worker.getId(), worker.getWorkerCode(), worker.getFullName(),
-                balance.getEarnedAmount(), balance.getAdvanceAmount(), balance.getPaidAmount(),
-                balance.getDeductionAmount(), balance.getNetPayable(), balance.getLastEntryAt(),
-                entries);
+                balance.getEarnedAmount(), balance.getAdvanceAmount(), openAdvances,
+                balance.getPaidAmount(), balance.getDeductionAmount(), balance.getNetPayable(),
+                balance.getLastEntryAt(), entries);
     }
 
     // ------------------------------------------------------------------ internals
@@ -201,9 +204,11 @@ public class WorkerAdvanceService {
     private AdvanceResponse toResponse(WorkerAdvance a) {
         String workerName = workers.findById(a.getWorkerId())
                 .map(Worker::getFullName).orElse(null);
+        // outstanding() rather than the generated column, which is stale in the session
+        // that has just recovered part of it.
         return new AdvanceResponse(a.getId(), a.getAdvanceNumber(), a.getSiteId(), a.getWorkerId(),
                 workerName, a.getAdvanceDate(), a.getAmount(), a.getPaymentMode(), a.getPurpose(),
-                a.isRecoverable(), a.getRecoveredAmount(), a.getBalanceAmount(), a.getStatus(),
+                a.isRecoverable(), a.getRecoveredAmount(), a.outstanding(), a.getStatus(),
                 a.getWorkflowStatus(), a.getApprovedAt(), a.getRemarks(), a.getVersion());
     }
 

@@ -130,6 +130,36 @@ public class WorkerAdvance extends BaseEntity {
         return workflowStatus == Workflow.APPROVED;
     }
 
+    /**
+     * What is still to come out of his wages. Computed rather than read off
+     * {@code balanceAmount}, which the database generates and Hibernate does not refresh in
+     * the session that just moved {@code recoveredAmount}.
+     */
+    public BigDecimal outstanding() {
+        return amount.subtract(recoveredAmount);
+    }
+
+    /** Still to be recovered: approved, deducted from wages, and not yet closed. */
+    public boolean isOpenForRecovery() {
+        return isApproved() && recoverable
+                && (status == Status.OPEN || status == Status.PARTIALLY_RECOVERED);
+    }
+
+    /**
+     * A payday covering {@code portion} of this advance. Called by the payment and by
+     * nothing else; the status follows the figure rather than being set beside it, so the
+     * two cannot disagree.
+     */
+    public void recover(BigDecimal portion) {
+        if (portion.signum() <= 0 || portion.compareTo(outstanding()) > 0) {
+            throw new IllegalArgumentException("recovery must be within what is outstanding");
+        }
+        this.recoveredAmount = recoveredAmount.add(portion);
+        this.status = recoveredAmount.compareTo(amount) == 0
+                ? Status.RECOVERED
+                : Status.PARTIALLY_RECOVERED;
+    }
+
     public UUID getOrgId() {
         return orgId;
     }

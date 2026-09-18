@@ -69,6 +69,13 @@ const GROUPS: Group[] = [
       { title: 'Stock', to: '/inventory/stock', permission: 'inventory:read' },
       { title: 'Workers', to: '/workers', permission: 'worker:read' },
       /*
+        Offered on the same permission as the worker register: a supervisor is entitled to
+        know what the men on his site have drawn, because they will ask him on payday. The
+        acts on the screen — recording, approving, paying — are each behind their own
+        permission and the screen hides what the account cannot do.
+      */
+      { title: 'Advances and wages', to: '/workers/advances', permission: 'worker:read' },
+      /*
         A register rather than a queue, which is why it is here and not beside Approvals.
         Behind expense:allocate: the screen exists to be read *and* corrected, and to somebody
         who can do neither it is a page of other people's bills — the same reason Approvals

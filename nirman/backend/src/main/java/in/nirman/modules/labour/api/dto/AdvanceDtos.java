@@ -2,6 +2,7 @@ package in.nirman.modules.labour.api.dto;
 
 import in.nirman.modules.labour.domain.WorkerAdvance;
 import in.nirman.modules.labour.domain.WorkerLedgerEntry;
+import in.nirman.modules.labour.domain.WorkerPayment;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
@@ -86,6 +87,11 @@ public final class AdvanceDtos {
     /**
      * What the field sheet computes by hand, per worker per month:
      * {@code Total Amount − Advance = Balance Payment}.
+     *
+     * <p>{@code openAdvanceAmount} is the part of {@code advanceAmount} no payday has yet
+     * closed — what the next one will mark recovered. It is read off the advances, not the
+     * ledger, because the ledger netted them the day they were approved and does not know
+     * which have since been settled.</p>
      */
     public record SettlementResponse(
             UUID workerId,
@@ -93,10 +99,46 @@ public final class AdvanceDtos {
             String workerName,
             BigDecimal earnedAmount,
             BigDecimal advanceAmount,
+            BigDecimal openAdvanceAmount,
             BigDecimal paidAmount,
             BigDecimal deductionAmount,
             BigDecimal netPayable,
             Instant lastEntryAt,
             List<LedgerEntryResponse> entries) {
+    }
+
+    // ------------------------------------------------------------------ paydays
+
+    public record PaymentResponse(
+            UUID id,
+            String paymentNumber,
+            UUID siteId,
+            UUID workerId,
+            String workerName,
+            LocalDate paymentDate,
+            BigDecimal amount,
+            WorkerPayment.PaymentMode paymentMode,
+            String referenceNumber,
+            /** What this payday closed of his open advances. */
+            BigDecimal advancesRecovered,
+            String remarks,
+            Long version) {
+    }
+
+    /**
+     * Wages handed over. The id is the client's for the reason the advance's is; the amount
+     * may not exceed what the ledger says he is owed — anything beyond that is an advance,
+     * and there is a screen for one.
+     */
+    public record CreatePaymentRequest(
+            @NotNull UUID id,
+            @NotNull UUID siteId,
+            @NotNull UUID workerId,
+            @NotNull LocalDate paymentDate,
+            @NotNull @DecimalMin(value = "0", inclusive = false)
+            @Digits(integer = 16, fraction = 2) BigDecimal amount,
+            @NotNull WorkerPayment.PaymentMode paymentMode,
+            @Size(max = 100) String referenceNumber,
+            @Size(max = 500) String remarks) {
     }
 }

@@ -122,6 +122,16 @@ an issue, a transfer or a stock count has ever named; a store that is finished w
 `GET|POST /workers/{id}/wage-rates` (POST closes the open rate and opens a new one),
 `POST /workers/{id}/allocations`, `POST /workers/{id}/photo`.
 
+### /worker-advances, /worker-payments
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/worker-advances` | `?siteId&workerId&from&to` paged, newest first — `worker:read` |
+| POST | `/worker-advances` | `advance:issue`. Client id, server number. `recoverable` is asked, never assumed. Nothing reaches the ledger until approved |
+| POST | `/worker-advances/{id}/decision` | `{action:APPROVE\|REJECT,remarks}` — `advance:settle:approve`. Approving a recoverable advance posts `ADVANCE` to the wage ledger |
+| GET | `/workers/{id}/settlement` | `?from&to` — `wage:read`. `earned − advance − paid − deduction = netPayable`, with the ledger lines; `openAdvanceAmount` is the part of `advanceAmount` no payday has yet closed |
+| GET | `/worker-payments` | `?siteId&workerId&from&to` paged — `wage:read` |
+| POST | `/worker-payments` | `payment:record`. The payday: posts `PAYMENT` to the ledger and marks the man's open recoverable advances recovered, oldest first, out of what his wages have covered. Refused (`payment.exceeds-payable`) past `netPayable` — money beyond that is an advance. Idempotent on the client id. Books no expense: the wage was costed at verification |
+
 ### /attendance
 | Method | Path | Notes |
 |---|---|---|

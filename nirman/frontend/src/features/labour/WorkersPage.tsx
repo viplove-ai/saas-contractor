@@ -20,6 +20,7 @@ import { useDeleteWorker, useMySites, useSiteDirectory, useWorkers } from './api
 import { EditWorkerDialog } from './EditWorkerDialog';
 import { OnboardWorkerDialog } from './OnboardWorkerDialog';
 import { ReviseWageDialog } from './ReviseWageDialog';
+import { SettlementDialog } from './SettlementDialog';
 import { TransferWorkerDialog } from './TransferWorkerDialog';
 import { WAGE_TYPE_LABEL, type Worker, type WorkerStatusFilter } from './types';
 
@@ -47,6 +48,7 @@ export function WorkersPage() {
   const [editing, setEditing] = useState<Worker | null>(null);
   const [repricing, setRepricing] = useState<Worker | null>(null);
   const [deleting, setDeleting] = useState<Worker | null>(null);
+  const [account, setAccount] = useState<Worker | null>(null);
 
   const mySites = useMySites();
   // The site the rest of the app is on, and "all my sites" still available beside it.
@@ -61,6 +63,9 @@ export function WorkersPage() {
   // The engineer and the office, never the supervisor: he corrects what he typed, but taking
   // a name off the roll is not a decision made at a gate.
   const canDelete = hasPermission('worker:delete');
+  // His account — earned, drawn, paid, owed — is money, and reading it is wage:read, which
+  // every role has held since V61. The screen that pays it is a tile away.
+  const canSeeAccount = hasPermission('wage:read');
   // A man is taken on *at* a site, so with no posting there is nowhere to put him. Wait for
   // the answer before deciding that — an empty list while loading is not the same as none.
   const noPosting = mySites.isSuccess && mySites.data.length === 0;
@@ -123,7 +128,7 @@ export function WorkersPage() {
         />
       ),
     },
-    ...(canWrite || canSetPay || canDelete
+    ...(canWrite || canSetPay || canDelete || canSeeAccount
       ? [
           {
             key: 'actions',
@@ -132,6 +137,11 @@ export function WorkersPage() {
             card: 'actions' as const,
             cell: (worker: Worker) => (
               <Stack direction="row" spacing={1} justifyContent="flex-end">
+                {canSeeAccount && (
+                  <Button size="small" onClick={() => setAccount(worker)}>
+                    Account
+                  </Button>
+                )}
                 {canWrite && (
                   <>
                     <Button size="small" onClick={() => setEditing(worker)}>
@@ -269,6 +279,7 @@ export function WorkersPage() {
       <EditWorkerDialog worker={editing} onClose={() => setEditing(null)} />
       <ReviseWageDialog worker={repricing} onClose={() => setRepricing(null)} />
       <TransferWorkerDialog worker={transferring} onClose={() => setTransferring(null)} />
+      <SettlementDialog workerId={account?.id ?? null} onClose={() => setAccount(null)} />
       <DeleteRecordDialog
         open={deleting !== null}
         kind="worker"

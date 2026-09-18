@@ -385,6 +385,24 @@ if the tests pass:
   because the user list is behind `user:read` and an accountant holding `advance:issue` could
   otherwise reach the call that hands over the money and not the one that says who is there to
   take it.
+- **An advance is deducted at approval and recovered on the payday, and those are two different
+  facts.** `worker_advances` has been in the schema since V1: approving a recoverable advance
+  posts `ADVANCE` to the man's ledger and the settlement sheet nets it out of his wages from
+  that day. What nothing recorded was the payday — the ledger had a `PAYMENT` entry type with
+  no writer — so `recovered_amount` and the row's status sat at zero for ever and net payable
+  only ever grew. `worker_payments` (V62) is the payday: `POST /worker-payments` posts
+  `PAYMENT` and, in the same transaction, marks every open recoverable advance the man's wages
+  have covered as recovered, oldest first, with `advances_recovered` on the payment row saying
+  what that payday closed. **He cannot be paid past `netPayable`**: the figure beyond it is
+  money against wages not yet earned, which is an advance, and refusing it keeps two registers
+  from telling one story in two places. Recovery is a payday's act and never the approval's or
+  the verification's — until there is a payday the advance stays open whatever the wages have
+  covered, which is what `openAdvanceAmount` on the settlement reports. **Nothing here posts an
+  expense**: the wage was counted as cost at verification (the double-counting rule in docs/09)
+  and the office books the cash under an `is_labour_payment` head as it does today, if at all.
+  **No new permission** — recording that money left the firm to settle what it owes is
+  `payment:record`, and a wage is the oldest thing the firm owes. The screen is
+  `/workers/advances`, and it draws the advances waiting on a decision first.
 - **A labour payment settles a wage only where a wage was costed.** `is_labour_payment` keeps
   money handed over for wages out of cost incurred, because verified attendance already
   counted it. On a site flagged `uses_outsourced_labour` there is no muster and nothing was
@@ -928,6 +946,11 @@ nothing is the worse record. Nothing about the rate's shape changes: it is still
 (`POST /workers/{id}/wage-rates`, now with the overtime rate optional and derived from the
 shift of the site he stands on that day, exactly as at onboarding), still audited, and still
 frozen onto every day already verified. **No new permission.**
+
+`V62` is the payday: `worker_payments`, one row per man per hand-over, the ledger's `PAYMENT`
+entry pointing at it. It touches no column on `worker_advances` — `recovered_amount`, the
+generated `balance_amount` and the status were always there, and V62 is what finally writes
+them. **No new permission**; see the advance rule above.
 
 `V60` is the member's own signature: `users.signature_attachment_id`, nullable, the file in
 `attachments` claimed to the user id. **No new permission** — see the rule above for why nobody

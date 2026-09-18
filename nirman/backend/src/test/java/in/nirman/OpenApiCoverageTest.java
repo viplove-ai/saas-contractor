@@ -81,7 +81,8 @@ class OpenApiCoverageTest extends AbstractIntegrationTest {
                 "/api/v1/attendance/verify",
                 "/api/v1/attendance/lock",
                 "/api/v1/worker-advances",
-                "/api/v1/worker-advances/{id}/decision");
+                "/api/v1/worker-advances/{id}/decision",
+                "/api/v1/worker-payments");
     }
 
     @Test

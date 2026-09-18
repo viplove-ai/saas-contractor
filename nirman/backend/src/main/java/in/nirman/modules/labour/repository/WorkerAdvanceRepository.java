@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,6 +19,26 @@ public interface WorkerAdvanceRepository extends JpaRepository<WorkerAdvance, UU
 
     /** Money handed to this man, counted before he can be deleted. */
     long countByWorkerId(UUID workerId);
+
+    /**
+     * The advances a payday can still close, oldest first — the order the sheet recovers
+     * them in. Approved and recoverable only: a draft has not been deducted from anything,
+     * and ration the contractor bears is never recovered.
+     */
+    @Query("""
+            SELECT a FROM WorkerAdvance a
+            WHERE a.workerId = :workerId
+              AND a.workflowStatus = in.nirman.modules.labour.domain.WorkerAdvance$Workflow.APPROVED
+              AND a.recoverable = true
+              AND a.status IN (in.nirman.modules.labour.domain.WorkerAdvance$Status.OPEN,
+                               in.nirman.modules.labour.domain.WorkerAdvance$Status.PARTIALLY_RECOVERED)
+            ORDER BY a.advanceDate, a.createdAt
+            """)
+    List<WorkerAdvance> findOpenForRecovery(@Param("workerId") UUID workerId);
+
+    /** Every approved recoverable advance, for what has already been recovered off them. */
+    List<WorkerAdvance> findByWorkerIdAndWorkflowStatusAndRecoverableTrue(
+            UUID workerId, WorkerAdvance.Workflow workflowStatus);
 
     /**
      * {@code siteIds} is the caller's scope, separate from the {@code siteId} filter: one is

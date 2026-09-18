@@ -33,7 +33,8 @@ Left sidebar, dense tables, saved filters.
 | `/projects`, `/projects/:id` | Project list, add and edit contract details, detail with budget vs actual | Admin, Accountant |
 | `/sites`, `/sites/:id` | Site list, detail, stores, engineer and supervisor posting | Admin |
 | `/boq`, `/boq/:id` | BOQ items, progress | Admin, Engineer |
-| `/workers`, `/workers/:id` | Worker master, wage history timeline | Admin, Engineer |
+| `/workers`, `/workers/:id` | Worker master, wage history timeline; each row opens the man's account (earned, drawn, paid, owed, line by line) | Admin, Engineer |
+| `/workers/advances` | Advances and wages. The advances waiting on a decision first, then the register, then the paydays; two figures at the top, never netted — still to come out of wages, and paid out. Recording is `advance:issue`, approving `advance:settle:approve`, paying `payment:record`; the payday offers the whole balance owed and says which advances it will close | all roles read; acts per permission |
 | `/attendance/verify` | Verification queue, bulk verify | Engineer, Admin |
 | `/attendance/register` | Register with month grid, export | all desk roles |
 | `/inventory/stock` | Stock by site, consolidated toggle | all desk roles |

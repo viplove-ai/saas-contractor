@@ -1,14 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../shared/apiClient';
 import type {
+  AdvancePaymentMode,
   Allocation,
   EmploymentType,
   PageResponse,
+  Settlement,
   SiteDirectoryEntry,
   SkillCategory,
+  WagePaymentMode,
   WageRate,
   WageType,
   Worker,
+  WorkerAdvance,
+  WorkerPayment,
   WorkerStatusFilter,
 } from './types';
 
@@ -22,6 +27,12 @@ export const labourKeys = {
   skills: ['labour', 'skill-categories'] as const,
   /** The sites the signed-in user actually works at, as opposed to the whole directory. */
   mySites: ['sites'] as const,
+  advances: (siteId: string) => ['labour', 'advances', siteId] as const,
+  allAdvances: ['labour', 'advances'] as const,
+  payments: (siteId: string) => ['labour', 'payments', siteId] as const,
+  allPayments: ['labour', 'payments'] as const,
+  settlement: (workerId: string) => ['labour', 'settlement', workerId] as const,
+  allSettlements: ['labour', 'settlement'] as const,
 };
 
 const PAGE_SIZE = 200;
@@ -237,5 +248,123 @@ export function useReviseWage() {
       // The roster carries each man's rate in force, and it is cached offline.
       void queryClient.invalidateQueries({ queryKey: ['attendance', 'roster'] });
     },
+  });
+}
+
+// ---------------------------------------------------------------- advances and paydays
+
+/**
+ * Every advance at the site, newest first. One page of two hundred rather than paging: the
+ * screen sorts the ones waiting on a decision to the top, and it cannot do that across pages
+ * it has not fetched.
+ */
+export function useWorkerAdvances(siteId: string | undefined) {
+  return useQuery({
+    queryKey: labourKeys.advances(siteId ?? ''),
+    queryFn: async () =>
+      (
+        await apiClient.get<PageResponse<WorkerAdvance>>('/worker-advances', {
+          params: { siteId, size: PAGE_SIZE },
+        })
+      ).data,
+    enabled: Boolean(siteId),
+  });
+}
+
+export function useWorkerPayments(siteId: string | undefined) {
+  return useQuery({
+    queryKey: labourKeys.payments(siteId ?? ''),
+    queryFn: async () =>
+      (
+        await apiClient.get<PageResponse<WorkerPayment>>('/worker-payments', {
+          params: { siteId, size: PAGE_SIZE },
+        })
+      ).data,
+    enabled: Boolean(siteId),
+  });
+}
+
+/** One man's account: what he earned, what he drew, what he is owed, line by line. */
+export function useSettlement(workerId: string | undefined) {
+  return useQuery({
+    queryKey: labourKeys.settlement(workerId ?? ''),
+    queryFn: async () =>
+      (await apiClient.get<Settlement>(`/workers/${workerId}/settlement`)).data,
+    enabled: Boolean(workerId),
+  });
+}
+
+/**
+ * The id is made here rather than by the server, so the same hand-over sent twice over a
+ * bad connection is one advance. The number is the server's.
+ */
+export interface RecordAdvanceInput {
+  id: string;
+  siteId: string;
+  workerId: string;
+  advanceDate: string;
+  amount: number;
+  paymentMode: AdvancePaymentMode;
+  purpose?: string | undefined;
+  recoverable: boolean;
+  remarks?: string | undefined;
+}
+
+function settleQueries(queryClient: ReturnType<typeof useQueryClient>, workerId: string) {
+  void queryClient.invalidateQueries({ queryKey: labourKeys.allAdvances });
+  void queryClient.invalidateQueries({ queryKey: labourKeys.allPayments });
+  void queryClient.invalidateQueries({ queryKey: labourKeys.settlement(workerId) });
+}
+
+export function useRecordAdvance() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: RecordAdvanceInput) =>
+      (await apiClient.post<WorkerAdvance>('/worker-advances', input)).data,
+    onSuccess: (_result, input) => settleQueries(queryClient, input.workerId),
+  });
+}
+
+/** Approving is what deducts it from his wages; until then it is only recorded. */
+export function useDecideAdvance() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      advanceId: string;
+      workerId: string;
+      action: 'APPROVE' | 'REJECT';
+      remarks?: string | undefined;
+    }) =>
+      (
+        await apiClient.post<WorkerAdvance>(`/worker-advances/${input.advanceId}/decision`, {
+          action: input.action,
+          remarks: input.remarks,
+        })
+      ).data,
+    onSuccess: (_result, input) => settleQueries(queryClient, input.workerId),
+  });
+}
+
+export interface PayWagesInput {
+  id: string;
+  siteId: string;
+  workerId: string;
+  paymentDate: string;
+  amount: number;
+  paymentMode: WagePaymentMode;
+  referenceNumber?: string | undefined;
+  remarks?: string | undefined;
+}
+
+/**
+ * The payday. The server posts it to his ledger and closes the advances his wages have
+ * covered in the same call, and refuses anything past what he is owed.
+ */
+export function usePayWages() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: PayWagesInput) =>
+      (await apiClient.post<WorkerPayment>('/worker-payments', input)).data,
+    onSuccess: (_result, input) => settleQueries(queryClient, input.workerId),
   });
 }

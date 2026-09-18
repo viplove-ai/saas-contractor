@@ -149,6 +149,12 @@ export const router = createBrowserRouter([
           screen('workers', async () => ({
             Component: (await import('../features/labour/WorkersPage')).WorkersPage,
           })),
+          // Money handed to the men: advances against wages and the paydays that settle
+          // them. Beside the register rather than on it, because "who is on my site" and
+          // "what has he drawn" are asked by different people at different moments.
+          screen('workers/advances', async () => ({
+            Component: (await import('../features/labour/WorkerAdvancesPage')).WorkerAdvancesPage,
+          })),
           // Also where RequireAuth parks anyone still on an admin-issued password.
           screen('profile', async () => ({
             Component: (await import('../features/profile/ProfilePage')).ProfilePage,

@@ -48,6 +48,7 @@ public class SiteDeletionGuardImpl implements SiteDeletionGuard {
         RECORD_TABLES.put("purchase_orders", new Noun("purchase order", "purchase orders"));
         RECORD_TABLES.put("site_advances", new Noun("site advance", "site advances"));
         RECORD_TABLES.put("worker_advances", new Noun("worker advance", "worker advances"));
+        RECORD_TABLES.put("worker_payments", new Noun("wage payment", "wage payments"));
         RECORD_TABLES.put("boq_progress_entries", new Noun("progress entry", "progress entries"));
     }
 

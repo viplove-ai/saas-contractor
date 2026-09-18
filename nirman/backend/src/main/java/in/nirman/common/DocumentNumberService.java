@@ -28,6 +28,8 @@ public class DocumentNumberService {
     /** The document families that carry a per-org unique number. */
     public enum DocType {
         WORKER_ADVANCE("ADV"),
+        /** The payday against it — distinct from PAYMENT, which numbers a supplier's. */
+        WORKER_PAYMENT("WPY"),
         EXPENSE("EXP"),
         GOODS_RECEIPT("GRN"),
         MATERIAL_ISSUE("ISS"),
