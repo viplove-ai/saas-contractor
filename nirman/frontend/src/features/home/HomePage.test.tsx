@@ -28,6 +28,7 @@ const SUPERVISOR = [
   'expense:read',
   'dpr:draft',
   'worker:read',
+  'worker:advance',
 ];
 
 const ENGINEER = [
@@ -88,6 +89,7 @@ describe('HomePage', () => {
       'Receive material',
       'Issue material',
       'Add expense',
+      'Advance to a worker',
       'Daily report',
     ]);
     expect(tilesUnder('Check and sign off')).toEqual([

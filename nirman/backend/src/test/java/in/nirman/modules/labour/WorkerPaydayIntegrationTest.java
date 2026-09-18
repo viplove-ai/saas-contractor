@@ -200,6 +200,54 @@ class WorkerPaydayIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.content[0].workerName").value("WP Listed Man"));
     }
 
+    @Test
+    @DisplayName("a supervisor records the hand-over at the gate, and somebody else decides it")
+    void supervisorRecordsButDoesNotDecide() throws Exception {
+        // Vivek supervises KSN-A, and only KSN-A.
+        String vivek = token("vivek");
+        String siteA = "31000000-0000-0000-0000-000000000001";
+        String karam = "60000000-0000-0000-0000-000000000101";
+        UUID id = UUID.randomUUID();
+        String body = """
+                {"id":"%s","siteId":"%s","workerId":"%s","advanceDate":"2025-12-02",
+                 "amount":500.00,"paymentMode":"CASH","purpose":"Ration","recoverable":true}"""
+                .formatted(id, siteA, karam);
+
+        mockMvc.perform(post("/api/v1/worker-advances")
+                        .header("Authorization", "Bearer " + vivek)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.workflowStatus").value("DRAFT"));
+
+        // Recorded is not deducted: his ledger has not moved.
+        Integer posted = jdbc.queryForObject(
+                "SELECT count(*) FROM worker_ledger_entries WHERE source_id = ?::uuid",
+                Integer.class, id.toString());
+        assertThat(posted).isZero();
+
+        // The decision is not his — and the float, which shares a name, is not his either.
+        mockMvc.perform(post("/api/v1/worker-advances/" + id + "/decision")
+                        .header("Authorization", "Bearer " + vivek)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"APPROVE\"}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/advances")
+                        .header("Authorization", "Bearer " + vivek)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"siteId":"%s","issuedToUserId":"20000000-0000-0000-0000-000000000003",
+                                 "advanceDate":"2025-12-02","amount":5000,"paymentMode":"CASH",
+                                 "purpose":"Petty cash"}""".formatted(siteA)))
+                .andExpect(status().isForbidden());
+
+        // The site he is not posted to is closed to him for the same act.
+        mockMvc.perform(post("/api/v1/worker-advances")
+                        .header("Authorization", "Bearer " + vivek)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body.replace(siteA, ANNEXE).replace(id.toString(), UUID.randomUUID().toString())))
+                .andExpect(status().isForbidden());
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /** A fresh man at the annexe with a day rate, so no other test's arithmetic is his. */

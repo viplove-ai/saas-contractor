@@ -99,8 +99,14 @@ public class WorkerAdvanceService {
     /**
      * Records an advance. Idempotent on the client-generated id, so an advance handed over
      * on site and synced three times is one row.
+     *
+     * <p>{@code worker:advance} (V63) rather than {@code advance:issue}: the latter also hands
+     * a member of staff a site float, and the supervisor who hands a man ration at the gate
+     * must not thereby be able to hand himself petty cash. Widening this is safe because a
+     * recorded advance deducts nothing until {@link #decide} — the field states what changed
+     * hands, and somebody else decides what it means.</p>
      */
-    @PreAuthorize("hasAuthority('advance:issue')")
+    @PreAuthorize("hasAuthority('worker:advance')")
     public AdvanceResponse create(CreateAdvanceRequest request) {
         siteAccessGuard.assertCanAccess(request.siteId());
         periodLockGuard.assertOpen(request.siteId(), request.advanceDate(),

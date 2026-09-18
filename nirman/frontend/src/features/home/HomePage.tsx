@@ -40,6 +40,14 @@ const GROUPS: Group[] = [
       { title: 'Receive material', to: '/inventory/receive', permission: 'inventory:receive' },
       { title: 'Issue material', to: '/inventory/issue', permission: 'inventory:issue' },
       { title: 'Add expense', to: '/expenses/new', permission: 'expense:create' },
+      /*
+        The same screen as 'Advances and wages' below, offered here as the act rather than
+        the register: the ration and the festival money go out of a supervisor's hand at the
+        gate, and that is a thing entered as the day happens. Behind the recording
+        permission (V63) so that an account which may only read it is not shown a door onto
+        a form it cannot submit.
+      */
+      { title: 'Advance to a worker', to: '/workers/advances', permission: 'worker:advance' },
       { title: 'Daily report', to: '/dpr/new', permission: 'dpr:draft' },
     ],
   },

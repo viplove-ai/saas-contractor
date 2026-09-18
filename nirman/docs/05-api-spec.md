@@ -126,7 +126,7 @@ an issue, a transfer or a stock count has ever named; a store that is finished w
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/worker-advances` | `?siteId&workerId&from&to` paged, newest first — `worker:read` |
-| POST | `/worker-advances` | `advance:issue`. Client id, server number. `recoverable` is asked, never assumed. Nothing reaches the ledger until approved |
+| POST | `/worker-advances` | `worker:advance` (V63; every role, site-scoped). Client id, server number. `recoverable` is asked, never assumed. Nothing reaches the ledger until approved |
 | POST | `/worker-advances/{id}/decision` | `{action:APPROVE\|REJECT,remarks}` — `advance:settle:approve`. Approving a recoverable advance posts `ADVANCE` to the wage ledger |
 | GET | `/workers/{id}/settlement` | `?from&to` — `wage:read`. `earned − advance − paid − deduction = netPayable`, with the ledger lines; `openAdvanceAmount` is the part of `advanceAmount` no payday has yet closed |
 | GET | `/worker-payments` | `?siteId&workerId&from&to` paged — `wage:read` |

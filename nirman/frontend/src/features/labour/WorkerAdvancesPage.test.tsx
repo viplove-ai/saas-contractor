@@ -26,7 +26,7 @@ vi.mock('../../shared/apiClient', async () => {
 let permissions = [
   'worker:read',
   'wage:read',
-  'advance:issue',
+  'worker:advance',
   'advance:settle:approve',
   'payment:record',
 ];
@@ -210,7 +210,7 @@ describe('WorkerAdvancesPage', () => {
     permissions = [
       'worker:read',
       'wage:read',
-      'advance:issue',
+      'worker:advance',
       'advance:settle:approve',
       'payment:record',
     ];
@@ -355,7 +355,42 @@ describe('WorkerAdvancesPage', () => {
     expect(within(dialog).getAllByText(/Cash advance/).length).toBeGreaterThan(0);
   });
 
-  /** A supervisor reads the register; the three acts on it are not his. */
+  /**
+   * The supervisor records the hand-over and nothing else: the ration went out of his hand
+   * at the gate, and whether it comes out of the man's wages is somebody else's decision.
+   */
+  it('lets a supervisor record an advance but neither approve nor pay', async () => {
+    permissions = ['worker:read', 'wage:read', 'worker:advance'];
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('heading', { name: 'Waiting on a decision' });
+
+    expect(screen.queryByRole('button', { name: 'Pay wages' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Record an advance' }));
+    await user.click(await screen.findByLabelText('To whom'));
+    await user.click(await screen.findByRole('option', { name: /Karam Singh/ }));
+    await user.type(screen.getByLabelText('How much'), '500');
+    await user.type(screen.getByLabelText('What for'), 'Ration');
+    await user.click(screen.getByRole('button', { name: 'Record it' }));
+
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith(
+        '/worker-advances',
+        expect.objectContaining({
+          siteId: 'site-a',
+          workerId: 'w1',
+          amount: 500,
+          purpose: 'Ration',
+          recoverable: true,
+          id: expect.any(String),
+        }),
+      ),
+    );
+  });
+
+  /** An account with none of the three keys reads the register and acts on nothing. */
   it('hides the buttons from an account that holds none of the three permissions', async () => {
     permissions = ['worker:read', 'wage:read'];
     renderPage();

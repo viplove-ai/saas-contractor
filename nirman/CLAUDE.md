@@ -400,9 +400,15 @@ if the tests pass:
   covered, which is what `openAdvanceAmount` on the settlement reports. **Nothing here posts an
   expense**: the wage was counted as cost at verification (the double-counting rule in docs/09)
   and the office books the cash under an `is_labour_payment` head as it does today, if at all.
-  **No new permission** — recording that money left the firm to settle what it owes is
-  `payment:record`, and a wage is the oldest thing the firm owes. The screen is
-  `/workers/advances`, and it draws the advances waiting on a decision first.
+  The payday minted **no permission** — recording that money left the firm to settle what it
+  owes is `payment:record`, and a wage is the oldest thing the firm owes. Recording the
+  advance minted **one**, `worker:advance` (V63), for every role: it sat behind
+  `advance:issue`, which also hands a member of staff a site float, and the supervisor who
+  hands a man ration at the gate must not thereby be able to hand himself petty cash. Widening
+  the recording is safe because it deducts nothing — the row is DRAFT until somebody holding
+  `advance:settle:approve` decides it comes out of his wages, the same split the muster roll
+  runs on. The screen is `/workers/advances`, and it draws the advances waiting on a decision
+  first.
 - **A labour payment settles a wage only where a wage was costed.** `is_labour_payment` keeps
   money handed over for wages out of cost incurred, because verified attendance already
   counted it. On a site flagged `uses_outsourced_labour` there is no muster and nothing was
@@ -951,6 +957,9 @@ frozen onto every day already verified. **No new permission.**
 entry pointing at it. It touches no column on `worker_advances` — `recovered_amount`, the
 generated `balance_amount` and the status were always there, and V62 is what finally writes
 them. **No new permission**; see the advance rule above.
+
+`V63` mints `worker:advance` and grants it to every system role — see the advance rule above
+for why it is not `advance:issue`. It moves no row and changes no screen of the accountant's.
 
 `V60` is the member's own signature: `users.signature_attachment_id`, nullable, the file in
 `attachments` claimed to the user id. **No new permission** — see the rule above for why nobody

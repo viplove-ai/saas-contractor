@@ -33,11 +33,13 @@ import { PAYMENT_MODE_LABEL, type WorkerAdvance, type WorkerPayment } from './ty
  * So a man's advance stood OPEN for ever on a row nobody could see.</p>
  *
  * <p>Three people meet here and hold three different keys. Whoever holds
- * {@code advance:issue} records the hand-over; {@code advance:settle:approve} is the decision
- * that it comes out of his wages, and the rows waiting on it are drawn first, because a
- * queue that has to be found is a queue nobody clears; and {@code payment:record} is the
- * payday. Anybody who can read the worker register can read this one — a supervisor is
- * entitled to know what the men on his site have drawn, because they will ask him.</p>
+ * {@code worker:advance} records the hand-over — every role since V63, because the ration
+ * and the festival money are handed over at the gate by the man who took him on, and it
+ * deducts nothing until approved; {@code advance:settle:approve} is that decision, and the
+ * rows waiting on it are drawn first, because a queue that has to be found is a queue nobody
+ * clears; and {@code payment:record} is the payday. Anybody who can read the worker register
+ * can read this one — a supervisor is entitled to know what the men on his site have drawn,
+ * because they will ask him.</p>
  *
  * <p>The two figures at the top are kept apart for the reason the float register keeps its
  * two apart: what is still to come out of wages and what the site has paid out are two
@@ -45,7 +47,7 @@ import { PAYMENT_MODE_LABEL, type WorkerAdvance, type WorkerPayment } from './ty
  */
 export function WorkerAdvancesPage() {
   const { hasPermission } = useAuth();
-  const mayRecord = hasPermission('advance:issue');
+  const mayRecord = hasPermission('worker:advance');
   const mayDecide = hasPermission('advance:settle:approve');
   const mayPay = hasPermission('payment:record');
   const maySeeSheet = hasPermission('wage:read');
