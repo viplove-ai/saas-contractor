@@ -20,6 +20,7 @@ import { useDeleteWorker, useMySites, useSiteDirectory, useWorkers } from './api
 import { EditWorkerDialog } from './EditWorkerDialog';
 import { OnboardWorkerDialog } from './OnboardWorkerDialog';
 import { ReviseWageDialog } from './ReviseWageDialog';
+import { ShareWorkerDialog } from './ShareWorkerDialog';
 import { SettlementDialog } from './SettlementDialog';
 import { TransferWorkerDialog } from './TransferWorkerDialog';
 import { WAGE_TYPE_LABEL, type Worker, type WorkerStatusFilter } from './types';
@@ -49,6 +50,7 @@ export function WorkersPage() {
   const [repricing, setRepricing] = useState<Worker | null>(null);
   const [deleting, setDeleting] = useState<Worker | null>(null);
   const [account, setAccount] = useState<Worker | null>(null);
+  const [sharing, setSharing] = useState<Worker | null>(null);
 
   const mySites = useMySites();
   // The site the rest of the app is on, and "all my sites" still available beside it.
@@ -70,11 +72,12 @@ export function WorkersPage() {
   // the answer before deciding that — an empty list while loading is not the same as none.
   const noPosting = mySites.isSuccess && mySites.data.length === 0;
 
-  const siteLabel = (id: string | undefined): string => {
-    if (!id) {
+  // Every site he stands on, by code. A shared man reads "KSN-A · KSN-B".
+  const siteLabel = (ids: string[]): string => {
+    if (ids.length === 0) {
       return 'Not posted';
     }
-    return directory.data?.find((site) => site.id === id)?.code ?? '—';
+    return ids.map((id) => directory.data?.find((site) => site.id === id)?.code ?? '—').join(' · ');
   };
 
   const columns: RecordColumn<Worker>[] = [
@@ -92,7 +95,7 @@ export function WorkersPage() {
         </>
       ),
     },
-    { key: 'site', header: 'Site', cell: (worker) => siteLabel(worker.currentSiteId) },
+    { key: 'site', header: 'Site', cell: (worker) => siteLabel(worker.currentSiteIds) },
     {
       key: 'rate',
       header: 'Rate',
@@ -288,7 +291,12 @@ export function WorkersPage() {
           setEditing(null);
           setTransferring(worker);
         }}
+        onShare={(worker) => {
+          setEditing(null);
+          setSharing(worker);
+        }}
       />
+      <ShareWorkerDialog worker={sharing} onClose={() => setSharing(null)} />
       <ReviseWageDialog worker={repricing} onClose={() => setRepricing(null)} />
       <TransferWorkerDialog worker={transferring} onClose={() => setTransferring(null)} />
       <SettlementDialog workerId={account?.id ?? null} onClose={() => setAccount(null)} />

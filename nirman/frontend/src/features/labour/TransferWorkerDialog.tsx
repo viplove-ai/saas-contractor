@@ -82,8 +82,9 @@ export function TransferWorkerDialog({ worker, onClose }: Props) {
     }
   });
 
+  // Every site he stands on, not only the first: a shared man is leaving all of them.
   const destinations = (directory.data ?? []).filter(
-    (site) => site.id !== worker?.currentSiteId && site.status !== 'CLOSED',
+    (site) => !worker?.currentSiteIds.includes(site.id) && site.status !== 'CLOSED',
   );
 
   return (
@@ -95,6 +96,8 @@ export function TransferWorkerDialog({ worker, onClose }: Props) {
           <DialogContentText>
             From the date you choose he comes off your roll and onto theirs, and their
             supervisor marks his attendance.
+            {(worker?.currentSiteIds.length ?? 0) > 1 &&
+              ' He is shared between sites today; a transfer ends every one of those postings.'}
           </DialogContentText>
 
           <Controller

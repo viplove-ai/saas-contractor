@@ -187,7 +187,7 @@ class BackdatedAttendanceIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rejected").value(1))
                 .andExpect(jsonPath("$.outcomes[0].reason").value(
-                        org.hamcrest.Matchers.containsString("already marked at another site")));
+                        org.hamcrest.Matchers.containsString("already marked present at another site")));
         // The day before, nobody had him: KSN-A may.
         mark(vivek, SITE_A, lastWeek.minusDays(1), movedId)
                 .andExpect(jsonPath("$.accepted").value(1));

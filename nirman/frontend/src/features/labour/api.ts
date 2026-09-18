@@ -211,6 +211,48 @@ export function useTransferWorker() {
   });
 }
 
+/**
+ * Lends the man to a second site without taking him off the first. From the date he is on
+ * both rosters and can be marked a half day at each; the server refuses more than a day
+ * across the two.
+ */
+export function useShareWorker() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { workerId: string; siteId: string; effectiveFrom: string }) =>
+      (
+        await apiClient.post<Allocation>(`/workers/${input.workerId}/allocations/share`, {
+          siteId: input.siteId,
+          effectiveFrom: input.effectiveFrom,
+        })
+      ).data,
+    onSuccess: (_result, input) => {
+      void queryClient.invalidateQueries({ queryKey: labourKeys.allWorkers });
+      void queryClient.invalidateQueries({ queryKey: labourKeys.allocations(input.workerId) });
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'roster'] });
+    },
+  });
+}
+
+/** Ends one of a shared man's postings on his last day there. His other sites keep him. */
+export function useEndPosting() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { workerId: string; allocationId: string; lastDay: string }) =>
+      (
+        await apiClient.post<Allocation>(
+          `/workers/${input.workerId}/allocations/${input.allocationId}/end`,
+          { lastDay: input.lastDay },
+        )
+      ).data,
+    onSuccess: (_result, input) => {
+      void queryClient.invalidateQueries({ queryKey: labourKeys.allWorkers });
+      void queryClient.invalidateQueries({ queryKey: labourKeys.allocations(input.workerId) });
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'roster'] });
+    },
+  });
+}
+
 export function useWageHistory(workerId: string | undefined) {
   return useQuery({
     queryKey: labourKeys.wageHistory(workerId ?? ''),

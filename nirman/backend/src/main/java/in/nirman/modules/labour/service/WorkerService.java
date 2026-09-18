@@ -5,6 +5,8 @@ import in.nirman.common.DocumentNumberService;
 import in.nirman.common.PageResponse;
 import in.nirman.modules.audit.AuditService;
 import in.nirman.modules.labour.api.dto.WorkerDtos.AllocateRequest;
+import in.nirman.modules.labour.api.dto.WorkerDtos.EndPostingRequest;
+import in.nirman.modules.labour.api.dto.WorkerDtos.ShareRequest;
 import in.nirman.modules.labour.api.dto.WorkerDtos.AllocationResponse;
 import in.nirman.modules.labour.api.dto.WorkerDtos.CreateWorkerRequest;
 import in.nirman.modules.labour.api.dto.WorkerDtos.ReviseWageRequest;
@@ -310,8 +312,10 @@ public class WorkerService {
             wageRates.saveAndFlush(open);
         });
 
-        // The site he stands on the day the rate begins is what prices his overtime hour.
-        UUID siteOnThatDay = allocations.findEffectiveOn(workerId, request.effectiveFrom())
+        // The site he stands on the day the rate begins is what prices his overtime hour —
+        // the one he has stood on longest, when he is shared between several.
+        UUID siteOnThatDay = allocations.findEffectiveOn(workerId, request.effectiveFrom()).stream()
+                .findFirst()
                 .map(WorkerSiteAllocation::getSiteId)
                 .orElse(null);
         BigDecimal overtimeRate = overtimeRate(request.overtimeRate(), request.normalRate(),
@@ -362,39 +366,140 @@ public class WorkerService {
     @PreAuthorize("hasAuthority('worker:write')")
     public AllocationResponse allocate(UUID workerId, AllocateRequest request) {
         Worker worker = requireWorker(workerId);
-        UUID currentSiteId = allocations.findByWorkerIdAndEffectiveToIsNull(workerId)
-                .map(WorkerSiteAllocation::getSiteId)
-                .orElse(null);
-        siteAccessGuard.assertCanAccess(currentSiteId == null ? request.siteId() : currentSiteId);
+        List<WorkerSiteAllocation> open = openPostings(workerId);
+        assertHoldsHim(open, request.siteId());
         if (!sites.isLiveInOrg(request.siteId())) {
             throw BusinessException.notFound("Site", request.siteId());
         }
 
-        allocations.findByWorkerIdAndEffectiveToIsNull(workerId).ifPresent(open -> {
-            if (open.getSiteId().equals(request.siteId())) {
-                throw BusinessException.conflict("allocation.unchanged",
-                        "This worker is already posted to that site.");
-            }
-            if (!open.getEffectiveFrom().isBefore(request.effectiveFrom())) {
+        // A transfer ends every posting he holds: the man is leaving for the new site, and
+        // a share he was carrying does not survive his going.
+        if (open.size() == 1 && open.get(0).getSiteId().equals(request.siteId())) {
+            throw BusinessException.conflict("allocation.unchanged",
+                    "This worker is already posted to that site.");
+        }
+        for (WorkerSiteAllocation posting : open) {
+            if (!posting.getEffectiveFrom().isBefore(request.effectiveFrom())) {
                 throw new BusinessException("allocation.not-after-current",
                         "The move must start after the current posting, which began on "
-                                + open.getEffectiveFrom() + ".");
+                                + posting.getEffectiveFrom() + ".");
             }
-            // Must be flushed before the insert below, or uq_alloc_open rejects the pair.
-            open.closeOn(request.effectiveFrom().minusDays(1));
-            allocations.saveAndFlush(open);
-        });
+            // Must be flushed before the insert below, or uq_alloc_open_site rejects the pair.
+            posting.closeOn(request.effectiveFrom().minusDays(1));
+            allocations.saveAndFlush(posting);
+        }
 
         WorkerSiteAllocation moved = new WorkerSiteAllocation(worker.getOrgId(), workerId,
                 request.siteId(), request.effectiveFrom());
         allocations.save(moved);
         // Both ends recorded: a man leaving one site and arriving at another is one event,
         // and the site he left is the question anyone auditing this will ask first.
-        audit.record("WORKER", workerId, currentSiteId == null ? "ALLOCATE" : "TRANSFER", null,
-                Map.of("fromSiteId", String.valueOf(currentSiteId),
+        List<String> fromSites = open.stream().map(a -> a.getSiteId().toString()).toList();
+        audit.record("WORKER", workerId, open.isEmpty() ? "ALLOCATE" : "TRANSFER", null,
+                Map.of("fromSiteIds", String.join(",", fromSites),
                         "siteId", request.siteId().toString(),
                         "effectiveFrom", request.effectiveFrom().toString()), null);
         return toResponse(moved);
+    }
+
+    /**
+     * Lends a man to a second site. His other postings stay open, so from the date he is on
+     * both rosters and can be marked a half day at each.
+     *
+     * <p><b>Two fences, not one.</b> The transfer asks only that the man be yours, because a
+     * handover is to somebody else's site by its nature. A share is not a handover: the man
+     * stays on your roll and gains another, and whoever adds it is answerable for both. So a
+     * site-scoped caller must hold the site he is being shared with as well — a supervisor
+     * shares among the sites he supervises — while the office, which sees every site, shares
+     * him anywhere. A man with no posting at all cannot be shared: that is a first posting,
+     * and the transfer already is one.</p>
+     */
+    @PreAuthorize("hasAuthority('worker:write')")
+    public AllocationResponse share(UUID workerId, ShareRequest request) {
+        Worker worker = requireWorker(workerId);
+        List<WorkerSiteAllocation> open = openPostings(workerId);
+        if (open.isEmpty()) {
+            throw new BusinessException("allocation.nothing-to-share",
+                    "This worker is not posted anywhere yet. Post him to a site first; sharing "
+                            + "is for a man who already stands somewhere.");
+        }
+        assertHoldsHim(open, null);
+        siteAccessGuard.assertCanAccess(request.siteId());
+        if (!sites.isLiveInOrg(request.siteId())) {
+            throw BusinessException.notFound("Site", request.siteId());
+        }
+        if (open.stream().anyMatch(posting -> posting.getSiteId().equals(request.siteId()))) {
+            throw BusinessException.conflict("allocation.unchanged",
+                    "This worker is already posted to that site.");
+        }
+
+        WorkerSiteAllocation shared = new WorkerSiteAllocation(worker.getOrgId(), workerId,
+                request.siteId(), request.effectiveFrom());
+        allocations.save(shared);
+        audit.record("WORKER", workerId, "SHARE", null,
+                Map.of("siteId", request.siteId().toString(),
+                        "alongsideSiteIds", String.join(",",
+                                open.stream().map(a -> a.getSiteId().toString()).toList()),
+                        "effectiveFrom", request.effectiveFrom().toString()), null);
+        return toResponse(shared);
+    }
+
+    /**
+     * Ends one of a shared man's postings. Refused on his last one: a man must stand
+     * somewhere, and taking him off his only roll is a transfer or a standing-down, both of
+     * which say where he went. The caller must hold the site he is leaving.
+     */
+    @PreAuthorize("hasAuthority('worker:write')")
+    public AllocationResponse endPosting(UUID workerId, UUID allocationId, EndPostingRequest request) {
+        requireWorker(workerId);
+        WorkerSiteAllocation posting = allocations.findByIdAndWorkerId(allocationId, workerId)
+                .orElseThrow(() -> BusinessException.notFound("Posting", allocationId));
+        siteAccessGuard.assertCanAccess(posting.getSiteId());
+        if (!posting.isOpen()) {
+            throw BusinessException.conflict("allocation.already-ended",
+                    "That posting already ended on " + posting.getEffectiveTo() + ".");
+        }
+        if (openPostings(workerId).size() == 1) {
+            throw new BusinessException("allocation.last-posting",
+                    "This is the only site he stands on. Transfer him to where he is going, or "
+                            + "mark him inactive if he has stopped.");
+        }
+        if (request.lastDay().isBefore(posting.getEffectiveFrom())) {
+            throw new BusinessException("allocation.ends-before-start",
+                    "The posting began on " + posting.getEffectiveFrom()
+                            + "; it cannot end before it began.");
+        }
+        posting.closeOn(request.lastDay());
+        allocations.save(posting);
+        audit.record("WORKER", workerId, "END_SHARE", null,
+                Map.of("siteId", posting.getSiteId().toString(),
+                        "lastDay", request.lastDay().toString()), null);
+        return toResponse(posting);
+    }
+
+    private List<WorkerSiteAllocation> openPostings(UUID workerId) {
+        return allocations.findByWorkerIdAndEffectiveToIsNullOrderByEffectiveFromAsc(workerId);
+    }
+
+    /**
+     * The guard on where he is, not on where he is going: he has to be yours before you can
+     * move or lend him, and yours means you hold one of the sites he stands on. With no
+     * posting at all the act is a first posting, and must be to a site you hold.
+     */
+    private void assertHoldsHim(List<WorkerSiteAllocation> open, UUID firstPostingSiteId) {
+        if (open.isEmpty()) {
+            if (firstPostingSiteId != null) {
+                siteAccessGuard.assertCanAccess(firstPostingSiteId);
+            }
+            return;
+        }
+        if (currentUser.seesAllSites()) {
+            return;
+        }
+        Set<UUID> mine = currentUser.assignedSiteIds();
+        if (open.stream().noneMatch(posting -> mine.contains(posting.getSiteId()))) {
+            throw BusinessException.forbidden("This worker is not posted to any of your sites.");
+        }
     }
 
     // ------------------------------------------------------------------ internals
@@ -436,15 +541,16 @@ public class WorkerService {
         WageRateResponse currentRate = wageRates.findEffectiveOn(worker.getId(), today)
                 .map(WorkerService::toResponse)
                 .orElse(null);
-        UUID currentSite = allocations.findEffectiveOn(worker.getId(), today)
+        List<UUID> currentSites = allocations.findEffectiveOn(worker.getId(), today).stream()
                 .map(WorkerSiteAllocation::getSiteId)
-                .orElse(null);
+                .toList();
         return new WorkerResponse(worker.getId(), worker.getWorkerCode(), worker.getFullName(),
                 worker.getMobile(), worker.getPhotoAttachmentId(), worker.getSkillCategoryId(),
                 worker.getEmploymentType(), worker.getLabourSupplierId(), worker.getWageType(),
                 worker.getJoiningDate(), worker.getExitDate(), worker.getAadhaarLast4(),
                 worker.getBankAccountNo(), worker.getBankIfsc(), worker.getBankName(),
-                worker.isActive(), currentRate, currentSite, worker.getVersion());
+                worker.isActive(), currentRate, currentSites.isEmpty() ? null : currentSites.get(0),
+                currentSites, worker.getVersion());
     }
 
     private static WageRateResponse toResponse(WageRate rate) {

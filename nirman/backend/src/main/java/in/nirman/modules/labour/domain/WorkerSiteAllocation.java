@@ -18,9 +18,12 @@ import java.util.UUID;
  * Where a worker is posted, over time. The allocation open on a date decides whose roster
  * he appears on that morning.
  *
- * <p>The schema permits only one open allocation per worker ({@code uq_alloc_open}), which
- * is the rule that stops the same man being marked present at two sites on the same day —
- * the oldest and most expensive error in a paper muster roll.</p>
+ * <p>The schema permits one open allocation per worker <em>per site</em>
+ * ({@code uq_alloc_open_site}, V64): a man lent between two sites holds a posting at each
+ * and appears on both rosters. The rule that stops him being marked present at both on the
+ * same morning — the oldest and most expensive error in a paper muster roll — lives in
+ * {@code AttendanceService}, where it is arithmetic on the day rather than a shape of the
+ * table: his marks across every site on a date may not come to more than a day.</p>
  *
  * <p>No {@code updated_at}: an allocation is opened and later closed, never otherwise
  * edited, so this cannot extend {@code BaseEntity}.</p>

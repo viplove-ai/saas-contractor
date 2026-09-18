@@ -15,19 +15,26 @@ public interface WorkerSiteAllocationRepository extends JpaRepository<WorkerSite
 
     List<WorkerSiteAllocation> findByWorkerIdOrderByEffectiveFromDesc(UUID workerId);
 
-    /** The schema permits at most one of these per worker ({@code uq_alloc_open}). */
-    Optional<WorkerSiteAllocation> findByWorkerIdAndEffectiveToIsNull(UUID workerId);
+    /**
+     * Every site he stands on now, oldest posting first. One per site
+     * ({@code uq_alloc_open_site}, V64); more than one row is a man shared between sites.
+     */
+    List<WorkerSiteAllocation> findByWorkerIdAndEffectiveToIsNullOrderByEffectiveFromAsc(UUID workerId);
 
+    Optional<WorkerSiteAllocation> findByIdAndWorkerId(UUID id, UUID workerId);
+
+    /** Where he stood on a date — one row per site he was posted to that day, oldest first. */
     @Query("""
             SELECT a FROM WorkerSiteAllocation a
             WHERE a.workerId = :workerId
               AND a.effectiveFrom <= :onDate
               AND (a.effectiveTo IS NULL OR a.effectiveTo >= :onDate)
+            ORDER BY a.effectiveFrom, a.createdAt
             """)
-    Optional<WorkerSiteAllocation> findEffectiveOn(@Param("workerId") UUID workerId,
-                                                   @Param("onDate") LocalDate onDate);
+    List<WorkerSiteAllocation> findEffectiveOn(@Param("workerId") UUID workerId,
+                                               @Param("onDate") LocalDate onDate);
 
-    /** Bulk form of {@link #findEffectiveOn}: at most one row per worker, by {@code uq_alloc_open}. */
+    /** Bulk form of {@link #findEffectiveOn}: a worker shared between sites has a row per site. */
     @Query("""
             SELECT a FROM WorkerSiteAllocation a
             WHERE a.workerId IN :workerIds

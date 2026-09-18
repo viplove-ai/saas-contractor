@@ -2,6 +2,8 @@ package in.nirman.modules.labour.api;
 
 import in.nirman.common.PageResponse;
 import in.nirman.modules.labour.api.dto.WorkerDtos.AllocateRequest;
+import in.nirman.modules.labour.api.dto.WorkerDtos.EndPostingRequest;
+import in.nirman.modules.labour.api.dto.WorkerDtos.ShareRequest;
 import in.nirman.modules.labour.api.dto.WorkerDtos.AllocationResponse;
 import in.nirman.modules.labour.api.dto.WorkerDtos.CreateWorkerRequest;
 import in.nirman.modules.labour.api.dto.WorkerDtos.DeleteWorkerRequest;
@@ -101,11 +103,27 @@ public class WorkerController {
     }
 
     @PostMapping("/{id}/allocations")
-    @Operation(summary = "Post the worker to a site, closing his previous posting the day before")
+    @Operation(summary = "Post the worker to a site, closing every previous posting the day before")
     public ResponseEntity<AllocationResponse> allocate(@PathVariable UUID id,
                                                        @Valid @RequestBody AllocateRequest request) {
         AllocationResponse created = workerService.allocate(id, request);
         return ResponseEntity.created(
                 URI.create("/api/v1/workers/" + id + "/allocations/" + created.id())).body(created);
+    }
+
+    @PostMapping("/{id}/allocations/share")
+    @Operation(summary = "Lend the worker to a second site from a date; his other postings stay open")
+    public ResponseEntity<AllocationResponse> share(@PathVariable UUID id,
+                                                    @Valid @RequestBody ShareRequest request) {
+        AllocationResponse created = workerService.share(id, request);
+        return ResponseEntity.created(
+                URI.create("/api/v1/workers/" + id + "/allocations/" + created.id())).body(created);
+    }
+
+    @PostMapping("/{id}/allocations/{allocationId}/end")
+    @Operation(summary = "End one of a shared worker's postings on his last day there")
+    public AllocationResponse endPosting(@PathVariable UUID id, @PathVariable UUID allocationId,
+                                         @Valid @RequestBody EndPostingRequest request) {
+        return workerService.endPosting(id, allocationId, request);
     }
 }

@@ -234,11 +234,9 @@ public class AttendanceService {
      * admitted once, and editing or replaying it is not a second admission.
      */
     private void assertMayMark(Worker worker, BulkAttendanceRequest request,
-                               Map<UUID, WorkerSiteAllocation> postingsOnDay,
-                               Map<UUID, LocalDate> postedLater, Backdating backdating,
-                               Map<UUID, List<AttendanceRecord>> marksElsewhere) {
-        WorkerSiteAllocation onDay = postingsOnDay.get(worker.getId());
-        if (onDay != null && onDay.getSiteId().equals(request.siteId())) {
+                               Map<UUID, List<WorkerSiteAllocation>> postingsOnDay,
+                               Map<UUID, LocalDate> postedLater, Backdating backdating) {
+        if (postedHere(postingsOnDay, worker.getId(), request.siteId())) {
             return;
         }
         LocalDate postedFrom = postedLater.get(worker.getId());
@@ -262,12 +260,60 @@ public class AttendanceService {
                     worker.getFullName() + " is posted here from " + postedFrom
                             + " and cannot be marked here before then on a day still to come.");
         }
-        for (AttendanceRecord mark : marksElsewhere.getOrDefault(worker.getId(), List.of())) {
-            if (!mark.getSiteId().equals(request.siteId())) {
-                throw BusinessException.conflict("attendance.marked-elsewhere",
-                        worker.getFullName() + " is already marked at another site on "
-                                + request.date() + "; a man is on one roll a morning.");
-            }
+    }
+
+    private static boolean postedHere(Map<UUID, List<WorkerSiteAllocation>> postingsOnDay,
+                                      UUID workerId, UUID siteId) {
+        return postingsOnDay.getOrDefault(workerId, List.of()).stream()
+                .anyMatch(posting -> posting.getSiteId().equals(siteId));
+    }
+
+    // ------------------------------------------------------------------ one man, one day
+
+    /**
+     * How much of a day a mark claims. PRESENT is the whole of it and HALF_DAY half; a man
+     * absent or on leave claims none, so a site he did not come to may say so without
+     * contradicting the site he did.
+     */
+    private static BigDecimal dayFraction(AttendanceStatus status) {
+        return switch (status) {
+            case PRESENT -> BigDecimal.ONE;
+            case HALF_DAY -> new BigDecimal("0.5");
+            case ABSENT, LEAVE -> BigDecimal.ZERO;
+        };
+    }
+
+    /**
+     * "One man, one roll, one morning", as arithmetic. A worker shared between sites (V64)
+     * stands on two rosters, and what stops him being paid twice for one day is that his
+     * marks across every site on a date may not come to more than a day: two half days is
+     * the case sharing exists for, and PRESENT here beside PRESENT or HALF_DAY there is the
+     * double count the posting used to rule out by shape. Run on every save, not only when
+     * the roll is reaching back, because a shared man has a posting at both sites and the
+     * old shortcut — "posted here, so nowhere else" — is no longer true of him.
+     *
+     * @param elsewhere his live marks that day at <em>other</em> sites
+     */
+    private static void assertDayNotOverclaimed(Worker worker, AttendanceStatus status,
+                                                LocalDate date, UUID siteId,
+                                                List<AttendanceRecord> elsewhere) {
+        BigDecimal claimed = dayFraction(status);
+        if (claimed.signum() == 0) {
+            return;
+        }
+        BigDecimal claimedElsewhere = elsewhere.stream()
+                .filter(mark -> !mark.getSiteId().equals(siteId))
+                .map(mark -> dayFraction(mark.getStatus()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (claimedElsewhere.signum() == 0) {
+            return;
+        }
+        if (claimed.add(claimedElsewhere).compareTo(BigDecimal.ONE) > 0) {
+            throw BusinessException.conflict("attendance.marked-elsewhere",
+                    worker.getFullName() + " is already marked "
+                            + (claimedElsewhere.compareTo(BigDecimal.ONE) >= 0 ? "present" : "a half day")
+                            + " at another site on " + date + ". A man's day can be split between "
+                            + "two sites only as two half days.");
         }
     }
 
@@ -293,21 +339,17 @@ public class AttendanceService {
 
         // Who was on this roll that morning, and who joined it later. The second question
         // is asked only when the first has a gap in it — on an ordinary day it costs nothing.
-        Map<UUID, WorkerSiteAllocation> postingsOnDay = workerIds.isEmpty() ? Map.of()
+        Map<UUID, List<WorkerSiteAllocation>> postingsOnDay = workerIds.isEmpty() ? Map.of()
                 : allocations.findEffectiveOnFor(workerIds, request.date()).stream()
-                        .collect(Collectors.toMap(WorkerSiteAllocation::getWorkerId,
-                                Function.identity(), (a, b) -> a));
-        boolean gap = workerIds.stream().anyMatch(id -> {
-            WorkerSiteAllocation onDay = postingsOnDay.get(id);
-            return onDay == null || !onDay.getSiteId().equals(request.siteId());
-        });
+                        .collect(Collectors.groupingBy(WorkerSiteAllocation::getWorkerId));
+        boolean gap = workerIds.stream().anyMatch(id -> !postedHere(postingsOnDay, id, request.siteId()));
         Backdating backdating = gap ? backdatingOn(site, request.date()) : null;
         Map<UUID, LocalDate> postedLater = gap ? postedLater(request.siteId(), request.date(), List.of())
                 : Map.of();
-        Map<UUID, List<AttendanceRecord>> marksElsewhere = gap
-                ? records.findLiveOnDayFor(workerIds, request.date()).stream()
-                        .collect(Collectors.groupingBy(AttendanceRecord::getWorkerId))
-                : Map.of();
+        // Always, not only on a gap: a shared man is posted here and marked there.
+        Map<UUID, List<AttendanceRecord>> marksElsewhere = workerIds.isEmpty() ? Map.of()
+                : records.findLiveOnDayFor(workerIds, request.date()).stream()
+                        .collect(Collectors.groupingBy(AttendanceRecord::getWorkerId));
 
         List<EntryOutcome> outcomes = new ArrayList<>();
         int accepted = 0;
@@ -318,7 +360,8 @@ public class AttendanceService {
             try {
                 Outcome outcome = saveOne(entry, request, site, workersById, rates, otThreshold,
                         worker -> assertMayMark(worker, request, postingsOnDay, postedLater,
-                                backdating, marksElsewhere));
+                                backdating),
+                        marksElsewhere);
                 outcomes.add(new EntryOutcome(entry.id(), entry.workerId(), outcome, null));
                 if (outcome == Outcome.UNCHANGED) {
                     unchanged++;
@@ -341,11 +384,16 @@ public class AttendanceService {
     private Outcome saveOne(AttendanceEntry entry, BulkAttendanceRequest request,
                             SiteLookup.SiteInfo site, Map<UUID, Worker> workersById,
                             Map<UUID, WageRate> rates, BigDecimal otThreshold,
-                            java.util.function.Consumer<Worker> admission) {
+                            java.util.function.Consumer<Worker> admission,
+                            Map<UUID, List<AttendanceRecord>> marksElsewhere) {
         Worker worker = workersById.get(entry.workerId());
         if (worker == null) {
             throw BusinessException.notFound("Worker", entry.workerId());
         }
+        // Checked on an edit as well as a new row: a half day typed over as a whole one
+        // claims the same second half the other site already has.
+        assertDayNotOverclaimed(worker, entry.status(), request.date(), request.siteId(),
+                marksElsewhere.getOrDefault(worker.getId(), List.of()));
 
         Optional<AttendanceRecord> byId = records.findById(entry.id());
         if (byId.isPresent()) {
@@ -485,6 +533,9 @@ public class AttendanceService {
 
         Worker worker = requireWorker(record.getWorkerId());
         SiteLookup.SiteInfo site = sites.require(record.getSiteId());
+        assertDayNotOverclaimed(worker, request.status(), record.getAttendanceDate(),
+                record.getSiteId(), records.findLiveOnDayFor(List.of(worker.getId()),
+                        record.getAttendanceDate()));
 
         BigDecimal wageBefore = nullToZero(record.getComputedWageAmount());
         BigDecimal otBefore = nullToZero(record.getComputedOtAmount());

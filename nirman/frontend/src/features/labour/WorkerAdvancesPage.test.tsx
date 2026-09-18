@@ -50,6 +50,7 @@ const WORKERS: PageResponse<Worker> = {
       wageType: 'DAILY',
       active: true,
       currentSiteId: 'site-a',
+      currentSiteIds: ['site-a'],
       version: 1,
     },
     {
@@ -60,6 +61,7 @@ const WORKERS: PageResponse<Worker> = {
       wageType: 'DAILY',
       active: true,
       currentSiteId: 'site-a',
+      currentSiteIds: ['site-a'],
       version: 1,
     },
   ],

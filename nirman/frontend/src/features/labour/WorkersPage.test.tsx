@@ -28,10 +28,12 @@ vi.mock('../../shared/apiClient', async () => {
 
 /** A supervisor: he may take men on and move them, but not decide what they are paid. */
 let permissions = ['worker:read', 'worker:write', 'attendance:create'];
+/** Whether the caller sees every site — the office does, a supervisor does not. */
+let allSites = false;
 
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
-    user: { id: 'u-sup', permissions },
+    user: { id: 'u-sup', permissions, allSites },
     hasPermission: (code: string) => permissions.includes(code),
   }),
 }));
@@ -56,6 +58,7 @@ const WORKERS: PageResponse<Worker> = {
       wageType: 'DAILY',
       active: true,
       currentSiteId: 'site-a',
+      currentSiteIds: ['site-a'],
       // Never on the edit form, and the point of the pass-through test below.
       aadhaarLast4: '4321',
       bankAccountNo: '11223344',
@@ -78,6 +81,7 @@ const WORKERS: PageResponse<Worker> = {
       wageType: 'DAILY',
       active: true,
       currentSiteId: 'site-a',
+      currentSiteIds: ['site-a'],
       version: 0,
     },
   ],
@@ -112,6 +116,7 @@ describe('WorkersPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     permissions = ['worker:read', 'worker:write', 'attendance:create'];
+    allSites = false;
     get.mockImplementation((url: string) => {
       if (url === '/workers') return Promise.resolve({ data: WORKERS });
       if (url === '/sites') return Promise.resolve({ data: MY_SITES });
@@ -479,5 +484,76 @@ describe('WorkersPage', () => {
     expect(body.siteId).toBe('site-b');
     // Tomorrow by default: a posting cannot be closed before the day it opened.
     expect(new Date(body.effectiveFrom).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  // A share is not a transfer: the man stays on the supervisor's roll and gains another, so
+  // he may lend him only among the sites he himself supervises.
+  it('lets a supervisor share a man among his own sites only', async () => {
+    const user = userEvent.setup({ delay: null });
+    get.mockImplementation((url: string) => {
+      if (url === '/workers') return Promise.resolve({ data: WORKERS });
+      if (url === '/sites')
+        return Promise.resolve({
+          data: [...MY_SITES, { id: 'site-b', code: 'KSN-B', name: 'Kausani Annexe' }],
+        });
+      if (url === '/sites/directory') return Promise.resolve({ data: DIRECTORY });
+      if (url === '/skill-categories') return Promise.resolve({ data: [] });
+      if (url === '/workers/w1/allocations')
+        return Promise.resolve({
+          data: [{ id: 'al1', workerId: 'w1', siteId: 'site-a', effectiveFrom: '2025-10-01' }],
+        });
+      return Promise.reject(new Error(`unexpected GET ${url}`));
+    });
+    renderPage();
+    await screen.findAllByText('Karam Singh');
+    const row = table().getByText('Karam Singh').closest('tr') as HTMLElement;
+    await user.click(within(row).getByRole('button', { name: 'Edit' }));
+    const edit = await screen.findByRole('dialog');
+    await user.click(within(edit).getByRole('button', { name: 'Share' }));
+
+    const dialog = await screen.findByRole('dialog', { name: /Share Karam Singh/ });
+    // Where he stands today is listed, and his only posting is not offered a way out.
+    expect(await within(dialog).findByText('KSN-A — Kausani Main Block')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'End posting' })).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('combobox', { name: 'Also send him to' }));
+    const options = (await screen.findAllByRole('option')).map((option) => option.textContent);
+    // His own sites less where the man already is — and not the other project's site.
+    expect(options).toEqual(['KSN-B — Kausani Annexe']);
+
+    await user.click(screen.getByRole('option', { name: /KSN-B/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Share' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    const [url, body] = post.mock.calls[0] as [string, { siteId: string; effectiveFrom: string }];
+    expect(url).toBe('/workers/w1/allocations/share');
+    expect(body.siteId).toBe('site-b');
+    expect(body.effectiveFrom).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('lets the office share a man with any site in the company', async () => {
+    allSites = true;
+    const user = userEvent.setup({ delay: null });
+    get.mockImplementation((url: string) => {
+      if (url === '/workers') return Promise.resolve({ data: WORKERS });
+      if (url === '/sites') return Promise.resolve({ data: DIRECTORY });
+      if (url === '/sites/directory') return Promise.resolve({ data: DIRECTORY });
+      if (url === '/skill-categories') return Promise.resolve({ data: [] });
+      if (url === '/workers/w1/allocations')
+        return Promise.resolve({
+          data: [{ id: 'al1', workerId: 'w1', siteId: 'site-a', effectiveFrom: '2025-10-01' }],
+        });
+      return Promise.reject(new Error(`unexpected GET ${url}`));
+    });
+    renderPage();
+    await screen.findAllByText('Karam Singh');
+    const row = table().getByText('Karam Singh').closest('tr') as HTMLElement;
+    await user.click(within(row).getByRole('button', { name: 'Edit' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Share' }));
+
+    const dialog = await screen.findByRole('dialog', { name: /Share Karam Singh/ });
+    await user.click(within(dialog).getByRole('combobox', { name: 'Also send him to' }));
+    const options = (await screen.findAllByRole('option')).map((option) => option.textContent);
+    expect(options).toEqual(['KSN-B — Kausani Annexe', 'BAG-A — Bageshwar Road']);
   });
 });

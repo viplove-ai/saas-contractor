@@ -45,8 +45,13 @@ export interface Worker {
   active: boolean;
   /** Null until the office sets one; a man with no rate cannot be paid. */
   currentWageRate?: WageRate;
-  /** Where he is posted today, or absent if he is not posted anywhere. */
+  /**
+   * Where he is posted today, or absent if he is not posted anywhere. The site he has stood
+   * on longest when he is shared between several.
+   */
   currentSiteId?: string;
+  /** Every site he stands on today, oldest posting first. More than one is a shared man. */
+  currentSiteIds: string[];
   version: number;
 }
 

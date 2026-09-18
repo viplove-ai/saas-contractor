@@ -333,6 +333,26 @@ if the tests pass:
   rate ended stays unpriced. The admission check runs on a **new** row only: an existing row
   was admitted once, and editing or replaying it is not a second admission. **No new
   permission** — marking a man is `attendance:create` whichever day it is for.
+- **A man may stand on two sites, and his day still adds to one.** `uq_alloc_open` allowed a
+  worker one open posting, which was the guard against being marked present at two sites on a
+  morning — the right rule at the wrong table, because the firm lends men between sites and the
+  register offered only a transfer or nothing, so he was marked on one roll and worked on two.
+  V64 makes the posting per site (`uq_alloc_open_site`): `POST /workers/{id}/allocations/share`
+  opens a second posting with the first left standing, `.../allocations/{allocationId}/end`
+  closes one of them on a last day and is refused on his last (a man must stand somewhere; that
+  is a transfer or a standing-down), and a transfer still closes every posting he holds. The
+  guard moves to `AttendanceService.assertDayNotOverclaimed` as the arithmetic it always was:
+  PRESENT is a day, HALF_DAY half, ABSENT and LEAVE nothing, and his live marks across every
+  site on a date may not come to more than a day — run on every save and every edit, not only
+  when the roll reaches back, because "posted here, so nowhere else" is no longer true of him.
+  A half day at each prices at half his rate each, which is what he earned. **No new
+  permission** — sharing is `worker:write`, as the transfer is. The fence is site scope, and it
+  is one fence wider than the transfer's: a handover is to somebody else's site by nature, but a
+  share keeps the man on your roll and adds one you answer for, so a site-scoped caller must hold
+  the site he is lending him to as well. A supervisor shares among the sites he supervises; the
+  office shares him anywhere. `WorkerResponse.currentSiteId` still names one site — the one he
+  has stood on longest, which is what his overtime rate was priced against — beside
+  `currentSiteIds`, which names them all.
 - **A head count is not attendance.** On a site flagged `uses_outsourced_labour`, the day is
   recorded as counts per trade in `site_labour_counts` — no worker, no wage rate, no ledger
   posting, because the supplier bills for the work. Hours are recorded (per man, nullable,
@@ -960,6 +980,11 @@ them. **No new permission**; see the advance rule above.
 
 `V63` mints `worker:advance` and grants it to every system role — see the advance rule above
 for why it is not `advance:issue`. It moves no row and changes no screen of the accountant's.
+
+`V64` lets a worker stand on more than one site: it drops `uq_alloc_open` for
+`uq_alloc_open_site`, one open posting per worker *per site*. It moves no row and adds no
+column; what it changes is where "one man, one roll, one morning" is enforced — see the rule
+above. **No new permission.**
 
 `V60` is the member's own signature: `users.signature_attachment_id`, nullable, the file in
 `attachments` claimed to the user id. **No new permission** — see the rule above for why nobody

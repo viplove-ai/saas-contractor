@@ -29,6 +29,8 @@ interface Props {
   onRevise?: ((worker: Worker) => void) | undefined;
   /** Opens the transfer for this man. */
   onTransfer?: ((worker: Worker) => void) | undefined;
+  /** Opens the share — lending him to a second site while he stays on the first. */
+  onShare?: ((worker: Worker) => void) | undefined;
 }
 
 /**
@@ -57,14 +59,17 @@ interface Props {
  * For a man who really has gone it is the date his final settlement is reckoned against; for
  * a man back on Monday there is no such date to give.</p>
  */
-export function EditWorkerDialog({ worker, onClose, onRevise, onTransfer }: Props) {
+export function EditWorkerDialog({ worker, onClose, onRevise, onTransfer, onShare }: Props) {
   const { hasPermission } = useAuth();
   const skills = useSkillCategories();
   const directory = useSiteDirectory();
   const update = useUpdateWorker();
   const [serverError, setServerError] = useState<string | null>(null);
   const canSetPay = hasPermission('wage:write');
-  const postedAt = directory.data?.find((site) => site.id === worker?.currentSiteId);
+  // Every site he stands on, as codes: a shared man has two, and both are where he is.
+  const postedAt = (worker?.currentSiteIds ?? [])
+    .map((id) => directory.data?.find((site) => site.id === id))
+    .map((site) => (site ? `${site.code} — ${site.name}` : '—'));
 
   const {
     control,
@@ -178,21 +183,39 @@ export function EditWorkerDialog({ worker, onClose, onRevise, onTransfer }: Prop
                       <Typography variant="overline" color="text.secondary">
                         Posted at
                       </Typography>
-                      <Typography variant="body2">
-                        {postedAt
-                          ? `${postedAt.code} — ${postedAt.name}`
-                          : worker.currentSiteId
-                            ? '—'
-                            : 'Not posted anywhere'}
-                      </Typography>
+                      {postedAt.length === 0 ? (
+                        <Typography variant="body2">Not posted anywhere</Typography>
+                      ) : (
+                        postedAt.map((site) => (
+                          <Typography key={site} variant="body2">
+                            {site}
+                          </Typography>
+                        ))
+                      )}
+                      {postedAt.length > 1 && (
+                        <Typography variant="caption" color="text.secondary">
+                          shared — a half day at each
+                        </Typography>
+                      )}
                     </Stack>
-                    <Button
-                      size="small"
-                      disabled={!worker.currentSiteId}
-                      onClick={() => onTransfer(worker)}
-                    >
-                      Transfer
-                    </Button>
+                    <Stack direction="row" spacing={0.5}>
+                      {onShare && (
+                        <Button
+                          size="small"
+                          disabled={postedAt.length === 0}
+                          onClick={() => onShare(worker)}
+                        >
+                          Share
+                        </Button>
+                      )}
+                      <Button
+                        size="small"
+                        disabled={!worker.currentSiteId}
+                        onClick={() => onTransfer(worker)}
+                      >
+                        Transfer
+                      </Button>
+                    </Stack>
                   </Stack>
                 )}
               </Stack>

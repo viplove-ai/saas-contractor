@@ -120,7 +120,13 @@ an issue, a transfer or a stock count has ever named; a store that is finished w
 ### /workers
 `GET|POST /workers` (`?siteId&contractorId&skill&active&q`), `GET|PUT /workers/{id}`,
 `GET|POST /workers/{id}/wage-rates` (POST closes the open rate and opens a new one),
-`POST /workers/{id}/allocations`, `POST /workers/{id}/photo`.
+`GET|POST /workers/{id}/allocations` (POST is a transfer: every open posting closes the day
+before and one opens at the new site), `POST /workers/{id}/allocations/share` (V64: lends
+him to a second site from a date; his other postings stay open and he is on both rosters),
+`POST /workers/{id}/allocations/{allocationId}/end` (`{lastDay}`; ends one of a shared man's
+postings, refused on his last one), `POST /workers/{id}/photo`. All three posting writes are
+`worker:write`; a transfer asks only that the caller hold a site the man stands on, a share
+asks that he hold the site he is lending him to as well unless he sees every site.
 
 ### /worker-advances, /worker-payments
 | Method | Path | Notes |

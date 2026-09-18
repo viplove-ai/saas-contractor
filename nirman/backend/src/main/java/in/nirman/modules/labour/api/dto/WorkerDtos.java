@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 /** Request and response shapes for the worker master and its wage and posting history. */
@@ -38,8 +39,14 @@ public final class WorkerDtos {
             boolean active,
             /** The rate in force today, or null if none has been set yet. */
             WageRateResponse currentWageRate,
-            /** Where he is posted today, or null if unallocated. */
+            /**
+             * Where he is posted today, or null if unallocated. The site he has stood on
+             * longest when he is shared between several — kept so a screen that asks for one
+             * site gets the one his rate was priced against.
+             */
             UUID currentSiteId,
+            /** Every site he stands on today, oldest posting first. More than one is a shared man. */
+            List<UUID> currentSiteIds,
             Long version) {
     }
 
@@ -148,9 +155,20 @@ public final class WorkerDtos {
             LocalDate effectiveTo) {
     }
 
-    /** Moving a worker closes his open posting the day before and opens one at the new site. */
+    /** Moving a worker closes every open posting the day before and opens one at the new site. */
     public record AllocateRequest(
             @NotNull UUID siteId,
             @NotNull LocalDate effectiveFrom) {
+    }
+
+    /** Lending a worker to a second site from a date. His other postings stay open. */
+    public record ShareRequest(
+            @NotNull UUID siteId,
+            @NotNull LocalDate effectiveFrom) {
+    }
+
+    /** Ending one of a shared man's postings; his last day there. */
+    public record EndPostingRequest(
+            @NotNull LocalDate lastDay) {
     }
 }
