@@ -143,20 +143,17 @@ export function WorkersPage() {
                   </Button>
                 )}
                 {canWrite && (
-                  <>
-                    <Button size="small" onClick={() => setEditing(worker)}>
-                      Edit
-                    </Button>
-                    <Button
-                      size="small"
-                      onClick={() => setTransferring(worker)}
-                      disabled={!worker.currentSiteId}
-                    >
-                      Transfer
-                    </Button>
-                  </>
+                  <Button size="small" onClick={() => setEditing(worker)}>
+                    Edit
+                  </Button>
                 )}
-                {canSetPay && (
+                {/*
+                  Transfer and the rate live inside Edit now: five buttons ran off the right
+                  of the card. This is the one case that still needs a button of its own —
+                  somebody who may set pay but may not edit the man, which no system role
+                  is since V61.
+                */}
+                {canSetPay && !canWrite && (
                   <Button size="small" onClick={() => setRepricing(worker)}>
                     {worker.currentWageRate ? 'Revise rate' : 'Set rate'}
                   </Button>
@@ -276,7 +273,22 @@ export function WorkersPage() {
         defaultSiteId={siteId}
         onClose={() => setOnboarding(false)}
       />
-      <EditWorkerDialog worker={editing} onClose={() => setEditing(null)} />
+      <EditWorkerDialog
+        worker={editing}
+        onClose={() => setEditing(null)}
+        onRevise={
+          canSetPay
+            ? (worker) => {
+                setEditing(null);
+                setRepricing(worker);
+              }
+            : undefined
+        }
+        onTransfer={(worker) => {
+          setEditing(null);
+          setTransferring(worker);
+        }}
+      />
       <ReviseWageDialog worker={repricing} onClose={() => setRepricing(null)} />
       <TransferWorkerDialog worker={transferring} onClose={() => setTransferring(null)} />
       <SettlementDialog workerId={account?.id ?? null} onClose={() => setAccount(null)} />

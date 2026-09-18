@@ -200,8 +200,13 @@ describe('WorkersPage', () => {
   });
 
   it('offers no rate button to someone who may not set pay', async () => {
+    const user = userEvent.setup({ delay: null });
     renderPage();
     await screen.findAllByText('Karam Singh');
+    const row = table().getByText('Karam Singh').closest('tr') as HTMLElement;
+    await user.click(within(row).getByRole('button', { name: 'Edit' }));
+    await screen.findByLabelText('Full name');
+
     expect(screen.queryByRole('button', { name: 'Revise rate' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Set rate' })).not.toBeInTheDocument();
   });
@@ -217,10 +222,11 @@ describe('WorkersPage', () => {
     const user = userEvent.setup({ delay: null });
     renderPage();
     await screen.findAllByText('Naya Mazdoor');
+    // The rate lives inside Edit, beside what he is on now — a row with five buttons ran off
+    // the card. A man with no rate is offered "Set rate", one with a rate "Revise rate".
     const unpaid = table().getByText('Naya Mazdoor').closest('tr') as HTMLElement;
-    const paid = table().getByText('Karam Singh').closest('tr') as HTMLElement;
-    expect(within(paid).getByRole('button', { name: 'Revise rate' })).toBeInTheDocument();
-    await user.click(within(unpaid).getByRole('button', { name: 'Set rate' }));
+    await user.click(within(unpaid).getByRole('button', { name: 'Edit' }));
+    await user.click(await screen.findByRole('button', { name: 'Set rate' }));
 
     expect(await screen.findByText(/no rate yet, so his days carry no amount/)).toBeInTheDocument();
     await user.type(screen.getByLabelText('Rate (per day)'), '650');
@@ -238,6 +244,16 @@ describe('WorkersPage', () => {
     expect(body.normalRate).toBe(650);
     expect(body.overtimeRate).toBeUndefined();
     expect(body.effectiveFrom).toBe('2025-03-01');
+
+    // A man who already has one is offered a revision, with the rate he is on beside it.
+    // The register is hidden from assistive tech until the dialog has finished closing.
+    const paid = await waitFor(
+      () => table().getByText('Karam Singh').closest('tr') as HTMLElement,
+    );
+    await user.click(within(paid).getByRole('button', { name: 'Edit' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('₹625.00 · per day')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Revise rate' })).toBeInTheDocument();
   });
 
   it('offers the day’s wage to someone who may set pay, and asks no overtime rate', async () => {
@@ -443,7 +459,11 @@ describe('WorkersPage', () => {
     renderPage();
     await screen.findAllByText('Karam Singh');
     const row = table().getByText('Karam Singh').closest('tr') as HTMLElement;
-    await user.click(within(row).getByRole('button', { name: 'Transfer' }));
+    await user.click(within(row).getByRole('button', { name: 'Edit' }));
+    // Where he stands is shown beside the button that moves him.
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('KSN-A — Kausani Main Block')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Transfer' }));
 
     await user.click(await screen.findByRole('combobox', { name: 'Send him to' }));
     const options = (await screen.findAllByRole('option')).map((option) => option.textContent);

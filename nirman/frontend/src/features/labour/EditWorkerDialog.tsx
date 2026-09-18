@@ -6,21 +6,29 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   MenuItem,
+  Paper,
   Stack,
   TextField,
+  Typography,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { apiErrorDetail } from '../../shared/apiClient';
+import { formatAmount } from '../../shared/formatters';
 import { useAuth } from '../auth/AuthContext';
-import { useSkillCategories, useUpdateWorker } from './api';
+import { useSiteDirectory, useSkillCategories, useUpdateWorker } from './api';
 import { editWorkerSchema, type EditWorkerForm } from './schema';
 import { EMPLOYMENT_LABEL, WAGE_TYPE_LABEL, type Worker } from './types';
 
 interface Props {
   worker: Worker | null;
   onClose: () => void;
+  /** Opens the rate revision for this man. Offered only to somebody who may set pay. */
+  onRevise?: ((worker: Worker) => void) | undefined;
+  /** Opens the transfer for this man. */
+  onTransfer?: ((worker: Worker) => void) | undefined;
 }
 
 /**
@@ -32,12 +40,15 @@ interface Props {
  * fields both forms share carry the same rules, because a correction that accepted a blank
  * name would be a way round the check at the gate.</p>
  *
- * <p><b>Pay is deliberately absent.</b> A rate is revised and never edited — the old one is
- * closed the day before the new one opens, so that a month already settled cannot be
- * repriced — and putting it in a form whose whole nature is to overwrite would undo that.
- * The wage <em>basis</em> is here, but only for someone who may set pay: per day or per
- * month decides what the number beside it means, so changing it is a pay decision even
- * though it is not a number.</p>
+ * <p><b>Pay is deliberately not a field here.</b> A rate is revised and never edited — the
+ * old one is closed the day before the new one opens, so that a month already settled cannot
+ * be repriced — and putting it in a form whose whole nature is to overwrite would undo that.
+ * What the form carries instead is the rate in force and a button to the revision, so that
+ * "what is he on, and change it" is one door rather than two on a row that was running out
+ * of the card. The posting is reached the same way and for the same reason: a transfer is a
+ * new allocation from a date, not an edit of the old one. The wage <em>basis</em> is a field,
+ * but only for someone who may set pay: per day or per month decides what the number beside
+ * it means, so changing it is a pay decision even though it is not a number.</p>
  *
  * <p>Marked Inactive takes him off the roll and is not deletion: his months keep their wages
  * and still count towards what the site cost. It is also not permanent — a man stood down
@@ -46,12 +57,14 @@ interface Props {
  * For a man who really has gone it is the date his final settlement is reckoned against; for
  * a man back on Monday there is no such date to give.</p>
  */
-export function EditWorkerDialog({ worker, onClose }: Props) {
+export function EditWorkerDialog({ worker, onClose, onRevise, onTransfer }: Props) {
   const { hasPermission } = useAuth();
   const skills = useSkillCategories();
+  const directory = useSiteDirectory();
   const update = useUpdateWorker();
   const [serverError, setServerError] = useState<string | null>(null);
   const canSetPay = hasPermission('wage:write');
+  const postedAt = directory.data?.find((site) => site.id === worker?.currentSiteId);
 
   const {
     control,
@@ -132,6 +145,59 @@ export function EditWorkerDialog({ worker, onClose }: Props) {
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           {serverError && <Alert severity="error">{serverError}</Alert>}
+
+          {/*
+            What he is paid and where he stands, each with the act that changes it. Neither is
+            saved by this form — both are revisions with a date, opened from here and not
+            typed over.
+          */}
+          {worker && (onRevise || onTransfer) && (
+            <Paper variant="outlined" sx={{ p: 1.5 }}>
+              <Stack spacing={1.5}>
+                {onRevise && (
+                  <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                    <Stack spacing={0}>
+                      <Typography variant="overline" color="text.secondary">
+                        Rate
+                      </Typography>
+                      <Typography variant="body2">
+                        {worker.currentWageRate
+                          ? `${formatAmount(worker.currentWageRate.normalRate)} · ${WAGE_TYPE_LABEL[worker.wageType].toLowerCase()}`
+                          : 'No rate yet — his days carry no amount'}
+                      </Typography>
+                    </Stack>
+                    <Button size="small" onClick={() => onRevise(worker)}>
+                      {worker.currentWageRate ? 'Revise rate' : 'Set rate'}
+                    </Button>
+                  </Stack>
+                )}
+                {onRevise && onTransfer && <Divider />}
+                {onTransfer && (
+                  <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                    <Stack spacing={0}>
+                      <Typography variant="overline" color="text.secondary">
+                        Posted at
+                      </Typography>
+                      <Typography variant="body2">
+                        {postedAt
+                          ? `${postedAt.code} — ${postedAt.name}`
+                          : worker.currentSiteId
+                            ? '—'
+                            : 'Not posted anywhere'}
+                      </Typography>
+                    </Stack>
+                    <Button
+                      size="small"
+                      disabled={!worker.currentSiteId}
+                      onClick={() => onTransfer(worker)}
+                    >
+                      Transfer
+                    </Button>
+                  </Stack>
+                )}
+              </Stack>
+            </Paper>
+          )}
 
           <TextField
             label="Full name"
